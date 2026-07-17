@@ -1,0 +1,61 @@
+{
+  "best_model": "RandomForest",
+  "trained_at": "2026-07-17T16:58:04.535234+00:00",
+  "training_samples": 26255,
+  "feature_count": 18,
+  "features": [
+    "hour",
+    "day_of_week",
+    "month",
+    "is_weekend",
+    "hour_sin",
+    "hour_cos",
+    "dow_sin",
+    "dow_cos",
+    "lag_1h",
+    "lag_2h",
+    "lag_6h",
+    "lag_12h",
+    "lag_24h",
+    "rolling_mean_3h",
+    "rolling_mean_6h",
+    "rolling_mean_12h",
+    "rolling_std_3h",
+    "rolling_std_6h"
+  ],
+  "training_hours_per_zone": 4380,
+  "zones": [
+    "US-CA",
+    "IN",
+    "DK-DK2",
+    "GB",
+    "FR",
+    "DE"
+  ],
+  "elapsed_seconds": 9.73,
+  "cv_results": {
+    "LinearRegression": {
+      "mae": 102.1078,
+      "rmse": 122.3742,
+      "r2": 0.664,
+      "n_splits": 5
+    },
+    "RandomForest": {
+      "mae": 2.9025,
+      "rmse": 6.5684,
+      "r2": 0.999,
+      "n_splits": 5
+    },
+    "XGBoost": {
+      "mae": 3.3992,
+      "rmse": 8.6082,
+      "r2": 0.998,
+      "n_splits": 5
+    }
+  },
+  "final_metrics": {
+    "mae": 1.9143,
+    "rmse": 5.0569,
+    "r2": 0.9994
+  }
+}

@@ -1,83 +1,128 @@
 """
 Carbon Data Routes
-Handles fetching and returning carbon intensity data
+==================
+GET /api/carbon    — Current + history + forecast for a grid zone
+GET /api/windows   — Detected green windows with ranking scores
+GET /api/zones     — List all supported grid zones
 """
 
-from flask import Blueprint, request, jsonify
-from datetime import datetime
-import sys
+from __future__ import annotations
+
 import os
+import logging
+from datetime import datetime, timezone
+from flask import Blueprint, request, jsonify
 
-# Add src directory to path so we can import shared types
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from services.carbon_service import get_carbon_data, detect_green_windows, get_available_zones
+from optimization.window_ranking import rank_windows
 
-carbon_bp = Blueprint('carbon', __name__)
+logger = logging.getLogger(__name__)
+carbon_bp = Blueprint("carbon", __name__)
 
-# Placeholder for carbon service (will be implemented in Phase 2)
-# This currently returns mock data for demonstration
+_API_KEY = os.getenv("ELECTRICITY_MAPS_API_KEY", "")
+_DEFAULT_ZONE = os.getenv("DEFAULT_ZONE", "US-CA")
+_DEFAULT_THRESHOLD = float(os.getenv("LOW_CARBON_THRESHOLD", "180"))
 
 
-@carbon_bp.route('/carbon', methods=['GET'])
-def get_carbon_data():
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
+
+@carbon_bp.route("/carbon", methods=["GET"])
+def get_carbon():
     """
-    Get carbon intensity data for a specific zone
-    
+    Fetch carbon intensity data for a zone.
+
     Query Parameters:
-        zone: Grid zone ID (e.g., 'IN', 'DE', 'FR')
-        offset: Time offset in hours for simulation (optional)
-    
-    Returns:
-        JSON: {
-            zone: string,
-            current: { datetime, carbonIntensity },
-            history: [...],
-            forecast: [...],
-            isSimulated: boolean,
-            error?: string
+        zone (str): Grid zone ID (default: US-CA)
+        offset (float): Time offset in hours for simulation (default: 0)
+
+    Returns 200:
+        {
+            success: true,
+            data: {
+                zone, current, history, forecast,
+                isSimulated, error?
+            }
         }
     """
-    zone = request.args.get('zone', 'IN')
-    offset = request.args.get('offset', 0, type=float)
-    
-    # TODO: Call carbon_service.get_carbon_data(zone, offset)
-    # For now, return a placeholder
-    
+    zone = request.args.get("zone", _DEFAULT_ZONE).strip()
+    offset = request.args.get("offset", 0, type=float)
+
+    # Use live API key if available
+    api_key = _API_KEY or None
+
+    logger.info("GET /api/carbon zone=%s offset=%s", zone, offset)
+
+    data = get_carbon_data(zone_id=zone, api_key=api_key, offset_hours=offset)
+
     return jsonify({
-        'success': True,
-        'data': {
-            'zone': zone,
-            'current': {
-                'datetime': datetime.utcnow().isoformat(),
-                'carbonIntensity': 180,
-            },
-            'history': [],
-            'forecast': [],
-            'isSimulated': True,
-            'error': 'Service implementation pending',
-        },
-        'timestamp': datetime.utcnow().isoformat(),
+        "success": True,
+        "data": data,
+        "timestamp": _now_iso(),
     }), 200
 
 
-@carbon_bp.route('/windows', methods=['GET'])
-def get_green_windows():
+@carbon_bp.route("/windows", methods=["GET"])
+def get_windows():
     """
-    Get detected green windows for a zone
-    
+    Detect and rank green windows for a zone.
+
     Query Parameters:
-        zone: Grid zone ID
-        threshold: Carbon intensity threshold for green windows
-    
-    Returns:
-        JSON: Array of green windows with scoring information
+        zone (str): Grid zone ID (default: US-CA)
+        threshold (float): Carbon intensity threshold (default: 180)
+        offset (float): Simulation time offset in hours (default: 0)
+
+    Returns 200:
+        {
+            success: true,
+            data: GreenWindow[]  (ranked best-first)
+        }
     """
-    zone = request.args.get('zone', 'US-CA')
-    threshold = request.args.get('threshold', 180, type=float)
-    
-    # TODO: Call carbon_service.detect_green_windows(zone, threshold)
-    
+    zone = request.args.get("zone", _DEFAULT_ZONE).strip()
+    threshold = request.args.get("threshold", _DEFAULT_THRESHOLD, type=float)
+    offset = request.args.get("offset", 0, type=float)
+
+    api_key = _API_KEY or None
+
+    logger.info("GET /api/windows zone=%s threshold=%s", zone, threshold)
+
+    carbon = get_carbon_data(zone_id=zone, api_key=api_key, offset_hours=offset)
+    raw_windows = detect_green_windows(
+        forecast=carbon["forecast"],
+        current_datetime=carbon["current"]["datetime"],
+        threshold=threshold,
+    )
+    ranked = rank_windows(raw_windows)
+
     return jsonify({
-        'success': True,
-        'data': [],
-        'timestamp': datetime.utcnow().isoformat(),
+        "success": True,
+        "data": ranked,
+        "count": len(ranked),
+        "timestamp": _now_iso(),
+    }), 200
+
+
+@carbon_bp.route("/zones", methods=["GET"])
+def list_zones():
+    """
+    List all supported grid zones.
+
+    Returns 200:
+        { success: true, data: GridZone[] }
+    """
+    zones = get_available_zones()
+    return jsonify({
+        "success": True,
+        "data": zones,
+        "count": len(zones),
+        "timestamp": _now_iso(),
     }), 200

@@ -61,8 +61,8 @@ instance/
 
 # Ignore trained models if you don't want to version them
 # Uncomment the next two lines if you decide not to store trained models
-# *.pkl
-# *.joblib
+*.pkl
+*.joblib
 
 # Ignore temporary ML files
 *.h5

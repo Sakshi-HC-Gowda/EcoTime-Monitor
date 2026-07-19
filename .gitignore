@@ -1,5 +1,7 @@
+# ==========================
 # Logs
-logs
+# ==========================
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -7,23 +9,97 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
+# ==========================
+# Node.js
+# ==========================
+node_modules/
+dist/
+dist-ssr/
+build/
+.next/
+out/
+
+# Local files
 *.local
 
-# Environment variables (local secrets)
+# ==========================
+# Environment Variables
+# ==========================
 .env
 .env.local
 .env.*.local
+.env.*
 
-# Editor directories and files
+# Keep sample env if you create one
+!.env.example
+
+# ==========================
+# Python
+# ==========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual Environments
+.venv/
+venv/
+env/
+
+# Flask
+instance/
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+
+# ==========================
+# Machine Learning
+# ==========================
+
+# Ignore trained models if you don't want to version them
+# Uncomment the next two lines if you decide not to store trained models
+# *.pkl
+# *.joblib
+
+# Ignore temporary ML files
+*.h5
+*.ckpt
+
+# ==========================
+# Testing & Coverage
+# ==========================
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+
+# ==========================
+# IDEs
+# ==========================
 .vscode/*
 !.vscode/extensions.json
-.idea
+.idea/
+
+# ==========================
+# Operating System
+# ==========================
 .DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+Thumbs.db
+
+# ==========================
+# Temporary Files
+# ==========================
+*.tmp
+*.bak
+*.swp
+*.swo
+
+# ==========================
+# Package Managers
+# ==========================
+package-lock.json.old
+yarn.lock.old
+pnpm-lock.yaml.old

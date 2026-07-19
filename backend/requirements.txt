@@ -3,3 +3,9 @@ Flask-CORS==4.0.0
 Flask-SQLAlchemy==3.1.1
 python-dotenv==1.0.0
 requests==2.31.0
+# ML / Data Science
+scikit-learn==1.4.2
+xgboost==2.0.3
+pandas==2.2.2
+numpy==1.26.4
+joblib==1.4.2

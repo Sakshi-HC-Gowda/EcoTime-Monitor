@@ -3,7 +3,8 @@ import { ShieldAlert, Zap, Globe, Flame, CloudSun, CalendarClock, Info } from 'l
 import { GRID_ZONES } from '../services/electricityMaps';
 import type { CarbonResponse } from '../services/electricityMaps';
 import { calculateWindowScore } from '../utils/algorithms';
-import type { GreenWindow } from '../utils/algorithms';
+import type { GreenWindow } from '../types/domain';
+
 
 interface DashboardProps {
   carbonData: CarbonResponse;

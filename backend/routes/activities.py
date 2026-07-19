@@ -1,210 +1,239 @@
 """
 Activity / Task Management Routes
-Handles CRUD operations for digital activities
+==================================
+POST   /api/activities           — Create a new task
+GET    /api/activities           — List tasks (paginated, filterable)
+GET    /api/activities/<id>      — Get a single task
+PATCH  /api/activities/<id>      — Update task status/progress/assignment
+DELETE /api/activities/<id>      — Delete a task
+POST   /api/activities/bulk      — Bulk update multiple tasks
 """
 
+from __future__ import annotations
+
+import logging
+from datetime import datetime, timezone
 from flask import Blueprint, request, jsonify
-from datetime import datetime
-from typing import Dict, List, Any
 
-activities_bp = Blueprint('activities', __name__)
+from services.activity_service import (
+    create_activity,
+    list_activities,
+    get_activity,
+    update_activity,
+    delete_activity,
+    bulk_update_activities,
+)
 
-# Temporary in-memory storage for activities (will be replaced with database in Phase 2)
-ACTIVITIES_STORE: Dict[str, Dict[str, Any]] = {}
+logger = logging.getLogger(__name__)
+activities_bp = Blueprint("activities", __name__)
 
 
-@activities_bp.route('/activities', methods=['POST'])
-def create_activity():
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+# ---------------------------------------------------------------------------
+# Create Activity
+# ---------------------------------------------------------------------------
+
+@activities_bp.route("/activities", methods=["POST"])
+def create():
     """
-    Create a new digital activity/task
-    
-    Request Body:
-        {
-            name: string,
-            type: 'flexible' | 'non-flexible',
-            activityType: 'file-upload' | 'cloud-backup' | etc,
-            duration: number (minutes),
-            powerDraw: number (Watts),
-            priorityScore: number (0-100),
-            flexibilityScore?: number (0-100)
-        }
-    
-    Returns:
-        JSON: Created task with ID, timestamps, and status
+    Create a new activity/task.
+
+    Request Body (JSON):
+        name (str, required)
+        type (str, required): 'flexible' | 'non-flexible'
+        duration (float, required): minutes
+        powerDraw (float, required): Watts
+        activityType (str): one of the known activity types
+        priorityScore (int): 0-100, default 50
+        flexibilityScore (int): 0-100, auto-set if missing
+
+    Returns 201: { success: true, data: Task }
+    Returns 400: { success: false, error: str }
     """
-    data = request.get_json()
-    
-    if not data or not all(k in data for k in ['name', 'type', 'duration', 'powerDraw']):
+    data = request.get_json(silent=True)
+    if not data:
         return jsonify({
-            'success': False,
-            'error': 'Missing required fields: name, type, duration, powerDraw',
-            'timestamp': datetime.utcnow().isoformat(),
+            "success": False,
+            "error": "Request body must be valid JSON",
+            "timestamp": _now_iso(),
         }), 400
-    
-    # TODO: Validate and create task via activities_service
-    
-    task_id = f"task-{datetime.utcnow().timestamp()}"
-    now = datetime.utcnow().isoformat()
-    
-    task = {
-        'id': task_id,
-        'name': data.get('name'),
-        'type': data.get('type'),
-        'activityType': data.get('activityType', 'batch-processing'),
-        'duration': data.get('duration'),
-        'powerDraw': data.get('powerDraw'),
-        'priorityScore': data.get('priorityScore', 50),
-        'flexibilityScore': data.get('flexibilityScore', 70 if data.get('type') == 'flexible' else 0),
-        'status': 'idle',
-        'progress': 0,
-        'createdAt': now,
-        'updatedAt': now,
-    }
-    
-    ACTIVITIES_STORE[task_id] = task
-    
+
+    task, error = create_activity(data)
+
+    if error:
+        return jsonify({
+            "success": False,
+            "error": error,
+            "timestamp": _now_iso(),
+        }), 400
+
     return jsonify({
-        'success': True,
-        'data': task,
-        'timestamp': now,
+        "success": True,
+        "data": task,
+        "timestamp": _now_iso(),
     }), 201
 
 
-@activities_bp.route('/activities', methods=['GET'])
-def list_activities():
+# ---------------------------------------------------------------------------
+# List Activities
+# ---------------------------------------------------------------------------
+
+@activities_bp.route("/activities", methods=["GET"])
+def list_all():
     """
-    List all activities with pagination
-    
+    List activities with optional filtering and pagination.
+
     Query Parameters:
-        page: Page number (1-based), default 1
-        pageSize: Items per page, default 50
-    
-    Returns:
-        JSON: Paginated list of activities
+        page (int): 1-based page number (default: 1)
+        pageSize (int): Items per page (default: 50, max: 200)
+        status (str): Filter by status
+
+    Returns 200: { success: true, data: PaginatedResponse<Task> }
     """
-    page = request.args.get('page', 1, type=int)
-    page_size = request.args.get('pageSize', 50, type=int)
-    
-    # TODO: Fetch from database with pagination
-    
-    items = list(ACTIVITIES_STORE.values())
-    total = len(items)
-    start = (page - 1) * page_size
-    end = start + page_size
-    
+    page = request.args.get("page", 1, type=int)
+    page_size = request.args.get("pageSize", 50, type=int)
+    status_filter = request.args.get("status", None)
+
+    result = list_activities(page=page, page_size=page_size, status_filter=status_filter)
+
     return jsonify({
-        'success': True,
-        'data': {
-            'items': items[start:end],
-            'total': total,
-            'page': page,
-            'pageSize': page_size,
-            'hasMore': end < total,
-        },
-        'timestamp': datetime.utcnow().isoformat(),
+        "success": True,
+        "data": result,
+        "timestamp": _now_iso(),
     }), 200
 
 
-@activities_bp.route('/activities/<task_id>', methods=['GET'])
-def get_activity(task_id: str):
+# ---------------------------------------------------------------------------
+# Get Single Activity
+# ---------------------------------------------------------------------------
+
+@activities_bp.route("/activities/<task_id>", methods=["GET"])
+def get_one(task_id: str):
     """
-    Get a specific activity by ID
-    
-    URL Parameters:
-        task_id: Activity identifier
-    
-    Returns:
-        JSON: Activity details or 404 if not found
+    Get a specific activity by ID.
+
+    Returns 200: { success: true, data: Task }
+    Returns 404: { success: false, error: str }
     """
-    # TODO: Fetch from database
-    
-    task = ACTIVITIES_STORE.get(task_id)
-    
+    task = get_activity(task_id)
+
     if not task:
         return jsonify({
-            'success': False,
-            'error': f'Activity {task_id} not found',
-            'timestamp': datetime.utcnow().isoformat(),
+            "success": False,
+            "error": f"Activity '{task_id}' not found",
+            "timestamp": _now_iso(),
         }), 404
-    
+
     return jsonify({
-        'success': True,
-        'data': task,
-        'timestamp': datetime.utcnow().isoformat(),
+        "success": True,
+        "data": task,
+        "timestamp": _now_iso(),
     }), 200
 
 
-@activities_bp.route('/activities/<task_id>', methods=['PATCH'])
-def update_activity(task_id: str):
+# ---------------------------------------------------------------------------
+# Update Activity
+# ---------------------------------------------------------------------------
+
+@activities_bp.route("/activities/<task_id>", methods=["PATCH"])
+def update(task_id: str):
     """
-    Update an activity's status, progress, or assignment
-    
-    URL Parameters:
-        task_id: Activity identifier
-    
-    Request Body:
-        {
-            status?: 'idle' | 'running' | 'paused' | 'delayed' | 'completed',
-            progress?: number (0-100),
-            assignedWindowId?: string
-        }
-    
-    Returns:
-        JSON: Updated activity or 404 if not found
+    Update status, progress, or window assignment for an activity.
+
+    Request Body (JSON — all optional):
+        status (str)
+        progress (float): 0-100
+        assignedWindowId (str | null)
+
+    Returns 200: { success: true, data: Task }
+    Returns 400/404: { success: false, error: str }
     """
-    # TODO: Update in database
-    
-    task = ACTIVITIES_STORE.get(task_id)
-    
-    if not task:
+    data = request.get_json(silent=True)
+    if data is None:
         return jsonify({
-            'success': False,
-            'error': f'Activity {task_id} not found',
-            'timestamp': datetime.utcnow().isoformat(),
-        }), 404
-    
-    data = request.get_json()
-    
-    if 'status' in data:
-        task['status'] = data['status']
-    if 'progress' in data:
-        task['progress'] = data['progress']
-    if 'assignedWindowId' in data:
-        task['assignedWindowId'] = data['assignedWindowId']
-    
-    task['updatedAt'] = datetime.utcnow().isoformat()
-    
+            "success": False,
+            "error": "Request body must be valid JSON",
+            "timestamp": _now_iso(),
+        }), 400
+
+    task, error = update_activity(task_id, data)
+
+    if error:
+        status_code = 404 if "not found" in error.lower() else 400
+        return jsonify({
+            "success": False,
+            "error": error,
+            "timestamp": _now_iso(),
+        }), status_code
+
     return jsonify({
-        'success': True,
-        'data': task,
-        'timestamp': datetime.utcnow().isoformat(),
+        "success": True,
+        "data": task,
+        "timestamp": _now_iso(),
     }), 200
 
 
-@activities_bp.route('/activities/<task_id>', methods=['DELETE'])
-def delete_activity(task_id: str):
+# ---------------------------------------------------------------------------
+# Delete Activity
+# ---------------------------------------------------------------------------
+
+@activities_bp.route("/activities/<task_id>", methods=["DELETE"])
+def delete(task_id: str):
     """
-    Delete an activity
-    
-    URL Parameters:
-        task_id: Activity identifier
-    
-    Returns:
-        JSON: Success message or 404 if not found
+    Delete an activity by ID.
+
+    Returns 200: { success: true, data: { message: str } }
+    Returns 404: { success: false, error: str }
     """
-    # TODO: Delete from database
-    
-    if task_id not in ACTIVITIES_STORE:
+    success, error = delete_activity(task_id)
+
+    if not success:
         return jsonify({
-            'success': False,
-            'error': f'Activity {task_id} not found',
-            'timestamp': datetime.utcnow().isoformat(),
+            "success": False,
+            "error": error,
+            "timestamp": _now_iso(),
         }), 404
-    
-    del ACTIVITIES_STORE[task_id]
-    
+
     return jsonify({
-        'success': True,
-        'data': {'message': f'Activity {task_id} deleted'},
-        'timestamp': datetime.utcnow().isoformat(),
+        "success": True,
+        "data": {"message": f"Activity '{task_id}' deleted successfully"},
+        "timestamp": _now_iso(),
+    }), 200
+
+
+# ---------------------------------------------------------------------------
+# Bulk Update (used by orchestrator / scheduler)
+# ---------------------------------------------------------------------------
+
+@activities_bp.route("/activities/bulk", methods=["POST"])
+def bulk_update():
+    """
+    Bulk-update multiple activities in one request.
+    Used by the scheduler after assigning tasks to windows.
+
+    Request Body (JSON):
+        { updates: [{ id: str, status?: str, progress?: float, ... }] }
+
+    Returns 200: { success: true, data: Task[] }
+    """
+    data = request.get_json(silent=True) or {}
+    updates = data.get("updates", [])
+
+    if not isinstance(updates, list):
+        return jsonify({
+            "success": False,
+            "error": "Field 'updates' must be an array",
+            "timestamp": _now_iso(),
+        }), 400
+
+    updated_tasks = bulk_update_activities(updates)
+
+    return jsonify({
+        "success": True,
+        "data": updated_tasks,
+        "count": len(updated_tasks),
+        "timestamp": _now_iso(),
     }), 200

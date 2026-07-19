@@ -1,25 +1,10 @@
-export interface Task {
-  id: string;
-  name: string;
-  type: 'flexible' | 'non-flexible';
-  flexibilityScore: number; // 0 to 100
-  priorityScore: number; // 0 to 100
-  duration: number; // in minutes
-  powerDraw: number; // in Watts
-  status: 'idle' | 'running' | 'paused' | 'delayed' | 'completed';
-  progress: number; // 0 to 100
-  assignedWindowId?: string;
-  executionStartTime?: number; // timestamp in simulation minutes
-}
+/**
+ * EcoTime Algorithms
+ * Types are re-exported from the single source of truth: src/types/domain.ts
+ * Do NOT redefine Task or GreenWindow here — use domain.ts instead.
+ */
+export type { Task, GreenWindow } from '../types/domain';
 
-export interface GreenWindow {
-  id: string;
-  startTime: string; // e.g. "20:00" or ISO string
-  duration: number; // in minutes
-  avgCarbonIntensity: number; // gCO2eq/kWh
-  carbonSavingPercent: number; // vs peak or baseline
-  userConvenience: number; // 0 to 100
-}
 
 /**
  * Calculates the EcoScore for a task based on:

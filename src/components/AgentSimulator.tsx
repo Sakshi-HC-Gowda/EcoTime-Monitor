@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, Trash2, Plus, Terminal, Layers, Award, Clock } from 'lucide-react';
 import { optimizeKnapsack, getRecommendation } from '../utils/algorithms';
-import type { Task, GreenWindow } from '../utils/algorithms';
+import type { Task, GreenWindow, ActivityType } from '../types/domain';
+
 
 interface AgentSimulatorProps {
   tasks: Task[];
@@ -10,7 +11,7 @@ interface AgentSimulatorProps {
   baselineIntensity: number;
   peakIntensity: number;
   greenWindows: GreenWindow[];
-  onAddTask: (task: Omit<Task, 'id' | 'status' | 'progress'>) => void;
+  onAddTask: (task: Omit<Task, 'id' | 'status' | 'progress' | 'createdAt' | 'updatedAt'>) => void;
   onDeleteTask: (id: string) => void;
   onManualTrigger: (id: string, action: 'run' | 'pause' | 'delay') => void;
   isSimulating: boolean;
@@ -43,6 +44,7 @@ export const AgentSimulator: React.FC<AgentSimulatorProps> = ({
   // New task form state
   const [taskName, setTaskName] = useState('');
   const [taskType, setTaskType] = useState<'flexible' | 'non-flexible'>('flexible');
+  const [activityType, setActivityType] = useState<ActivityType>('batch-processing');
   const [duration, setDuration] = useState(30);
   const [powerDraw, setPowerDraw] = useState(150);
   const [priority, setPriority] = useState(50);
@@ -65,6 +67,7 @@ export const AgentSimulator: React.FC<AgentSimulatorProps> = ({
     onAddTask({
       name: taskName,
       type: taskType,
+      activityType,
       duration,
       powerDraw,
       priorityScore: priority,
@@ -80,6 +83,7 @@ export const AgentSimulator: React.FC<AgentSimulatorProps> = ({
     if (preset === 'backup') {
       setTaskName('Cloud Backup Server');
       setTaskType('flexible');
+      setActivityType('cloud-backup');
       setDuration(120);
       setPowerDraw(350);
       setPriority(40);
@@ -87,6 +91,7 @@ export const AgentSimulator: React.FC<AgentSimulatorProps> = ({
     } else if (preset === 'upload') {
       setTaskName('Raw Dataset Sync');
       setTaskType('flexible');
+      setActivityType('dataset-download');
       setDuration(45);
       setPowerDraw(120);
       setPriority(60);
@@ -94,6 +99,7 @@ export const AgentSimulator: React.FC<AgentSimulatorProps> = ({
     } else if (preset === 'cicd') {
       setTaskName('CI/CD Pipeline Build');
       setTaskType('flexible');
+      setActivityType('ci-cd-pipeline');
       setDuration(25);
       setPowerDraw(450);
       setPriority(75);
@@ -101,6 +107,7 @@ export const AgentSimulator: React.FC<AgentSimulatorProps> = ({
     } else if (preset === 'call') {
       setTaskName('Video Conference');
       setTaskType('non-flexible');
+      setActivityType('batch-processing');
       setDuration(60);
       setPowerDraw(85);
       setPriority(90);
@@ -253,6 +260,18 @@ export const AgentSimulator: React.FC<AgentSimulatorProps> = ({
                 }}>
                   <option value="flexible">Flexible (Can Defer)</option>
                   <option value="non-flexible">Non-Flexible (Run Now)</option>
+                </select>
+              </div>
+
+              <div className="input-group">
+                <label>Activity Type</label>
+                <select value={activityType} onChange={(e) => setActivityType(e.target.value as ActivityType)}>
+                  <option value="batch-processing">Batch Processing</option>
+                  <option value="cloud-backup">Cloud Backup</option>
+                  <option value="file-upload">File Upload</option>
+                  <option value="software-update">Software Update</option>
+                  <option value="dataset-download">Dataset Download</option>
+                  <option value="ci-cd-pipeline">CI/CD Pipeline</option>
                 </select>
               </div>
 

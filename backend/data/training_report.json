@@ -1,6 +1,6 @@
 {
   "best_model": "RandomForest",
-  "trained_at": "2026-07-17T16:58:04.535234+00:00",
+  "trained_at": "2026-07-18T12:20:49.929793+00:00",
   "training_samples": 26255,
   "feature_count": 18,
   "features": [
@@ -32,30 +32,24 @@
     "FR",
     "DE"
   ],
-  "elapsed_seconds": 9.73,
+  "elapsed_seconds": 27.19,
   "cv_results": {
     "LinearRegression": {
-      "mae": 102.1078,
-      "rmse": 122.3742,
-      "r2": 0.664,
+      "mae": 104.643,
+      "rmse": 125.2045,
+      "r2": 0.6547,
       "n_splits": 5
     },
     "RandomForest": {
-      "mae": 2.9025,
-      "rmse": 6.5684,
-      "r2": 0.999,
-      "n_splits": 5
-    },
-    "XGBoost": {
-      "mae": 3.3992,
-      "rmse": 8.6082,
-      "r2": 0.998,
+      "mae": 9.4323,
+      "rmse": 24.8301,
+      "r2": 0.9612,
       "n_splits": 5
     }
   },
   "final_metrics": {
-    "mae": 1.9143,
-    "rmse": 5.0569,
-    "r2": 0.9994
+    "mae": 2.6874,
+    "rmse": 5.8803,
+    "r2": 0.9992
   }
 }

@@ -3,6 +3,7 @@
  * Types are re-exported from the single source of truth: src/types/domain.ts
  * Do NOT redefine Task or GreenWindow here — use domain.ts instead.
  */
+import type { Task, GreenWindow } from '../types/domain';
 export type { Task, GreenWindow } from '../types/domain';
 
 

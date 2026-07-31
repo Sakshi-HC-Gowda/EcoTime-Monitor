@@ -88,11 +88,47 @@ export interface UpdateTaskRequest {
 export interface GreenWindow {
   id: string;
   startTime: string;
+  endTime?: string;
   duration: number; // minutes
   avgCarbonIntensity: number;
+  minCarbonIntensity?: number;
   carbonSavingPercent: number;
   userConvenience: number; // 0-100
+  ecoScore?: number;
+  rank?: number;
+  recommendation?: string;
   detectedAt?: string;
+}
+
+export interface ForecastPoint extends CarbonDataPoint {
+  isML?: boolean;
+  confidenceLower?: number;
+  confidenceUpper?: number;
+}
+
+export interface ForecastResponse {
+  zone: string;
+  forecast: ForecastPoint[];
+  model: {
+    model_name: string;
+    is_trained: boolean;
+    trained_at?: string;
+  };
+}
+
+export interface ForecastModelInfo {
+  model_name: string;
+  is_trained: boolean;
+  trained_at?: string;
+  feature_count?: number;
+  metrics?: Record<string, number>;
+  cv_results?: Record<string, number>;
+  training_status?: {
+    running: boolean;
+    last_started?: string;
+    last_finished?: string;
+    error?: string;
+  };
 }
 
 export interface EcoScore {

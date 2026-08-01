@@ -8,7 +8,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { ActivityCard } from '@/features/activities/components/ActivityCard';
 import { CreateActivityModal } from '@/features/activities/components/CreateActivityModal';
 
-type TabStatus = 'all' | 'pending' | 'scheduled' | 'running' | 'completed' | 'failed';
+type TabStatus = 'all' | 'pending' | 'scheduled' | 'running' | 'completed';
 
 const TABS: { value: TabStatus; label: string }[] = [
   { value: 'all',       label: 'All' },
@@ -16,15 +16,13 @@ const TABS: { value: TabStatus; label: string }[] = [
   { value: 'scheduled', label: 'Scheduled' },
   { value: 'running',   label: 'Running' },
   { value: 'completed', label: 'Completed' },
-  { value: 'failed',    label: 'Failed' },
 ];
 
 export function ActivitiesPage() {
   const [activeTab, setActiveTab] = useState<TabStatus>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const statusFilter = activeTab === 'all' ? undefined : activeTab;
-  const { data: activitiesData, isLoading, isError, refetch } = useActivitiesQuery(1, 50, statusFilter);
+  const { data: activitiesData, isLoading, isError, refetch } = useActivitiesQuery(1, 200);
   const { createMutation, updateMutation, deleteMutation } = useActivityMutations();
 
   if (isLoading) {
@@ -47,7 +45,9 @@ export function ActivitiesPage() {
     );
   }
 
-  const tasks = activitiesData.items;
+  const tasks = activeTab === 'all'
+    ? activitiesData.items
+    : activitiesData.items.filter((task) => task.status === activeTab);
 
   return (
     <div className="page-shell page-stack">
@@ -116,7 +116,9 @@ export function ActivitiesPage() {
             <ActivityCard
               key={task.id}
               activity={task}
-              onUpdateStatus={(id, status) => updateMutation.mutate({ id, update: { status } })}
+              onUpdateStatus={(id, status, scheduledStartTime) =>
+                updateMutation.mutate({ id, update: { status, scheduledStartTime } })
+              }
               onDelete={(id) => deleteMutation.mutate(id)}
             />
           ))}

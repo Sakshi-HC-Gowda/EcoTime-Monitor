@@ -45,7 +45,15 @@ export type ActivityType =
 
 export type TaskFlexibility = 'flexible' | 'non-flexible';
 
-export type TaskStatus = 'idle' | 'running' | 'paused' | 'delayed' | 'completed';
+export type TaskStatus =
+  | 'pending'
+  | 'scheduled'
+  | 'running'
+  | 'completed'
+  | 'idle'
+  | 'paused'
+  | 'delayed'
+  | 'failed';
 
 export interface Task {
   id: string;
@@ -57,10 +65,15 @@ export interface Task {
   duration: number; // minutes
   powerDraw: number; // Watts
   estimatedEnergyConsumption?: number; // kWh
+  estimatedCarbonImpact?: number; // grams CO2
+  ecoScore?: number; // 0-100
+  recommendation?: string;
+  recommendedStartTime?: string;
+  scheduledStartTime?: string;
   status: TaskStatus;
   progress: number; // 0-100
   assignedWindowId?: string;
-  executionStartTime?: number;
+  executionStartTime?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -79,6 +92,7 @@ export interface UpdateTaskRequest {
   status?: TaskStatus;
   progress?: number;
   assignedWindowId?: string;
+  scheduledStartTime?: string;
 }
 
 // ============================================================================

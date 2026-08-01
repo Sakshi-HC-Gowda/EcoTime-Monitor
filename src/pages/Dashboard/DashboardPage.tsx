@@ -49,7 +49,7 @@ export function DashboardPage() {
 
   const { data: carbon, isLoading: carbonLoading, isError: carbonError, refetch: refetchCarbon } = useCarbon('US-CA');
   const { data: windows, isLoading: windowsLoading } = useGreenWindows('US-CA', 180);
-  const { data: activitiesData, isLoading: activitiesLoading } = useActivitiesQuery(1, 10);
+  const { data: activitiesData, isLoading: activitiesLoading } = useActivitiesQuery(1, 200);
 
   if (carbonLoading || windowsLoading || activitiesLoading) {
     return (
@@ -73,7 +73,11 @@ export function DashboardPage() {
 
   const currentIntensity = carbon.current.carbonIntensity;
   const isLow = currentIntensity < 180;
-  const activeTasksCount = activitiesData?.items.filter((t) => t.status === 'running').length || 0;
+  const pendingCount = activitiesData?.items.filter((t) => t.status === 'pending').length || 0;
+  const scheduledCount = activitiesData?.items.filter((t) => t.status === 'scheduled').length || 0;
+  const runningCount = activitiesData?.items.filter((t) => t.status === 'running').length || 0;
+  const completedCount = activitiesData?.items.filter((t) => t.status === 'completed').length || 0;
+  const activeTasksCount = runningCount;
   const totalTasksCount = activitiesData?.total || 0;
   const nextWindow = windows && windows.length > 0 ? windows[0] : null;
 
@@ -153,7 +157,7 @@ export function DashboardPage() {
           title="Active Workloads"
           value={activeTasksCount}
           unit={`/ ${totalTasksCount} total`}
-          subtitle="Currently executing"
+          subtitle={`P:${pendingCount} S:${scheduledCount} R:${runningCount} C:${completedCount}`}
           icon={Zap}
           iconColor="text-amber-400"
           iconBg="bg-amber-500/10 border-amber-500/20"
@@ -266,6 +270,31 @@ export function DashboardPage() {
 
         {/* Right column — 4 cols */}
         <div className="section-stack lg:col-span-4">
+
+          <GlassCard hoverEffect onClick={() => navigate('/activities')} className="cursor-pointer">
+            <div className="mb-3 flex items-center justify-between">
+              <h4 className="text-[13px] font-bold text-white">Activity Lifecycle</h4>
+              <ArrowRight className="h-3.5 w-3.5 text-slate-600" />
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="rounded-xl border border-blue-500/20 bg-blue-500/[0.06] p-2.5">
+                <p className="text-slate-400">Pending</p>
+                <p className="text-lg font-bold text-blue-300">{pendingCount}</p>
+              </div>
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-2.5">
+                <p className="text-slate-400">Scheduled</p>
+                <p className="text-lg font-bold text-amber-300">{scheduledCount}</p>
+              </div>
+              <div className="rounded-xl border border-green-500/20 bg-green-500/[0.06] p-2.5">
+                <p className="text-slate-400">Running</p>
+                <p className="text-lg font-bold text-green-300">{runningCount}</p>
+              </div>
+              <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] p-2.5">
+                <p className="text-slate-400">Completed</p>
+                <p className="text-lg font-bold text-emerald-300">{completedCount}</p>
+              </div>
+            </div>
+          </GlassCard>
 
           {/* Grid Profile */}
           <GlassCard hoverEffect onClick={() => navigate('/settings')} className="cursor-pointer">

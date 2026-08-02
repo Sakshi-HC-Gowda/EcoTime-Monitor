@@ -24,11 +24,13 @@ class WorkloadProfile(db.Model):
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     activity_id = db.Column(
-        db.String(64), db.ForeignKey("activities.id"), nullable=False, index=True
+        db.String(64), db.ForeignKey("activities.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    activity = db.relationship("Activity", backref=db.backref(
-        "workload_profiles", cascade="all, delete-orphan", lazy="select"
-    ))
+    activity = db.relationship(
+        "Activity",
+        back_populates="workload_profile",
+        lazy="select",
+    )
 
     cpu_usage = db.Column(db.Float, nullable=False)          # estimated %, 0-100
     memory_usage = db.Column(db.Float, nullable=False, default=0.0)  # estimated %, 0-100

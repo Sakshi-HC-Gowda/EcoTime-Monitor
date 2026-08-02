@@ -25,12 +25,13 @@ class ActivityHistory(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
 
     activity_id = db.Column(
-        db.String(64), db.ForeignKey("activities.id"), nullable=False, index=True
+        db.String(64), db.ForeignKey("activities.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    activity = db.relationship("Activity", backref=db.backref(
-        "history", cascade="all, delete-orphan", lazy="select",
-        order_by="ActivityHistory.created_at.desc()"
-    ))
+    activity = db.relationship(
+        "Activity",
+        back_populates="history",
+        lazy="select",
+    )
 
     previous_status = db.Column(db.String(32), nullable=True)
     new_status = db.Column(db.String(32), nullable=False)

@@ -19,10 +19,11 @@ class ScheduleSlot(db.Model):
         db.String(64), db.ForeignKey("activities.id", ondelete="CASCADE"),
         nullable=False, index=True,
     )
-    activity = db.relationship("Activity", backref=db.backref(
-        "schedule_slots", cascade="all, delete-orphan", lazy="select",
-        order_by="ScheduleSlot.created_at.desc()",
-    ))
+    activity = db.relationship(
+        "Activity",
+        back_populates="schedule_slots",
+        lazy="select",
+    )
 
     window_id = db.Column(db.String(64), nullable=False, index=True)
     start_time = db.Column(db.DateTime(timezone=True), nullable=False, index=True)

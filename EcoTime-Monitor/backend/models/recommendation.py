@@ -33,11 +33,13 @@ class Recommendation(db.Model):
     # Nullable: some recommendations (e.g. a multi-task scheduling run)
     # aren't tied to a single activity.
     activity_id = db.Column(
-        db.String(64), db.ForeignKey("activities.id"), nullable=True, index=True
+        db.String(64), db.ForeignKey("activities.id", ondelete="CASCADE"), nullable=True, index=True
     )
-    activity = db.relationship("Activity", backref=db.backref(
-        "recommendations", cascade="all, delete-orphan", lazy="select"
-    ))
+    activity = db.relationship(
+        "Activity",
+        back_populates="recommendations",
+        lazy="select",
+    )
 
     text = db.Column(db.String(500), nullable=False)
     reason = db.Column(db.String(500), nullable=True)

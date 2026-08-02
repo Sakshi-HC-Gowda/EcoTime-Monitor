@@ -20,10 +20,11 @@ class ExecutionHistory(db.Model):
         db.String(64), db.ForeignKey("activities.id", ondelete="CASCADE"),
         nullable=False, index=True,
     )
-    activity = db.relationship("Activity", backref=db.backref(
-        "execution_records", cascade="all, delete-orphan", lazy="select",
-        order_by="ExecutionHistory.created_at.desc()",
-    ))
+    activity = db.relationship(
+        "Activity",
+        back_populates="execution_history",
+        lazy="select",
+    )
 
     previous_status = db.Column(db.String(32), nullable=True)
     new_status = db.Column(db.String(32), nullable=False, index=True)

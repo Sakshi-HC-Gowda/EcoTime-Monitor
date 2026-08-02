@@ -26,12 +26,14 @@ class CurrentStatus(db.Model):
 
     # One current-status row per activity (1:1) — enforced at the DB level.
     activity_id = db.Column(
-        db.String(64), db.ForeignKey("activities.id"), nullable=False,
+        db.String(64), db.ForeignKey("activities.id", ondelete="CASCADE"), nullable=False,
         unique=True, index=True,
     )
-    activity = db.relationship("Activity", backref=db.backref(
-        "current_status", uselist=False, cascade="all, delete-orphan", lazy="select"
-    ))
+    activity = db.relationship(
+        "Activity",
+        back_populates="current_status",
+        lazy="select",
+    )
 
     current_status = db.Column(db.String(32), nullable=False, index=True)
     last_updated = db.Column(

@@ -17,18 +17,11 @@ from flask import Blueprint, request, jsonify
 from services.optimizer_service import compute_eco_score, run_scheduler, compute_savings_summary
 from services.activity_service import get_activity, update_activity
 from services.analytics_service import log_recommendation
+from services.persistence_service import persist_schedule_slot
+from services.system_settings_service import get_simulation_config, set_simulation_config
 
 logger = logging.getLogger(__name__)
 optimizer_bp = Blueprint("optimizer", __name__)
-
-# In-memory simulation config (session-level; survives restart via .env defaults)
-_simulation_config: dict = {
-    "zone": os.getenv("DEFAULT_ZONE", "US-CA"),
-    "lowCarbonThreshold": float(os.getenv("LOW_CARBON_THRESHOLD", "180")),
-    "baselineIntensity": float(os.getenv("BASELINE_INTENSITY", "380")),
-    "simulationSpeed": int(os.getenv("SIMULATION_SPEED", "15")),
-    "isSimulating": os.getenv("SIMULATION_MODE", "true").lower() == "true",
-}
 
 
 def _now_iso() -> str:
@@ -81,7 +74,8 @@ def schedule():
     tasks = data.get("tasks", [])
     window = data.get("window", {})
     method = data.get("method", "greedy").lower()
-    baseline = float(data.get("baselineIntensity", _simulation_config["baselineIntensity"]))
+    sim_config = get_simulation_config()
+    baseline = float(data.get("baselineIntensity", sim_config.get("baselineIntensity", 380)))
 
     if method not in ("greedy", "knapsack"):
         return jsonify({
@@ -124,23 +118,21 @@ def schedule():
             (t.get("duration", 0) / 60.0) * (t.get("powerDraw", 0) / 1000.0)
             for t in selected
         )
+        avg_intensity = window.get("avgIntensity") or window.get("carbonIntensity")
         log_recommendation(
             text=f"Scheduled {len(selected)} task(s) into window '{window.get('id', '?')}' via {method}.",
             reason=f"Estimated {savings['reductionPercent']}% carbon reduction vs. baseline intensity.",
             expected_carbon_saving=savings["totalSavedCo2"],
             expected_energy_saving=round(total_energy_kwh, 4),
+            recommended_start_time=window.get("startTime"),
+            forecast_used=sim_config.get("zone", "US-CA"),
             status="accepted",
         )
     except Exception:
         logger.exception("Failed to log scheduling recommendation")
 
     # Actually WRITE the scheduling decision onto each real, persisted
-    # activity — status="scheduled" + assignedWindowId. Without this, the
-    # scheduler only produced a log entry and the activity's real status
-    # never changed, so it never showed up under any status-grouped view.
-    # Best-effort per task: tasks passed in that aren't real DB rows
-    # (e.g. ad-hoc/synthetic scheduler input) are silently skipped rather
-    # than failing the whole request.
+    # activity — status="scheduled" + assignedWindowId + ScheduleSlot row.
     window_id = window.get("id")
     scheduled_count = 0
     for t in sched_result["result"].get("selectedTasks", []):
@@ -155,6 +147,17 @@ def schedule():
             logger.warning("Failed to mark task %s as scheduled: %s", task_id, update_error)
         else:
             scheduled_count += 1
+            try:
+                persist_schedule_slot(
+                    activity_id=task_id,
+                    window_id=window_id or "default-window",
+                    start_time=window.get("startTime"),
+                    end_time=window.get("endTime"),
+                    avg_carbon_intensity=window.get("avgIntensity"),
+                    status="assigned",
+                )
+            except Exception:
+                logger.exception("Failed to persist ScheduleSlot for task %s", task_id)
     logger.info("Scheduler persisted status=scheduled for %d/%d task(s)", scheduled_count, len(selected))
 
     return jsonify({
@@ -202,9 +205,10 @@ def eco_score():
             "timestamp": _now_iso(),
         }), 400
 
+    sim_config = get_simulation_config()
     baseline = request.args.get(
         "baselineIntensity",
-        _simulation_config["baselineIntensity"],
+        sim_config.get("baselineIntensity", 380.0),
         type=float,
     )
     peak = request.args.get("peakIntensity", 800.0, type=float)
@@ -248,6 +252,8 @@ def eco_score():
             reason=score["reason"],
             expected_carbon_saving=expected_carbon,
             expected_energy_saving=expected_energy,
+            eco_score=score["ecoScore"],
+            forecast_used=sim_config.get("zone", "US-CA"),
             status="pending",
         )
     except Exception:
@@ -258,7 +264,7 @@ def eco_score():
     try:
         from services.analytics_service import log_carbon_snapshot
         log_carbon_snapshot(
-            region=_simulation_config["zone"],
+            region=sim_config.get("zone", "US-CA"),
             carbon_intensity=current_intensity,
             source="eco-score",
             activity_id=task_id if persisted_task else None,
@@ -280,7 +286,7 @@ def eco_score():
 @optimizer_bp.route("/config/simulation", methods=["POST"])
 def set_config():
     """
-    Update simulation configuration parameters.
+    Update simulation configuration parameters in PostgreSQL system_settings.
 
     Request Body (JSON, all optional):
         zone (str)
@@ -292,23 +298,13 @@ def set_config():
     Returns 200: { success: true, data: SimulationConfig }
     """
     data = request.get_json(silent=True) or {}
+    updated = set_simulation_config(data)
 
-    if "zone" in data:
-        _simulation_config["zone"] = str(data["zone"]).strip()
-    if "lowCarbonThreshold" in data:
-        _simulation_config["lowCarbonThreshold"] = float(data["lowCarbonThreshold"])
-    if "baselineIntensity" in data:
-        _simulation_config["baselineIntensity"] = float(data["baselineIntensity"])
-    if "simulationSpeed" in data:
-        _simulation_config["simulationSpeed"] = int(data["simulationSpeed"])
-    if "isSimulating" in data:
-        _simulation_config["isSimulating"] = bool(data["isSimulating"])
-
-    logger.info("Simulation config updated: %s", _simulation_config)
+    logger.info("Simulation config updated in PostgreSQL: %s", updated)
 
     return jsonify({
         "success": True,
-        "data": _simulation_config,
+        "data": updated,
         "timestamp": _now_iso(),
     }), 200
 
@@ -316,12 +312,13 @@ def set_config():
 @optimizer_bp.route("/config/simulation", methods=["GET"])
 def get_config():
     """
-    Retrieve current simulation configuration.
+    Retrieve current simulation configuration from PostgreSQL system_settings.
 
     Returns 200: { success: true, data: SimulationConfig }
     """
     return jsonify({
         "success": True,
-        "data": _simulation_config,
+        "data": get_simulation_config(),
         "timestamp": _now_iso(),
     }), 200
+

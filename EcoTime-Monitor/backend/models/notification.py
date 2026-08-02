@@ -19,10 +19,11 @@ class Notification(db.Model):
         db.String(64), db.ForeignKey("activities.id", ondelete="CASCADE"),
         nullable=True, index=True,
     )
-    activity = db.relationship("Activity", backref=db.backref(
-        "notifications", cascade="all, delete-orphan", lazy="select",
-        order_by="Notification.created_at.desc()",
-    ))
+    activity = db.relationship(
+        "Activity",
+        back_populates="notifications",
+        lazy="select",
+    )
 
     title = db.Column(db.String(255), nullable=False)
     message = db.Column(db.Text, nullable=False)

@@ -16,10 +16,13 @@ from __future__ import annotations
 import logging
 import os
 from datetime import datetime, timezone
+from pathlib import Path
 
 from flask import Flask, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
+from sqlalchemy import create_engine, text
+from sqlalchemy.exc import SQLAlchemyError
 
 from extensions import db
 
@@ -36,6 +39,47 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+BASE_DIR = Path(__file__).resolve().parent
+DEFAULT_SQLITE_DB = BASE_DIR / "instance" / "ecotime.db"
+
+
+def _build_sqlite_uri() -> str:
+    DEFAULT_SQLITE_DB.parent.mkdir(parents=True, exist_ok=True)
+    return f"sqlite:///{DEFAULT_SQLITE_DB.as_posix()}"
+
+
+def _resolve_database_config(config_name: str, configured_uri: str | None) -> tuple[str, bool]:
+    """Prefer PostgreSQL when available, but fall back to SQLite for local/dev runs."""
+    if config_name == "testing":
+        return "sqlite:///:memory:", False
+
+    if configured_uri and configured_uri.startswith("postgres://"):
+        configured_uri = configured_uri.replace("postgres://", "postgresql://", 1)
+
+    if configured_uri and configured_uri.startswith("postgresql://"):
+        try:
+            engine = create_engine(
+                configured_uri,
+                connect_args={"connect_timeout": 2},
+                pool_pre_ping=True,
+            )
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            logger.info("Using PostgreSQL database from DATABASE_URL")
+            return configured_uri, True
+        except SQLAlchemyError as exc:
+            logger.warning(
+                "PostgreSQL connection unavailable (%s); falling back to local SQLite database",
+                exc,
+            )
+
+    if configured_uri:
+        logger.warning("DATABASE_URL was not usable for PostgreSQL; using local SQLite database")
+    else:
+        logger.warning("DATABASE_URL not set; using local SQLite database")
+
+    return _build_sqlite_uri(), False
 
 
 # ---------------------------------------------------------------------------
@@ -56,34 +100,14 @@ def create_app(config_name: str | None = None) -> Flask:
     app = Flask(__name__)
 
     # -----------------------------------------------------------------------
-    # Database Path
-    # -----------------------------------------------------------------------
-    # THIS IS WHERE POSTGRESQL VS SQLITE IS DECIDED:
-    #   - Set DATABASE_URL in backend/.env (see .env.example) to use
-    #     PostgreSQL, e.g. postgresql://user:password@localhost:5432/ecotime
-    #   - Leave it unset to keep using local SQLite (backend/ecotime.db) —
-    #     no code change needed either way, this is purely env-driven.
-    #
-    # Flask-SQLAlchemy resolves a *relative* sqlite:/// URI against
-    # app.instance_path (a hidden "instance/" subfolder), NOT the working
-    # directory — a well-known surprise. Using an explicit absolute path
-    # here guarantees the SQLite fallback is always backend/ecotime.db,
-    # unambiguously, regardless of instance-folder resolution or CWD.
-    _BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
-    _default_db_path = f"sqlite:///{os.path.join(_BACKEND_DIR, 'ecotime.db')}"
-    db_path = os.getenv("DATABASE_URL", _default_db_path)
-
-    # Heroku / Railway export DATABASE_URL with the 'postgres://' scheme,
-    # which SQLAlchemy 2.x rejects (requires 'postgresql://').
-    if db_path.startswith("postgres://"):
-        db_path = db_path.replace("postgres://", "postgresql://", 1)
-
-    # -----------------------------------------------------------------------
     # Configuration
     # -----------------------------------------------------------------------
     config_name = config_name or os.getenv("FLASK_ENV", "development")
+    database_uri, _is_pg = _resolve_database_config(
+        config_name,
+        os.getenv("DATABASE_URL"),
+    )
 
-    _is_pg = db_path.startswith("postgresql://")
     _pool_opts = {
         "pool_pre_ping": True,
         "pool_size": 10,
@@ -95,7 +119,7 @@ def create_app(config_name: str | None = None) -> Flask:
         app.config.update(
             DEBUG=False,
             TESTING=False,
-            SQLALCHEMY_DATABASE_URI=db_path,
+            SQLALCHEMY_DATABASE_URI=database_uri,
             SQLALCHEMY_TRACK_MODIFICATIONS=False,
             SQLALCHEMY_ENGINE_OPTIONS=_pool_opts,
         )
@@ -110,7 +134,7 @@ def create_app(config_name: str | None = None) -> Flask:
         app.config.update(
             DEBUG=True,
             TESTING=False,
-            SQLALCHEMY_DATABASE_URI=db_path,
+            SQLALCHEMY_DATABASE_URI=database_uri,
             SQLALCHEMY_TRACK_MODIFICATIONS=False,
             SQLALCHEMY_ENGINE_OPTIONS=_pool_opts,
         )
@@ -146,6 +170,12 @@ def create_app(config_name: str | None = None) -> Flask:
         from services.system_settings_service import seed_defaults
         seed_defaults()
         logger.info("System settings seeded")
+
+        # Migrate existing SQLite data to PostgreSQL if ecotime.db is present
+        from migrations.migrate_sqlite_to_pg import migrate_sqlite_data_to_pg
+        migrated = migrate_sqlite_data_to_pg(db.session, db.engine)
+        if any(migrated.values()):
+            logger.info("Migrated SQLite data to PostgreSQL: %s", migrated)
 
     # -----------------------------------------------------------------------
     # Warm up the ML forecast model now (unpickling it is the slow part —

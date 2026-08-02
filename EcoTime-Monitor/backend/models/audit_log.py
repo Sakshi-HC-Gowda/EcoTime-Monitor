@@ -26,6 +26,11 @@ class AuditLog(db.Model):
         db.String(64), db.ForeignKey("activities.id", ondelete="SET NULL"),
         nullable=True, index=True,
     )
+    activity = db.relationship(
+        "Activity",
+        back_populates="audit_logs",
+        lazy="select",
+    )
 
     created_at = db.Column(
         db.DateTime(timezone=True),

@@ -43,7 +43,7 @@ VALID_ACTIVITY_TYPES = {
 
 # Allowed transitions (empty set = terminal). Legacy statuses remain valid.
 STATUS_TRANSITIONS: dict[str, set[str]] = {
-    "draft": {"pending", "idle", "cancelled", "failed"},
+    "draft": {"pending", "idle", "running", "scheduled", "delayed", "cancelled", "failed"},
     "idle": {"pending", "scheduled", "running", "cancelled", "failed"},
     "pending": {"scheduled", "running", "waiting_for_device", "cancelled", "failed"},
     "scheduled": {"waiting_for_device", "running", "missed", "cancelled", "failed", "delayed"},
@@ -202,7 +202,7 @@ def create_activity(data: dict) -> tuple[dict | None, str | None]:
         power_draw=power_draw,
         priority_score=priority_score,
         flexibility_score=flexibility_score,
-        status="draft",
+        status="pending",
         progress=0.0,
         assigned_window_id=None,
     )
@@ -212,7 +212,7 @@ def create_activity(data: dict) -> tuple[dict | None, str | None]:
         db.session.add(ActivityHistory(
             activity_id=task_id,
             previous_status=None,
-            new_status="draft",
+            new_status="pending",
             execution_time=None,
         ))
         profile = _estimate_workload_profile(
@@ -228,7 +228,7 @@ def create_activity(data: dict) -> tuple[dict | None, str | None]:
         ))
         db.session.add(CurrentStatus(
             activity_id=task_id,
-            current_status="draft",
+            current_status="pending",
         ))
         on_activity_created(activity)
         db.session.commit()

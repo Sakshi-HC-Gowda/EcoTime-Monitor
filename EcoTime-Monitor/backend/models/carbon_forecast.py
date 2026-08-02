@@ -32,9 +32,11 @@ class CarbonForecast(db.Model):
         db.String(64), db.ForeignKey("activities.id", ondelete="CASCADE"),
         nullable=True, index=True,
     )
-    activity = db.relationship("Activity", backref=db.backref(
-        "carbon_forecasts", cascade="all, delete-orphan", lazy="select",
-    ))
+    activity = db.relationship(
+        "Activity",
+        back_populates="carbon_forecasts",
+        lazy="select",
+    )
 
     __table_args__ = (
         db.UniqueConstraint(

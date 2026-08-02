@@ -42,12 +42,10 @@ _CANCELLED_STATUSES = {"failed"}
 
 _DEFAULT_ZONE = os.getenv("DEFAULT_ZONE", "US-CA")
 
-# In-memory system-wide operating flag (mirrors the simulation-config
-# pattern already used in routes/optimizer.py — no need for a table).
-_system_status: dict[str, Any] = {
-    "isActive": True,
-    "updatedAt": None,
-}
+from services.system_settings_service import (
+    get_system_status as get_pg_system_status,
+    set_system_status as set_pg_system_status,
+)
 
 
 def _now() -> datetime:
@@ -439,6 +437,9 @@ def log_recommendation(
     activity_id: str | None = None,
     expected_carbon_saving: float | None = None,
     expected_energy_saving: float | None = None,
+    eco_score: float | None = None,
+    forecast_used: str | None = None,
+    recommended_start_time: datetime | str | None = None,
     status: str = "pending",
 ) -> dict | None:
     """
@@ -447,12 +448,24 @@ def log_recommendation(
     breaks the recommendation/scheduling endpoints that call this.
     """
     try:
+        parsed_time = None
+        if isinstance(recommended_start_time, str):
+            try:
+                parsed_time = datetime.fromisoformat(recommended_start_time.replace("Z", "+00:00"))
+            except ValueError:
+                parsed_time = None
+        elif isinstance(recommended_start_time, datetime):
+            parsed_time = recommended_start_time
+
         rec = Recommendation(
             activity_id=activity_id,
             text=(text or "")[:500],
             reason=(reason or "")[:500] or None,
             expected_carbon_saving=expected_carbon_saving,
             expected_energy_saving=expected_energy_saving,
+            eco_score=eco_score,
+            forecast_used=forecast_used,
+            recommended_start_time=parsed_time,
             status=status if status in {"pending", "accepted", "rejected", "expired"} else "pending",
         )
         db.session.add(rec)
@@ -523,7 +536,7 @@ def get_status_summary() -> dict:
     """
     Aggregate status counts read from the dedicated CurrentStatus table
     (kept 1:1 in sync with Activity.status by activity_service), plus
-    the system-wide operating flag. Single grouped SQL query.
+    the system-wide operating flag from PostgreSQL system_settings.
     """
     rows = (
         db.session.query(CurrentStatus.current_status, func.count(CurrentStatus.id))
@@ -537,6 +550,8 @@ def get_status_summary() -> dict:
     postponed = sum(counts.get(s, 0) for s in _POSTPONED_STATUSES)
     cancelled = sum(counts.get(s, 0) for s in _CANCELLED_STATUSES)
     pending = sum(counts.get(s, 0) for s in _PENDING_STATUSES)
+    scheduled = counts.get("scheduled", 0)
+    missed = counts.get("missed", 0)
     total = sum(counts.values())
 
     return {
@@ -546,14 +561,15 @@ def get_status_summary() -> dict:
             "postponed": postponed,
             "cancelled": cancelled,
             "pending": pending,
+            "scheduled": scheduled,
+            "missed": missed,
             "total": total,
         },
-        "system": dict(_system_status),
+        "system": get_pg_system_status(),
     }
 
 
 def set_system_status(is_active: bool) -> dict:
-    """Update the system-wide operating flag (e.g. pause/resume the optimizer)."""
-    _system_status["isActive"] = bool(is_active)
-    _system_status["updatedAt"] = _now_iso()
-    return dict(_system_status)
+    """Update the system-wide operating flag in PostgreSQL system_settings."""
+    return set_pg_system_status(is_active)
+

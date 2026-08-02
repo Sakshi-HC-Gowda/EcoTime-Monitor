@@ -95,6 +95,72 @@ class Activity(db.Model):
     )
 
     # -----------------------------------------------------------------------
+    # Relationships (Cascade Delete)
+    # -----------------------------------------------------------------------
+    history = db.relationship(
+        "ActivityHistory",
+        back_populates="activity",
+        cascade="all, delete-orphan",
+        lazy="select",
+    )
+    workload_profile = db.relationship(
+        "WorkloadProfile",
+        back_populates="activity",
+        uselist=False,
+        cascade="all, delete-orphan",
+        lazy="select",
+    )
+    current_status = db.relationship(
+        "CurrentStatus",
+        back_populates="activity",
+        uselist=False,
+        cascade="all, delete-orphan",
+        lazy="select",
+    )
+    recommendations = db.relationship(
+        "Recommendation",
+        back_populates="activity",
+        cascade="all, delete-orphan",
+        lazy="select",
+    )
+    schedule_slots = db.relationship(
+        "ScheduleSlot",
+        back_populates="activity",
+        cascade="all, delete-orphan",
+        lazy="select",
+    )
+    execution_history = db.relationship(
+        "ExecutionHistory",
+        back_populates="activity",
+        cascade="all, delete-orphan",
+        lazy="select",
+    )
+    carbon_snapshots = db.relationship(
+        "CarbonSnapshot",
+        back_populates="activity",
+        cascade="all, delete-orphan",
+        lazy="select",
+    )
+    notifications = db.relationship(
+        "Notification",
+        back_populates="activity",
+        cascade="all, delete-orphan",
+        lazy="select",
+    )
+    audit_logs = db.relationship(
+        "AuditLog",
+        back_populates="activity",
+        cascade="all, delete-orphan",
+        lazy="select",
+    )
+    carbon_forecasts = db.relationship(
+        "CarbonForecast",
+        back_populates="activity",
+        cascade="all, delete-orphan",
+        lazy="select",
+    )
+
+    # -----------------------------------------------------------------------
     # Serialisation
     # -----------------------------------------------------------------------
 
@@ -133,6 +199,14 @@ class Activity(db.Model):
         Create an Activity instance from a camelCase request dict.
         """
         activity_type = data.get("activityType", "batch-processing")
+        raw_deadline = data.get("deadline")
+        parsed_deadline = None
+        if raw_deadline:
+            try:
+                parsed_deadline = datetime.fromisoformat(str(raw_deadline).replace("Z", "+00:00"))
+            except ValueError:
+                parsed_deadline = None
+
         return cls(
             id=data["id"],
             name=data["name"],
@@ -145,6 +219,7 @@ class Activity(db.Model):
             flexibility_score=int(data.get("flexibilityScore", 70)),
             estimated_energy_kwh=data.get("estimatedEnergyKwh"),
             estimated_carbon_grams=data.get("estimatedCarbonGrams"),
+            deadline=parsed_deadline,
             status=data.get("status", "draft"),
             progress=float(data.get("progress", 0)),
             assigned_window_id=data.get("assignedWindowId"),
@@ -152,3 +227,4 @@ class Activity(db.Model):
 
     def __repr__(self) -> str:
         return f"<Activity {self.id!r} name={self.name!r} status={self.status!r}>"
+

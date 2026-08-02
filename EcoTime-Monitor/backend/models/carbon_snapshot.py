@@ -25,11 +25,13 @@ class CarbonSnapshot(db.Model):
     # aren't tied to one activity. When a snapshot IS taken in the context of
     # scoring/scheduling a specific activity (see eco-score route), it's linked.
     activity_id = db.Column(
-        db.String(64), db.ForeignKey("activities.id"), nullable=True, index=True
+        db.String(64), db.ForeignKey("activities.id", ondelete="CASCADE"), nullable=True, index=True
     )
-    activity = db.relationship("Activity", backref=db.backref(
-        "carbon_snapshots", cascade="all, delete-orphan", lazy="select"
-    ))
+    activity = db.relationship(
+        "Activity",
+        back_populates="carbon_snapshots",
+        lazy="select",
+    )
 
     region = db.Column(db.String(32), nullable=False, index=True)
     carbon_intensity = db.Column(db.Float, nullable=False)   # gCO2/kWh

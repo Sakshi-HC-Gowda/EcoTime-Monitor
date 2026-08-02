@@ -21,6 +21,7 @@ from models.recommendation import Recommendation
 from models.execution_history import ExecutionHistory
 from models.analytics_snapshot import AnalyticsSnapshot
 from models.carbon_forecast import CarbonForecast
+from models.schedule_slot import ScheduleSlot
 from models.notification import Notification
 from models.audit_log import AuditLog
 from models.current_status import CurrentStatus
@@ -315,3 +316,45 @@ def on_activity_status_changed(
         details={"from": previous_status, "to": activity.status},
     )
     refresh_analytics_snapshot("status_changed", activity.id)
+
+
+def persist_schedule_slot(
+    activity_id: str,
+    window_id: str,
+    start_time: datetime | str | None = None,
+    end_time: datetime | str | None = None,
+    avg_carbon_intensity: float | None = None,
+    eco_score: float | None = None,
+    status: str = "assigned",
+) -> ScheduleSlot:
+    """Persist a green window assignment for an activity in PostgreSQL."""
+    parsed_start = None
+    if isinstance(start_time, str):
+        try:
+            parsed_start = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+        except ValueError:
+            parsed_start = None
+    elif isinstance(start_time, datetime):
+        parsed_start = start_time
+
+    parsed_end = None
+    if isinstance(end_time, str):
+        try:
+            parsed_end = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
+        except ValueError:
+            parsed_end = None
+    elif isinstance(end_time, datetime):
+        parsed_end = end_time
+
+    slot = ScheduleSlot(
+        activity_id=activity_id,
+        window_id=window_id,
+        start_time=parsed_start or _now(),
+        end_time=parsed_end,
+        avg_carbon_intensity=avg_carbon_intensity,
+        eco_score=eco_score,
+        status=status,
+    )
+    db.session.add(slot)
+    return slot
+

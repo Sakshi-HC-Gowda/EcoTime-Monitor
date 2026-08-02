@@ -41,6 +41,13 @@ VALID_ACTIVITY_TYPES = {
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
+WORKLOAD_PROFILES = {
+    "Model Training": {"power": 450, "priority": 40, "flexibility": 90},
+    "Dataset Download": {"power": 200, "priority": 20, "flexibility": 95},
+    "Software Update": {"power": 80, "priority": 30, "flexibility": 100},
+    "Video Rendering": {"power": 350, "priority": 50, "flexibility": 85},
+    "Cloud Backup": {"power": 120, "priority": 20, "flexibility": 100},
+}
 
 def create_activity(data: dict) -> tuple[dict | None, str | None]:
     """
@@ -55,7 +62,7 @@ def create_activity(data: dict) -> tuple[dict | None, str | None]:
         (task_dict, error_message) — one of them will be None
     """
     # Validate required fields
-    required = ["name", "type", "duration", "powerDraw"]
+    required = ["name", "type", "duration"]
     missing = [f for f in required if f not in data or data[f] is None]
     if missing:
         return None, f"Missing required fields: {', '.join(missing)}"
@@ -72,21 +79,31 @@ def create_activity(data: dict) -> tuple[dict | None, str | None]:
     # Validate numeric fields
     try:
         duration = float(data["duration"])
-        power_draw = float(data["powerDraw"])
     except (ValueError, TypeError):
-        return None, "Fields 'duration' and 'powerDraw' must be numeric"
+        return None, "Fields duration must be numeric"
+    
 
     if duration <= 0:
-        return None, "Field 'duration' must be greater than 0"
-    if power_draw <= 0:
-        return None, "Field 'powerDraw' must be greater than 0"
+        return None, "Field duration must be greater than 0"
+
+    activity_name=data["name"]
+    profile = WORKLOAD_PROFILES.get(activity_name)
+    if not profile:
+        profile = WORKLOAD_PROFILES.get(category)
+        
+    if profile:
+        power_draw = profile.get("power",150)
+        priority_score = profile.get("priority",30)
+        flexibility_score = profile.get("flexibility",80)
+    else:
+        power_draw=150
+        priority_score=30
+        flexibility_score=80
 
     task_id = f"task-{datetime.now(timezone.utc).timestamp():.6f}"
     now = _now_iso()
 
-    flexibility_score = data.get("flexibilityScore")
-    if flexibility_score is None:
-        flexibility_score = 70 if task_type == "flexible" else 0
+    
 
     task: dict[str, Any] = {
         "id": task_id,
@@ -95,8 +112,8 @@ def create_activity(data: dict) -> tuple[dict | None, str | None]:
         "activityType": activity_type,
         "duration": duration,
         "powerDraw": power_draw,
-        "priorityScore": min(100, max(0, int(data.get("priorityScore", 50)))),
-        "flexibilityScore": min(100, max(0, int(flexibility_score))),
+        "priorityScore": priority_score,
+        "flexibilityScore":flexibility_score,
         "status": "idle",
         "progress": 0,
         "assignedWindowId": None,

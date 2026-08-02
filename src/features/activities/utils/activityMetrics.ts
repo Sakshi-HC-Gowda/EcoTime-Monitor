@@ -1,4 +1,4 @@
-import type { Task } from '@/types/domain';
+import type { GreenWindow, Task } from '@/types/domain';
 
 type TaskLike = Pick<Task, 'duration' | 'powerDraw' | 'flexibilityScore' | 'priorityScore'> &
   Partial<Pick<Task, 'estimatedEnergyConsumption' | 'estimatedCarbonImpact' | 'ecoScore' | 'recommendation' | 'recommendedStartTime' | 'createdAt'>>;
@@ -47,14 +47,18 @@ export function getRecommendationText(task: TaskLike): string {
   return 'Run now';
 }
 
-export function getRecommendedStartTimeIso(task: TaskLike): string {
+export function getRecommendedStartTimeIso(task: TaskLike, greenWindows: GreenWindow[] = []): string {
   if (task.recommendedStartTime) {
     return task.recommendedStartTime;
   }
 
+  const fittingWindow = greenWindows.find((window) => window.duration >= task.duration);
+  if (fittingWindow?.startTime) {
+    return fittingWindow.startTime;
+  }
+
   const created = task.createdAt ? new Date(task.createdAt) : new Date();
-  const offsetMinutes = getRecommendationText(task).toLowerCase().includes('schedule') ? 30 : 0;
-  return new Date(created.getTime() + offsetMinutes * 60_000).toISOString();
+  return new Date(created.getTime() + 30 * 60_000).toISOString();
 }
 
 export function formatRecommendedTime(iso: string): string {

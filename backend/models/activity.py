@@ -19,7 +19,12 @@ class Activity(db.Model):
     Represents a digital activity or task to be carbon-aware scheduled.
 
     Status state machine:
+        idle, pending, scheduled, running, paused, delayed, completed, failed
+
+    Common lifecycle:
         pending → scheduled → running → completed
+        scheduled ↔ paused
+        running → failed
     """
 
     __tablename__ = "activities"

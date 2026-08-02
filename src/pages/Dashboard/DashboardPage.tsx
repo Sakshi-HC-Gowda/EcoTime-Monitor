@@ -73,10 +73,18 @@ export function DashboardPage() {
 
   const currentIntensity = carbon.current.carbonIntensity;
   const isLow = currentIntensity < 180;
-  const pendingCount = activitiesData?.items.filter((t) => t.status === 'pending').length || 0;
-  const scheduledCount = activitiesData?.items.filter((t) => t.status === 'scheduled').length || 0;
-  const runningCount = activitiesData?.items.filter((t) => t.status === 'running').length || 0;
-  const completedCount = activitiesData?.items.filter((t) => t.status === 'completed').length || 0;
+  let pendingCount = 0;
+  let scheduledCount = 0;
+  let runningCount = 0;
+  let completedCount = 0;
+
+  for (const task of activitiesData?.items ?? []) {
+    if (task.status === 'pending') pendingCount += 1;
+    else if (task.status === 'scheduled') scheduledCount += 1;
+    else if (task.status === 'running') runningCount += 1;
+    else if (task.status === 'completed') completedCount += 1;
+  }
+
   const activeTasksCount = runningCount;
   const totalTasksCount = activitiesData?.total || 0;
   const nextWindow = windows && windows.length > 0 ? windows[0] : null;

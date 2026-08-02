@@ -9,9 +9,13 @@ so routes work correctly even during startup.
 
 from __future__ import annotations
 
+import os
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
+
+from optimization.window_ranking import rank_windows
+from services.carbon_service import detect_green_windows, get_carbon_data
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +37,9 @@ VALID_ACTIVITY_TYPES = {
     "dataset-download", "ci-cd-pipeline", "batch-processing",
 }
 
+DEFAULT_ZONE = os.getenv("DEFAULT_ZONE", "US-CA")
+DEFAULT_GREEN_THRESHOLD = float(os.getenv("LOW_CARBON_THRESHOLD", "180"))
+
 # ---------------------------------------------------------------------------
 # CRUD Operations
 # ---------------------------------------------------------------------------
@@ -45,10 +52,18 @@ def _now_iso() -> str:
 def _parse_iso(value: str | None) -> datetime | None:
     if not value:
         return None
+    normalized = value.strip()
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
     try:
-        return datetime.fromisoformat(value)
+        parsed = datetime.fromisoformat(normalized)
     except ValueError:
         return None
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+
+    return parsed.astimezone(timezone.utc)
 
 
 def _compute_derived_fields(data: dict[str, Any], created_at: str) -> dict[str, Any]:
@@ -70,7 +85,11 @@ def _compute_derived_fields(data: dict[str, Any], created_at: str) -> dict[str, 
         recommendation = "Run now"
     elif flexibility >= 60:
         recommendation = "Schedule for green window"
-        recommended_start_dt = created_dt.replace(microsecond=0) + timedelta(minutes=30)
+        recommended_start_iso = _find_recommended_start_time(duration)
+        if recommended_start_iso:
+            recommended_start_dt = _parse_iso(recommended_start_iso) or created_dt
+        else:
+            recommended_start_dt = created_dt.replace(microsecond=0) + timedelta(minutes=30)
     else:
         recommendation = "Run now"
 
@@ -81,6 +100,29 @@ def _compute_derived_fields(data: dict[str, Any], created_at: str) -> dict[str, 
         "recommendation": recommendation,
         "recommendedStartTime": recommended_start_dt.isoformat(),
     }
+
+
+def _find_recommended_start_time(duration_minutes: float) -> str | None:
+    """Pick the best future green-window start time for the task duration."""
+    try:
+        carbon = get_carbon_data(zone_id=DEFAULT_ZONE, offset_hours=0)
+        raw_windows = detect_green_windows(
+            forecast=carbon.get("forecast", []),
+            current_datetime=carbon["current"]["datetime"],
+            threshold=DEFAULT_GREEN_THRESHOLD,
+        )
+        ranked_windows = rank_windows(raw_windows)
+
+        fitting_window = next(
+            (window for window in ranked_windows if float(window.get("duration", 0)) >= duration_minutes),
+            ranked_windows[0] if ranked_windows else None,
+        )
+        if fitting_window:
+            return fitting_window.get("startTime")
+    except Exception as exc:
+        logger.warning("Falling back to simple recommendation because green-window lookup failed: %s", exc)
+
+    return None
 
 
 def _apply_time_transitions(task: dict[str, Any]) -> None:
@@ -244,7 +286,7 @@ def update_activity(task_id: str, updates: dict) -> tuple[dict | None, str | Non
     """
     Update allowed fields on an existing activity.
 
-    Allowed update fields: status, progress, assignedWindowId
+    Allowed update fields: status, progress, assignedWindowId, scheduledStartTime
 
     Returns:
         (updated_task, error_message)

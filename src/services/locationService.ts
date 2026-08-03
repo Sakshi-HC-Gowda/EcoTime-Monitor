@@ -180,7 +180,7 @@ export async function reverseGeocode(lat: number, lon: number): Promise<ReverseG
   const res = await fetch(url, {
     headers: {
       // Nominatim usage policy requires a valid User-Agent identifying your app
-      'User-Agent': 'EcoTime-CarbonOptimizer/2.0 (ecotimeproject@example.com)',
+      'User-Agent': 'EcoTime-CarbonOptimizer/2.0 (ecotime@app.internal)',
       'Accept-Language': 'en',
     },
   });
@@ -194,7 +194,7 @@ export async function reverseGeocode(lat: number, lon: number): Promise<ReverseG
   const country: string     = data.address?.country      || '';
   const countryCode: string = (data.address?.country_code || '').toUpperCase();
   // Nominatim uses 'state' for India and most countries
-  const state: string       = data.address?.state         || data.address?.region || '';
+  const state: string       = data.address?.state         || data.address?.state_district || data.address?.region || data.address?.province || '';
 
   if (!countryCode) {
     throw new Error('Could not determine country from coordinates.');

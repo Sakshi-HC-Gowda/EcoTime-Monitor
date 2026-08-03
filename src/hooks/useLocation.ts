@@ -15,7 +15,7 @@
  *  - Expose clearDetection() so manual zone selection can suppress the auto-zone
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { detectZoneFromLocation } from '../services/locationService';
 import type { DetectedLocation } from '../services/locationService';
 
@@ -35,12 +35,8 @@ export function useLocation(): UseLocationResult {
   const [location, setLocation]         = useState<DetectedLocation | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [triggerCount, setTriggerCount] = useState(0);
-  const hasRunRef                       = useRef(false);
 
   useEffect(() => {
-    if (hasRunRef.current && triggerCount === 0) return;
-    hasRunRef.current = true;
-
     let cancelled = false;
 
     const run = async () => {
@@ -59,7 +55,9 @@ export function useLocation(): UseLocationResult {
         const posErr = err as GeolocationPositionError | null;
         const isDenied =
           posErr?.code === GeolocationPositionError.PERMISSION_DENIED ||
-          (err instanceof Error && err.message.toLowerCase().includes('denied'));
+          (err instanceof Error &&
+            (err.message.toLowerCase().includes('user denied') ||
+             err.message.toLowerCase().includes('geolocation permission denied')));
 
         setStatus(isDenied ? 'denied' : 'error');
         setErrorMessage(
@@ -80,7 +78,7 @@ export function useLocation(): UseLocationResult {
   }, [triggerCount]);
 
   const retrigger = useCallback(() => {
-    setStatus('idle');
+    setLocation(null);
     setTriggerCount((c) => c + 1);
   }, []);
 

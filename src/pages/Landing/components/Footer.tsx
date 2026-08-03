@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import { Leaf } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 
@@ -20,10 +19,9 @@ export function Footer() {
           </div>
 
           <div className="flex flex-wrap items-center gap-6 md:gap-8 text-sm text-slate-400 font-medium">
-            <a href="#features" className="hover:text-white transition-colors duration-200">Features</a>
-            <a href="#workflow" className="hover:text-white transition-colors duration-200">Solution</a>
-            <a href="#dashboard-preview" className="hover:text-white transition-colors duration-200">Dashboard</a>
-            <Link to="/dashboard" className="hover:text-white transition-colors duration-200">Dashboard</Link>
+           <a href="#features">Features</a>
+<a href="#workflow">How it Works</a>
+<a href="#dashboard-preview">Preview</a>
           </div>
         </div>
 
@@ -31,9 +29,13 @@ export function Footer() {
           <p className="text-sm text-slate-500 text-center sm:text-left">
             © {new Date().getFullYear()} EcoTime. All rights reserved.
           </p>
-          <Button to="/dashboard" size="sm" variant="secondary">
-            Open Dashboard
-          </Button>
+          <Button
+to="/dashboard"
+size="sm"
+variant="secondary"
+>
+Get Started
+</Button>
         </div>
       </div>
     </footer>

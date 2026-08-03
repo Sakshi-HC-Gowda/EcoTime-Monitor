@@ -54,10 +54,11 @@ def create_activity(data: dict) -> tuple[dict | None, str | None]:
     Create and persist a new activity.
 
     Args:
-        data: Request body dict with required fields:
-            name, type, duration, powerDraw
-            and optional: activityType, priorityScore, flexibilityScore
+       data: Request body dict with required fields:
+           name, type, duration
 
+        Power draw, priority score, and flexibility score
+        are assigned automatically using workload profiles.
     Returns:
         (task_dict, error_message) — one of them will be None
     """
@@ -86,19 +87,18 @@ def create_activity(data: dict) -> tuple[dict | None, str | None]:
     if duration <= 0:
         return None, "Field duration must be greater than 0"
 
-    activity_name=data["name"]
+       activity_name = data["name"].strip()
+
     profile = WORKLOAD_PROFILES.get(activity_name)
-    if not profile:
-        profile = WORKLOAD_PROFILES.get(category)
-        
+
     if profile:
-        power_draw = profile.get("power",150)
-        priority_score = profile.get("priority",30)
-        flexibility_score = profile.get("flexibility",80)
+        power_draw = float(profile.get("power", 150))
+        priority_score = min(100, max(0, int(profile.get("priority", 30))))
+        flexibility_score = min(100, max(0, int(profile.get("flexibility", 80))))
     else:
-        power_draw=150
-        priority_score=30
-        flexibility_score=80
+        power_draw = 150.0
+        priority_score = 30
+        flexibility_score = 80
 
     task_id = f"task-{datetime.now(timezone.utc).timestamp():.6f}"
     now = _now_iso()
@@ -112,8 +112,8 @@ def create_activity(data: dict) -> tuple[dict | None, str | None]:
         "activityType": activity_type,
         "duration": duration,
         "powerDraw": power_draw,
-        "priorityScore": priority_score,
-        "flexibilityScore":flexibility_score,
+        "priorityScore": min(100, max(0, int(priority_score))),
+        "flexibilityScore": min(100, max(0, int(flexibility_score))),
         "status": "idle",
         "progress": 0,
         "assignedWindowId": None,

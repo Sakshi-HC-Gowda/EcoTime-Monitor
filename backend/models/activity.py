@@ -19,9 +19,12 @@ class Activity(db.Model):
     Represents a digital activity or task to be carbon-aware scheduled.
 
     Status state machine:
-        idle → pending → scheduled → running → completed
-             ↘         ↘           ↘ paused → running
-               delayed              failed
+        idle, pending, scheduled, running, paused, delayed, completed, failed
+
+    Common lifecycle:
+        pending → scheduled → running → completed
+        scheduled ↔ paused
+        running → failed
     """
 
     __tablename__ = "activities"
@@ -72,7 +75,7 @@ class Activity(db.Model):
             name="task_status_enum",
         ),
         nullable=False,
-        default="idle",
+        default="pending",
     )
     progress = db.Column(db.Float, default=0.0)              # 0-100
     assigned_window_id = db.Column(db.String(64), nullable=True)
@@ -131,7 +134,7 @@ class Activity(db.Model):
             power_draw=float(data["powerDraw"]),
             priority_score=int(data.get("priorityScore", 50)),
             flexibility_score=int(data.get("flexibilityScore", 70)),
-            status=data.get("status", "idle"),
+            status=data.get("status", "pending"),
             progress=float(data.get("progress", 0)),
             assigned_window_id=data.get("assignedWindowId"),
         )

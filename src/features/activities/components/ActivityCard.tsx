@@ -98,7 +98,7 @@ export function ActivityCard({ activity, onUpdateStatus, onRunNow, onScheduleUpl
       className={`relative flex flex-col overflow-hidden border-t-2 ${topBorderClass}`}
       padding="none"
     >
-      <div className="flex items-start justify-between p-[var(--card-padding-md)] pb-4">
+      <div className="flex items-start justify-between p-[var(--card-padding-md)] pb-5">
         <div className="min-w-0 pr-3">
           <span className="label-text font-mono">{activity.activityType}</span>
           <h3 className="mt-0.5 text-[15px] font-bold leading-tight text-white">{activity.name}</h3>
@@ -106,7 +106,7 @@ export function ActivityCard({ activity, onUpdateStatus, onRunNow, onScheduleUpl
         <StatusBadge status={activity.status} />
       </div>
 
-      <div className="grid grid-cols-2 gap-2 px-[var(--card-padding-md)] pb-4">
+      <div className="grid grid-cols-2 gap-3 px-[var(--card-padding-md)] pb-5">
         <div className="ds-card p-2.5">
           <span className="label-text mb-1 block">Estimated Power</span>
           <span className="flex items-center gap-1.5 text-xs font-semibold text-white">
@@ -204,6 +204,7 @@ export function ActivityCard({ activity, onUpdateStatus, onRunNow, onScheduleUpl
       )}
 
       <div className="flex items-center gap-2 border-t border-white/[0.04] bg-white/[0.01] px-[var(--card-padding-md)] py-3.5">
+      <div className="flex items-center gap-2.5 border-t border-white/[0.04] bg-white/[0.01] px-[var(--card-padding-md)] py-4">
         {canAcceptRecommendation && (
           <button
             onClick={handleSchedule}

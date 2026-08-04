@@ -19,9 +19,9 @@ export function Footer() {
           </div>
 
           <div className="flex flex-wrap items-center gap-6 md:gap-8 text-sm text-slate-400 font-medium">
-           <a href="#features">Features</a>
-<a href="#workflow">How it Works</a>
-<a href="#dashboard-preview">Preview</a>
+            <a href="#features">Features</a>
+            <a href="#workflow">How it Works</a>
+            {/* <a href="#dashboard-preview">Preview</a> */}
           </div>
         </div>
 
@@ -30,12 +30,12 @@ export function Footer() {
             © {new Date().getFullYear()} EcoTime. All rights reserved.
           </p>
           <Button
-to="/dashboard"
-size="sm"
-variant="secondary"
->
-Get Started
-</Button>
+            to="/dashboard"
+            size="sm"
+            variant="secondary"
+          >
+            Get Started
+          </Button>
         </div>
       </div>
     </footer>

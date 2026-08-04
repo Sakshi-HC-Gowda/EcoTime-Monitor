@@ -139,11 +139,11 @@ export function ActivitiesPage() {
 
   if (isLoading) {
     return (
-      <div className="page-shell page-stack">
+      <div className="page-shell page-stack activities-page">
+        <LoadingSkeleton count={1} height="h-16" variant="row" />
         <LoadingSkeleton count={1} height="h-14" variant="row" />
-        <LoadingSkeleton count={1} height="h-12" variant="row" />
-        <div className="card-grid card-grid-sm-2 card-grid-lg-3">
-          <LoadingSkeleton count={3} height="h-48" />
+        <div className="card-grid card-grid-sm-2 card-grid-lg-3 activities-grid">
+          <LoadingSkeleton count={3} height="h-52" />
         </div>
       </div>
     );
@@ -151,7 +151,7 @@ export function ActivitiesPage() {
 
   if (isError || !activitiesData) {
     return (
-      <div className="page-shell">
+      <div className="page-shell activities-page">
         <ErrorState onRetry={() => refetch()} />
       </div>
     );
@@ -170,9 +170,10 @@ export function ActivitiesPage() {
         className="hidden"
         onChange={handleFileSelection}
       />
+    <div className="page-shell page-stack activities-page">
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="page-header">
+      <div className="page-header activities-header">
         <div>
           <h1 className="page-header-title heading-row">
             Digital Workloads
@@ -185,13 +186,15 @@ export function ActivitiesPage() {
           </p>
         </div>
 
-        <Button size="sm" onClick={() => setIsModalOpen(true)} iconLeft={<Plus className="w-3.5 h-3.5" />}>
-          Register Activity
-        </Button>
+        <div className="cluster">
+          <Button size="sm" onClick={() => setIsModalOpen(true)} iconLeft={<Plus className="w-3.5 h-3.5" />}>
+            Register Activity
+          </Button>
+        </div>
       </div>
 
       {/* ── Segment control tabs ────────────────────────────────────────────── */}
-      <div className="segment-control w-full sm:w-auto">
+      <div className="segment-control activities-segment w-full sm:w-auto">
         {TABS.map(({ value, label }) => {
           const count = value === 'all'
             ? activitiesData.total
@@ -230,7 +233,7 @@ export function ActivitiesPage() {
           accentColor="amber"
         />
       ) : (
-        <div className="card-grid card-grid-sm-2 card-grid-lg-3">
+        <div className="card-grid card-grid-sm-2 card-grid-lg-3 activities-grid">
           {tasks.map((task) => (
             <ActivityCard
               key={task.id}

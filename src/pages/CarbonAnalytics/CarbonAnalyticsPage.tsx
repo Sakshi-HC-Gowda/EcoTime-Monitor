@@ -19,7 +19,7 @@ export function CarbonAnalyticsPage() {
 
   if (isLoading) {
     return (
-      <div className="page-shell page-stack">
+      <div className="page-shell page-stack max-w-[1650px] mx-auto">
         <LoadingSkeleton count={1} height="h-14" variant="row" />
         <div className="card-grid card-grid-sm-2 card-grid-lg-4">
           <LoadingSkeleton count={4} height="h-28" />
@@ -41,7 +41,7 @@ export function CarbonAnalyticsPage() {
   const isOptimal = current < 180;
 
   return (
-    <div className="page-shell page-stack">
+    <div className="page-shell page-stack max-w-[1650px] mx-auto">
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="page-header">

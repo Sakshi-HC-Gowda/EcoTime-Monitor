@@ -16,7 +16,7 @@ export function ForecastPage() {
 
   if (isLoading) {
     return (
-      <div className="page-shell page-stack">
+      <div className="page-shell page-stack max-w-[1650px] mx-auto">
         <LoadingSkeleton count={3} height="h-40" />
       </div>
     );
@@ -31,7 +31,7 @@ export function ForecastPage() {
   }
 
   return (
-    <div className="page-shell page-stack">
+    <div className="page-shell page-stack max-w-[1650px] mx-auto">
       <div>
         <h1 className="page-header-title heading-row">
           ML Carbon Forecast

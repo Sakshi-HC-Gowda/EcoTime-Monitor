@@ -52,7 +52,7 @@ export function OptimizationPage() {
 
   if (activitiesLoading || windowsLoading) {
     return (
-      <div className="page-shell page-stack">
+      <div className="page-shell page-stack max-w-[1650px] mx-auto">
         <LoadingSkeleton count={3} height="h-40" />
       </div>
     );
@@ -137,7 +137,7 @@ export function OptimizationPage() {
   );
 
   return (
-    <div className="page-shell page-stack">
+    <div className="page-shell page-stack max-w-[1650px] mx-auto">
       <div className="page-header">
         <div>
           <h1 className="page-header-title heading-row">

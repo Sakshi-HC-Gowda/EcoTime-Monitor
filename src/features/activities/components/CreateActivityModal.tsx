@@ -2,6 +2,15 @@ import { useState } from 'react';
 import { X, ChevronDown } from 'lucide-react';
 import type { ActivityType, CreateTaskRequest } from '@/types/domain';
 import { Button } from '@/components/ui/Button';
+import { useGreenWindows } from '@/features/carbon/hooks/useCarbon';
+import {
+  formatRecommendedTime,
+  getEstimatedCarbonImpact,
+  getEstimatedEcoScore,
+  getEstimatedEnergyKwh,
+  getRecommendationText,
+  getRecommendedStartTimeIso,
+} from '@/features/activities/utils/activityMetrics';
 
 interface Props {
   isOpen: boolean;
@@ -33,12 +42,27 @@ const numInputClass =
   'w-full h-10 px-3 rounded-xl bg-slate-950/80 border border-white/[0.07] text-[13px] text-white font-mono font-medium focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500/40 transition-all';
 
 export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
+  const { data: greenWindows = [] } = useGreenWindows('US-CA', 180, 0, isOpen);
   const [name, setName] = useState('');
   const [activityType, setActivityType] = useState<ActivityType>('dataset-download');
   const [duration, setDuration] = useState(45);
   const [powerDraw, setPowerDraw] = useState(350);
   const [priorityScore, setPriorityScore] = useState(50);
   const [flexibilityScore, setFlexibilityScore] = useState(80);
+
+  const estimateDraft = {
+    duration: Number(duration),
+    powerDraw: Number(powerDraw),
+    priorityScore: Number(priorityScore),
+    flexibilityScore: Number(flexibilityScore),
+    createdAt: new Date().toISOString(),
+  };
+
+  const estimatedEnergy = getEstimatedEnergyKwh(estimateDraft);
+  const estimatedCarbon = getEstimatedCarbonImpact(estimateDraft);
+  const estimatedEcoScore = getEstimatedEcoScore(estimateDraft);
+  const recommendation = getRecommendationText(estimateDraft);
+  const recommendedStart = formatRecommendedTime(getRecommendedStartTimeIso(estimateDraft, greenWindows));
 
   if (!isOpen) return null;
 
@@ -172,6 +196,21 @@ export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
                   className={numInputClass}
                 />
               </div>
+            </div>
+
+            <div className="rounded-xl border border-green-500/20 bg-green-500/[0.05] p-4">
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.08em] text-green-400">Estimated Values</p>
+              <div className="grid grid-cols-2 gap-2 text-xs text-slate-200">
+                <p>Estimated Power: <span className="font-semibold text-white">{Number(powerDraw).toFixed(0)} W</span></p>
+                <p>Estimated Energy: <span className="font-semibold text-white">{estimatedEnergy.toFixed(2)} kWh</span></p>
+                <p>Carbon Impact: <span className="font-semibold text-white">{estimatedCarbon.toFixed(0)} gCO2</span></p>
+                <p>EcoScore: <span className="font-semibold text-white">{estimatedEcoScore.toFixed(1)} / 100</span></p>
+              </div>
+              <p className="mt-2 text-xs text-slate-300">
+                Recommendation: <span className="font-semibold text-white">{recommendation}</span>
+                {' '}at{' '}
+                <span className="font-semibold text-white">{recommendedStart}</span>
+              </p>
             </div>
           </div>
 

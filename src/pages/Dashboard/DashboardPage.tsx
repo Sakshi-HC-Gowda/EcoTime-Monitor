@@ -77,10 +77,29 @@ export function DashboardPage() {
 
   const currentIntensity = carbon.current.carbonIntensity;
   const isLow = currentIntensity < 180;
+<<<<<<< HEAD
   const activeTasksCount = activitiesData?.items.filter((t) => t.status === 'running').length || 0;
   const totalTasksCount = activitiesData?.total || 0;
   const greenWindows = windows ?? [];
 
+=======
+  let pendingCount = 0;
+  let scheduledCount = 0;
+  let runningCount = 0;
+  let completedCount = 0;
+
+  for (const task of activitiesData?.items ?? []) {
+    if (task.status === 'pending') pendingCount += 1;
+    else if (task.status === 'scheduled') scheduledCount += 1;
+    else if (task.status === 'running') runningCount += 1;
+    else if (task.status === 'completed') completedCount += 1;
+  }
+
+  const activeTasksCount = runningCount;
+  const totalTasksCount = activitiesData?.total || 0;
+  const greenWindows = windows ?? [];
+
+>>>>>>> f55b0a069117478877ead42be399f654ac7f17c4
   // Forecast chart data — next 24 hours
   const forecastData = carbon.forecast.slice(0, 24).map((pt) => ({
     time: new Date(pt.datetime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -163,7 +182,7 @@ export function DashboardPage() {
           title="Active Workloads"
           value={activeTasksCount}
           unit={`/ ${totalTasksCount} total`}
-          subtitle="Currently executing"
+          subtitle={`P:${pendingCount} S:${scheduledCount} R:${runningCount} C:${completedCount}`}
           icon={Zap}
           iconColor="text-amber-400"
           iconBg="bg-amber-500/10 border-amber-500/20"
@@ -261,6 +280,36 @@ export function DashboardPage() {
 
           {/* Grid Region */}
           <GlassCard hoverEffect onClick={() => navigate('/carbon')} className="cursor-pointer">
+<<<<<<< HEAD
+=======
+          <GlassCard hoverEffect onClick={() => navigate('/activities')} className="cursor-pointer">
+            <div className="mb-3 flex items-center justify-between">
+              <h4 className="text-[13px] font-bold text-white">Activity Lifecycle</h4>
+              <ArrowRight className="h-3.5 w-3.5 text-slate-600" />
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="rounded-xl border border-blue-500/20 bg-blue-500/[0.06] p-2.5">
+                <p className="text-slate-400">Pending</p>
+                <p className="text-lg font-bold text-blue-300">{pendingCount}</p>
+              </div>
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-2.5">
+                <p className="text-slate-400">Scheduled</p>
+                <p className="text-lg font-bold text-amber-300">{scheduledCount}</p>
+              </div>
+              <div className="rounded-xl border border-green-500/20 bg-green-500/[0.06] p-2.5">
+                <p className="text-slate-400">Running</p>
+                <p className="text-lg font-bold text-green-300">{runningCount}</p>
+              </div>
+              <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] p-2.5">
+                <p className="text-slate-400">Completed</p>
+                <p className="text-lg font-bold text-emerald-300">{completedCount}</p>
+              </div>
+            </div>
+          </GlassCard>
+
+          {/* Grid Profile */}
+          <GlassCard hoverEffect onClick={() => navigate('/settings')} className="cursor-pointer">
+>>>>>>> f55b0a069117478877ead42be399f654ac7f17c4
             <div className="flex items-center justify-between mb-3">
               <span className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.08em]">Grid Region</span>
               <Globe className="w-3.5 h-3.5 text-green-400" />

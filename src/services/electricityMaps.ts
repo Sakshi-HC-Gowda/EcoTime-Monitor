@@ -133,89 +133,37 @@ export function generateMockCarbonData(zoneId: string, currentOffsetHours: numbe
 }
 
 /**
- * Fetches data from Electricity Maps API or falls back to simulated data.
+ * Fetches carbon data via the EcoTime backend API.
+ * The backend calls Electricity Maps using ELECTRICITY_MAPS_API_KEY from .env
+ * and falls back to simulation automatically if the live API is unavailable.
  */
 export async function fetchCarbonData(
   zoneId: string,
-  apiKey: string | null,
+  _apiKey: string | null,
   currentOffsetHours: number = 0
 ): Promise<CarbonResponse> {
-  if (!apiKey) {
-    // If no API key, return mock data
-    return generateMockCarbonData(zoneId, currentOffsetHours);
-  }
+  const { carbonService } = await import('./carbonService');
 
   try {
-    const headers: HeadersInit = {
-      'auth-token': apiKey,
-    };
+    const res = await carbonService.getCarbonData(zoneId, currentOffsetHours);
 
-    // Attempt to fetch current carbon intensity
-    const latestRes = await fetch(`https://api.electricitymap.org/v3/carbon-intensity/latest?zone=${zoneId}`, {
-      headers,
-    });
-    
-    if (!latestRes.ok) {
-      throw new Error(`Latest carbon API returned ${latestRes.status}: ${latestRes.statusText}`);
-    }
-    const latestData = await latestRes.json();
-
-    // Attempt to fetch forecast intensity
-    const forecastRes = await fetch(`https://api.electricitymap.org/v3/carbon-intensity/forecast?zone=${zoneId}`, {
-      headers,
-    });
-
-    let forecastPoints: CarbonDataPoint[] = [];
-    if (forecastRes.ok) {
-      const forecastData = await forecastRes.json();
-      if (forecastData.forecast && Array.isArray(forecastData.forecast)) {
-        forecastPoints = forecastData.forecast.map((f: any) => ({
-          datetime: f.datetime,
-          carbonIntensity: f.carbonIntensity,
-        }));
-      }
-    } else {
-      console.warn('Forecast API failed, creating mock forecast based on latest intensity');
-      // Create mock forecast relative to latest
-      const now = new Date(latestData.datetime);
-      const zone = GRID_ZONES.find(z => z.id === zoneId) || GRID_ZONES[0];
-      for (let i = 0; i < 24; i++) {
-        const foreTime = new Date(now.getTime() + i * 60 * 60 * 1000);
-        forecastPoints.push({
-          datetime: foreTime.toISOString(),
-          carbonIntensity: Math.round(getSimulatedIntensity(zone, foreTime) * (latestData.carbonIntensity / zone.baseIntensity)),
-        });
-      }
+    if (res.success && res.data) {
+      return res.data;
     }
 
-    // Mock history since history endpoints in Electricity Maps are restricted in trial keys
-    const historyPoints: CarbonDataPoint[] = [];
-    const now = new Date(latestData.datetime);
-    const zone = GRID_ZONES.find(z => z.id === zoneId) || GRID_ZONES[0];
-    for (let i = 12; i >= 1; i--) {
-      const histTime = new Date(now.getTime() - i * 60 * 60 * 1000);
-      historyPoints.push({
-        datetime: histTime.toISOString(),
-        carbonIntensity: Math.round(getSimulatedIntensity(zone, histTime) * (latestData.carbonIntensity / zone.baseIntensity)),
-      });
-    }
-
-    return {
-      zone: zoneId,
-      current: {
-        datetime: latestData.datetime,
-        carbonIntensity: latestData.carbonIntensity,
-      },
-      history: historyPoints,
-      forecast: forecastPoints,
-      isSimulated: false,
-    };
-  } catch (err: any) {
-    console.error('Electricity Maps API Fetch failed, falling back to simulation:', err);
+    console.warn('[fetchCarbonData] Backend returned error, using local simulation:', res.error);
     const mockData = generateMockCarbonData(zoneId, currentOffsetHours);
     return {
       ...mockData,
-      error: `API Connection Failed (${err.message}). Using simulated fallback.`,
+      error: res.error || 'Backend carbon API unavailable. Using local simulated fallback.',
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[fetchCarbonData] Backend request failed, using local simulation:', err);
+    const mockData = generateMockCarbonData(zoneId, currentOffsetHours);
+    return {
+      ...mockData,
+      error: `Backend connection failed (${message}). Using local simulated fallback.`,
     };
   }
 }

@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from flask import Blueprint, request, jsonify
 
 from forecast.predict import get_predictor
-from services.carbon_service import get_carbon_data
+from services.carbon_service import get_carbon_data, generate_simulated_data
 
 logger = logging.getLogger(__name__)
 forecast_bp = Blueprint("forecast", __name__)
@@ -57,16 +57,27 @@ def get_forecast():
 
     logger.info("GET /api/forecast zone=%s hours=%d", zone, hours)
 
-    # Fetch recent history to anchor the prediction
-    carbon = get_carbon_data(zone_id=zone, offset_hours=0)
-    history = carbon.get("history", [])
+    try:
+        carbon = get_carbon_data(zone_id=zone, offset_hours=0)
+        history = carbon.get("history", [])
 
-    predictor = get_predictor()
-    forecast_points = predictor.predict(
-        zone_id=zone,
-        horizon_hours=hours,
-        history=history,
-    )
+        predictor = get_predictor()
+        forecast_points = predictor.predict(
+            zone_id=zone,
+            horizon_hours=hours,
+            history=history,
+        )
+    except Exception as exc:
+        logger.exception("GET /api/forecast failed for zone %s", zone)
+        carbon = generate_simulated_data(zone, 0)
+        history = carbon.get("history", [])
+        predictor = get_predictor()
+        forecast_points = predictor.predict(
+            zone_id=zone,
+            horizon_hours=hours,
+            history=history,
+        )
+        logger.warning("Forecast used simulation anchor after error: %s", exc)
 
     return jsonify({
         "success": True,

@@ -62,7 +62,7 @@ export function Hero() {
               className="sm:w-auto"
               iconRight={<ArrowRight className="w-5 h-5" />}
             >
-              Launch Dashboard
+              Get Started
             </Button>
 
             <Button

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Wind, Calendar, LayoutList } from 'lucide-react';
 import { useGreenWindows } from '@/features/carbon/hooks/useCarbon';
+import { useZone } from '@/app/ZoneProvider';
 import { LoadingSkeleton } from '@/components/ui/LoadingSkeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { WindowCard } from '@/features/windows/components/WindowCard';
@@ -19,8 +20,9 @@ const VIEW_OPTIONS: { value: ViewMode; label: string; icon: React.ElementType }[
 
 export function GreenWindowsPage() {
   const navigate = useNavigate();
+  const { selectedZone } = useZone();
   const [viewMode, setViewMode] = useState<ViewMode>('cards');
-  const { data: windows, isLoading, isError, refetch } = useGreenWindows('US-CA', 180);
+  const { data: windows, isLoading, isError, refetch } = useGreenWindows(selectedZone, 180);
 
   if (isLoading) {
     return (

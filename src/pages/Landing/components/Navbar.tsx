@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/Button';
 
 const navLinks = [
   { href: '#features', label: 'Features' },
-  { href: '#workflow', label: 'Solution' },
-  { href: '#dashboard-preview', label: 'Dashboard' },
+  { href: '#workflow', label: 'How it Works' },
+  { href: '#dashboard-preview', label: 'Preview' },
 ];
 
 export function Navbar() {
@@ -37,9 +37,23 @@ export function Navbar() {
           ))}
         </nav>
 
-        <Button to="/dashboard" size="sm" className="flex-shrink-0" iconRight={<ArrowRight className="w-4 h-4" />}>
-          Launch Dashboard
-        </Button>
+        <div className="flex items-center gap-3">
+  <Button
+    to="/dashboard"
+    variant="ghost"
+    size="sm"
+  >
+    Sign In
+  </Button>
+
+  <Button
+    to="/dashboard"
+    size="sm"
+    iconRight={<ArrowRight className="w-4 h-4" />}
+  >
+    Get Started
+  </Button>
+</div>
       </div>
     </header>
   );

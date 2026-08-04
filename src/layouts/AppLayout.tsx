@@ -17,6 +17,7 @@ import {
   type LucideProps,
 } from 'lucide-react';
 import type { ForwardRefExoticComponent, RefAttributes } from 'react';
+import { LocationBanner } from '@/features/carbon/components/LocationBanner';
 
 interface NavItemDef {
   label: string;
@@ -200,6 +201,8 @@ export function AppLayout() {
             </div>
           </div>
         </header>
+
+        <LocationBanner />
 
         {/* Page content with animation */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden">

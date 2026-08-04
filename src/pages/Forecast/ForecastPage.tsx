@@ -1,5 +1,6 @@
 import { TrendingUp } from 'lucide-react';
 import { useForecast, useForecastInfo, useTrainModel } from '@/features/forecast/hooks/useForecast';
+import { useZone } from '@/app/ZoneProvider';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { LoadingSkeleton } from '@/components/ui/LoadingSkeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -8,7 +9,8 @@ import { ModelInfoCard } from '@/features/forecast/components/ModelInfoCard';
 import { ForecastStats } from '@/features/forecast/components/ForecastStats';
 
 export function ForecastPage() {
-  const { data: forecastData, isLoading, isError, refetch } = useForecast('US-CA', 36);
+  const { selectedZone } = useZone();
+  const { data: forecastData, isLoading, isError, refetch } = useForecast(selectedZone, 36);
   const { data: modelInfo } = useForecastInfo();
   const trainMutation = useTrainModel();
 

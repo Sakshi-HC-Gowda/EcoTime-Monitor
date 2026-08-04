@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { Plus, Filter } from 'lucide-react';
 import { useActivitiesQuery, useActivityMutations } from '@/features/activities/hooks/useActivitiesQuery';
 import { LoadingSkeleton } from '@/components/ui/LoadingSkeleton';
@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ActivityCard } from '@/features/activities/components/ActivityCard';
 import { CreateActivityModal } from '@/features/activities/components/CreateActivityModal';
+import { uploadFiles, type UploadedFile } from '@/services/uploadService';
+import type { Task } from '@/types/domain';
 
 type TabStatus = 'all' | 'pending' | 'scheduled' | 'running' | 'completed';
 
@@ -21,9 +23,119 @@ const TABS: { value: TabStatus; label: string }[] = [
 export function ActivitiesPage() {
   const [activeTab, setActiveTab] = useState<TabStatus>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [uploadStates, setUploadStates] = useState<Record<string, {
+    progress: number;
+    status: 'queued' | 'uploading' | 'success' | 'error';
+    message?: string;
+    selectedFileName?: string;
+    uploadedFile?: UploadedFile;
+  }>>({});
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const pendingFileActionRef = useRef<{
+    activity: Task;
+    mode: 'run' | 'schedule';
+    scheduledStartTime?: string;
+  } | null>(null);
+  const queuedFilesRef = useRef<Map<string, File[]>>(new Map());
+  const uploadingRef = useRef<Set<string>>(new Set());
 
   const { data: activitiesData, isLoading, isError, refetch } = useActivitiesQuery(1, 200);
   const { createMutation, updateMutation, deleteMutation } = useActivityMutations();
+
+  const setUploadState = useCallback((id: string, state: {
+    progress: number;
+    status: 'queued' | 'uploading' | 'success' | 'error';
+    message?: string;
+    selectedFileName?: string;
+    uploadedFile?: UploadedFile;
+  }) => {
+    setUploadStates((prev) => ({ ...prev, [id]: state }));
+  }, []);
+
+  const executeUpload = useCallback(async (activity: Task, files: File[]) => {
+    if (uploadingRef.current.has(activity.id)) return;
+    uploadingRef.current.add(activity.id);
+
+    const selectedFileName = files.length === 1 ? files[0].name : `${files[0].name} + ${files.length - 1} more`;
+    setUploadState(activity.id, { progress: 0, status: 'uploading', selectedFileName });
+    await updateMutation.mutateAsync({ id: activity.id, update: { status: 'running', progress: 0 } });
+
+    const result = await uploadFiles(files, (progress) => {
+      setUploadState(activity.id, { progress, status: 'uploading', selectedFileName });
+    });
+
+    uploadingRef.current.delete(activity.id);
+    queuedFilesRef.current.delete(activity.id);
+
+    if (!result.success) {
+      setUploadState(activity.id, {
+        progress: 0,
+        status: 'error',
+        message: result.error || 'Upload failed',
+        selectedFileName,
+      });
+      await updateMutation.mutateAsync({ id: activity.id, update: { status: 'failed', progress: 0 } });
+      return;
+    }
+
+    setUploadState(activity.id, {
+      progress: 100,
+      status: 'success',
+      selectedFileName,
+      uploadedFile: result.data?.files?.[0],
+    });
+    await updateMutation.mutateAsync({ id: activity.id, update: { status: 'completed', progress: 100 } });
+  }, [setUploadState, updateMutation]);
+
+  useEffect(() => {
+    if (!activitiesData?.items) return;
+
+    for (const activity of activitiesData.items) {
+      const files = queuedFilesRef.current.get(activity.id);
+      if (
+        activity.activityType === 'file-upload' &&
+        activity.status === 'running' &&
+        files &&
+        !uploadingRef.current.has(activity.id)
+      ) {
+        void executeUpload(activity, files);
+      }
+    }
+  }, [activitiesData?.items, executeUpload]);
+
+  const openFilePicker = (activity: Task, mode: 'run' | 'schedule', scheduledStartTime?: string) => {
+    pendingFileActionRef.current = { activity, mode, scheduledStartTime };
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileSelection = async (event: ChangeEvent<HTMLInputElement>) => {
+    const pendingAction = pendingFileActionRef.current;
+    pendingFileActionRef.current = null;
+
+    if (!pendingAction) return;
+
+    const files = Array.from(event.target.files ?? []);
+    if (files.length === 0) return;
+
+    const { activity, mode, scheduledStartTime } = pendingAction;
+    const selectedFileName = files.length === 1 ? files[0].name : `${files[0].name} + ${files.length - 1} more`;
+
+    if (mode === 'run') {
+      queuedFilesRef.current.set(activity.id, files);
+      await executeUpload(activity, files);
+      return;
+    }
+
+    queuedFilesRef.current.set(activity.id, files);
+    setUploadState(activity.id, { progress: 0, status: 'queued', selectedFileName });
+    updateMutation.mutate({
+      id: activity.id,
+      update: { status: 'scheduled', scheduledStartTime },
+    });
+  };
 
   if (isLoading) {
     return (
@@ -50,6 +162,14 @@ export function ActivitiesPage() {
     : activitiesData.items.filter((task) => task.status === activeTab);
 
   return (
+    <div className="page-shell page-stack">
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={handleFileSelection}
+      />
     <div className="page-shell page-stack activities-page">
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
@@ -121,7 +241,10 @@ export function ActivitiesPage() {
               onUpdateStatus={(id, status, scheduledStartTime) =>
                 updateMutation.mutate({ id, update: { status, scheduledStartTime } })
               }
+              onRunNow={(activity) => openFilePicker(activity, 'run')}
+              onScheduleUpload={(activity, scheduledStartTime) => openFilePicker(activity, 'schedule', scheduledStartTime)}
               onDelete={(id) => deleteMutation.mutate(id)}
+              uploadState={uploadStates[task.id]}
             />
           ))}
         </div>

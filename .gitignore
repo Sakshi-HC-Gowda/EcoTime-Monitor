@@ -49,6 +49,7 @@ env/
 
 # Flask
 instance/
+backend/uploads/
 
 # Databases
 *.db

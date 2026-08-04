@@ -7,6 +7,7 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
+  type TooltipContentProps,
 } from 'recharts';
 import {
   Activity,
@@ -34,9 +35,10 @@ import { LoadingSkeleton } from '@/components/ui/LoadingSkeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import type { GreenWindow, Task } from '@/types/domain';
 
 // ─── Custom recharts tooltip ─────────────────────────────────────────────────
-function CustomTooltip({ active, payload, label }: any) {
+function CustomTooltip({ active, payload, label }: TooltipContentProps) {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-slate-900 border border-white/[0.10] rounded-xl px-3.5 py-2.5 shadow-xl text-xs">
@@ -77,12 +79,16 @@ export function DashboardPage() {
 
   const currentIntensity = carbon.current.carbonIntensity;
   const isLow = currentIntensity < 180;
+
+  const activities: Task[] = activitiesData?.items ?? [];
+  const greenWindows: GreenWindow[] = windows ?? [];
+
   let pendingCount = 0;
   let scheduledCount = 0;
   let runningCount = 0;
   let completedCount = 0;
 
-  for (const task of activitiesData?.items ?? []) {
+  for (const task of activities) {
     if (task.status === 'pending') pendingCount += 1;
     else if (task.status === 'scheduled') scheduledCount += 1;
     else if (task.status === 'running') runningCount += 1;
@@ -91,7 +97,6 @@ export function DashboardPage() {
 
   const activeTasksCount = runningCount;
   const totalTasksCount = activitiesData?.total || 0;
-  const greenWindows = windows ?? [];
 
   // Forecast chart data — next 24 hours
   const forecastData = carbon.forecast.slice(0, 24).map((pt) => ({
@@ -236,7 +241,7 @@ export function DashboardPage() {
                     axisLine={false}
                     width={48}
                   />
-                  <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(168,85,247,0.2)', strokeWidth: 1 }} />
+                  <Tooltip content={(props) => <CustomTooltip {...props} />} cursor={{ stroke: 'rgba(168,85,247,0.2)', strokeWidth: 1 }} />
                   <Area
                     type="monotone"
                     dataKey="intensity"
@@ -272,6 +277,7 @@ export function DashboardPage() {
         <div className="section-stack lg:col-span-4">
 
           {/* Grid Region */}
+
           <GlassCard hoverEffect onClick={() => navigate('/activities')} className="cursor-pointer">
             <div className="mb-3.5 flex items-center justify-between">
               <h4 className="text-[13px] font-bold text-white">Activity Lifecycle</h4>

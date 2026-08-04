@@ -18,9 +18,9 @@ const paddingMap = {
 };
 
 const variantMap: Record<GlassCardVariant, string> = {
-  default:  'bg-slate-900/50 border-white/[0.06]',
-  elevated: 'bg-slate-800/60 border-white/[0.10] shadow-[inset_0_1px_0_rgba(255,255,255,0.07)]',
-  inset:    'bg-[rgba(7,10,19,0.50)] border-white/[0.04]',
+  default:  'bg-slate-900/36 border-white/[0.05]',
+  elevated: 'bg-slate-800/48 border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]',
+  inset:    'bg-[rgba(7,10,19,0.42)] border-white/[0.035]',
 };
 
 export function GlassCard({
@@ -38,7 +38,7 @@ export function GlassCard({
         ${variantMap[variant]}
         ${paddingMap[padding]}
         ${hoverEffect
-          ? 'ds-card-hover hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/20'
+          ? 'ds-card-hover hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/16'
           : ''}
         ${className}
       `}

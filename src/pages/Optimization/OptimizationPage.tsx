@@ -22,7 +22,7 @@ export function OptimizationPage() {
 
   if (activitiesLoading || windowsLoading) {
     return (
-      <div className="page-shell page-stack">
+      <div className="page-shell page-stack max-w-[1650px] mx-auto">
         <LoadingSkeleton count={3} height="h-40" />
       </div>
     );
@@ -33,9 +33,9 @@ export function OptimizationPage() {
   const ecoScore = 45;
   const ecoStatus =
     ecoScore >= 80 ? 'Excellent' :
-    ecoScore >= 60 ? 'Good' :
-    ecoScore >= 40 ? 'Fair' :
-    'Poor';
+      ecoScore >= 60 ? 'Good' :
+        ecoScore >= 40 ? 'Fair' :
+          'Poor';
 
   const formatTime = (value?: string) => {
     if (!value) return 'Not available';
@@ -69,7 +69,7 @@ export function OptimizationPage() {
 
   const handleRun = () => {
     if (!targetWindow || tasks.length === 0) return;
-    
+
     runMutation.mutate(
       {
         tasks,
@@ -84,7 +84,7 @@ export function OptimizationPage() {
   };
 
   return (
-    <div className="page-shell page-stack">
+    <div className="page-shell page-stack max-w-[1650px] mx-auto">
       <div className="page-header">
         <div>
           <h1 className="page-header-title heading-row">
@@ -109,11 +109,10 @@ export function OptimizationPage() {
             <div className="space-y-3 mb-6">
               <button
                 onClick={() => setMethod('greedy')}
-                className={`ds-card ds-card-pad-sm ds-card-hover w-full text-left ${
-                  method === 'greedy'
+                className={`ds-card ds-card-pad-sm ds-card-hover w-full text-left ${method === 'greedy'
                     ? 'bg-blue-500/10 border-blue-500/50 text-white'
                     : 'bg-white/[0.02] border-white/[0.05] text-slate-400 hover:bg-white/[0.05]'
-                }`}
+                  }`}
               >
                 <div className="font-bold mb-1 flex items-center justify-between">
                   Greedy Algorithm
@@ -124,11 +123,10 @@ export function OptimizationPage() {
 
               <button
                 onClick={() => setMethod('knapsack')}
-                className={`ds-card ds-card-pad-sm ds-card-hover w-full text-left ${
-                  method === 'knapsack'
+                className={`ds-card ds-card-pad-sm ds-card-hover w-full text-left ${method === 'knapsack'
                     ? 'bg-purple-500/10 border-purple-500/50 text-white'
                     : 'bg-white/[0.02] border-white/[0.05] text-slate-400 hover:bg-white/[0.05]'
-                }`}
+                  }`}
               >
                 <div className="font-bold mb-1 flex items-center justify-between">
                   0/1 Knapsack

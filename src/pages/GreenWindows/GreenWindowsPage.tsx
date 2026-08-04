@@ -13,7 +13,7 @@ import type { GreenWindow } from '@/types/domain';
 type ViewMode = 'cards' | 'timeline' | 'calendar';
 
 const VIEW_OPTIONS: { value: ViewMode; label: string; icon: React.ElementType }[] = [
-  { value: 'cards',    label: 'Cards',    icon: LayoutList },
+  { value: 'cards', label: 'Cards', icon: LayoutList },
   { value: 'timeline', label: 'Timeline', icon: Wind },
   { value: 'calendar', label: 'Calendar', icon: Calendar },
 ];
@@ -26,7 +26,7 @@ export function GreenWindowsPage() {
 
   if (isLoading) {
     return (
-      <div className="page-shell page-stack">
+      <div className="page-shell page-stack max-w-[1650px] mx-auto">
         <LoadingSkeleton count={1} height="h-14" variant="row" />
         <div className="card-grid card-grid-sm-2 card-grid-lg-3">
           <LoadingSkeleton count={3} height="h-48" />
@@ -48,7 +48,7 @@ export function GreenWindowsPage() {
   };
 
   return (
-    <div className="page-shell page-stack">
+    <div className="page-shell page-stack max-w-[1650px] mx-auto">
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="page-header">

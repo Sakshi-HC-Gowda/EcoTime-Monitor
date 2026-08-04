@@ -70,9 +70,6 @@ export interface CreateTaskRequest {
   type: TaskFlexibility;
   activityType: ActivityType;
   duration: number;
-  powerDraw: number;
-  priorityScore: number;
-  flexibilityScore?: number;
 }
 
 export interface UpdateTaskRequest {

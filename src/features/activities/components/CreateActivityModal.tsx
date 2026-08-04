@@ -36,10 +36,7 @@ export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
   const [name, setName] = useState('');
   const [activityType, setActivityType] = useState<ActivityType>('dataset-download');
   const [duration, setDuration] = useState(45);
-  const [powerDraw, setPowerDraw] = useState(350);
-  const [priorityScore, setPriorityScore] = useState(50);
-  const [flexibilityScore, setFlexibilityScore] = useState(80);
-
+ 
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -50,10 +47,7 @@ export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
       name,
       type: 'flexible',
       activityType,
-      duration: Number(duration),
-      powerDraw: Number(powerDraw),
-      priorityScore: Number(priorityScore),
-      flexibilityScore: Number(flexibilityScore),
+      duration: Number(duration)
     });
 
     setName('');
@@ -122,53 +116,9 @@ export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
               <div>
                 <FieldLabel>Duration (min)</FieldLabel>
                 <input
-                  type="number"
-                  min="1"
-                  max="1440"
+                  type="number"                
                   value={duration}
                   onChange={(e) => setDuration(Number(e.target.value))}
-                  className={numInputClass}
-                />
-              </div>
-            </div>
-
-            {/* Divider */}
-            <div className="border-t border-white/[0.05]" />
-
-            {/* Power + Priority + Flexibility */}
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <FieldLabel>Power Draw (W)</FieldLabel>
-                <input
-                  type="number"
-                  min="10"
-                  max="10000"
-                  value={powerDraw}
-                  onChange={(e) => setPowerDraw(Number(e.target.value))}
-                  className={numInputClass}
-                />
-              </div>
-
-              <div>
-                <FieldLabel>Priority (0–100)</FieldLabel>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={priorityScore}
-                  onChange={(e) => setPriorityScore(Number(e.target.value))}
-                  className={numInputClass}
-                />
-              </div>
-
-              <div>
-                <FieldLabel>Flexibility (%)</FieldLabel>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={flexibilityScore}
-                  onChange={(e) => setFlexibilityScore(Number(e.target.value))}
                   className={numInputClass}
                 />
               </div>

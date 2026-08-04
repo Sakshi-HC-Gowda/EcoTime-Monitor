@@ -16,15 +16,17 @@ from __future__ import annotations
 import logging
 import os
 from datetime import datetime, timezone
+from pathlib import Path
 
 from flask import Flask, jsonify
 from flask_cors import CORS
-from flask_sqlalchemy import SQLAlchemy
+from dotenv import load_dotenv
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
+from extensions import db
 
-# ---------------------------------------------------------------------------
-# Shared SQLAlchemy instance (imported by models)
-# ---------------------------------------------------------------------------
-db = SQLAlchemy()
+# Load backend/.env regardless of the directory used to start Flask.
+load_dotenv(Path(__file__).resolve().with_name(".env"))
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -57,30 +59,30 @@ def create_app(config_name: str | None = None) -> Flask:
     # Configuration
     # -----------------------------------------------------------------------
     config_name = config_name or os.getenv("FLASK_ENV", "development")
-    db_path = os.getenv("DATABASE_URL", "sqlite:///ecotime.db")
+    database_url = os.getenv("DATABASE_URL")
+    secret_key = os.getenv("SECRET_KEY")
 
-    if config_name == "production":
-        app.config.update(
-            DEBUG=False,
-            TESTING=False,
-            SQLALCHEMY_DATABASE_URI=db_path,
-            SQLALCHEMY_TRACK_MODIFICATIONS=False,
-            SQLALCHEMY_ENGINE_OPTIONS={"pool_pre_ping": True},
+    if not database_url:
+        raise RuntimeError(
+            "DATABASE_URL is not configured. Add it to backend/.env before starting EcoTime."
         )
-    elif config_name == "testing":
-        app.config.update(
-            DEBUG=True,
-            TESTING=True,
-            SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
-            SQLALCHEMY_TRACK_MODIFICATIONS=False,
-        )
-    else:  # development (default)
-        app.config.update(
-            DEBUG=True,
-            TESTING=False,
-            SQLALCHEMY_DATABASE_URI=db_path,
-            SQLALCHEMY_TRACK_MODIFICATIONS=False,
-        )
+    if not database_url.startswith(("postgresql://", "postgresql+psycopg2://")):
+        raise RuntimeError("DATABASE_URL must use a PostgreSQL URL.")
+    if not secret_key:
+        raise RuntimeError("SECRET_KEY is not configured. Add it to backend/.env.")
+
+    app.config.update(
+        SECRET_KEY=secret_key,
+        DEBUG=config_name == "development",
+        TESTING=config_name == "testing",
+        SQLALCHEMY_DATABASE_URI=database_url,
+        SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        SQLALCHEMY_ENGINE_OPTIONS={
+            "pool_pre_ping": True,
+            "pool_recycle": 1800,
+        },
+        DATABASE_AVAILABLE=False,
+    )
 
     logger.info("Starting EcoTime backend [%s mode]", config_name)
 
@@ -91,9 +93,23 @@ def create_app(config_name: str | None = None) -> Flask:
 
     with app.app_context():
         # Import models so SQLAlchemy registers them before create_all()
-        from models import activity  # noqa: F401
-        db.create_all()
-        logger.info("Database tables verified/created")
+        from models import (  # noqa: F401
+            Activity,
+            ActivityHistory,
+            AnalyticsRecommendation,
+            SimulationConfig,
+        )
+        try:
+            # Flask-SQLAlchemy delegates to SQLAlchemy's safe table check:
+            # create_all() creates only absent tables and never drops data.
+            db.create_all()
+            db.session.execute(text("SELECT 1"))
+            db.session.commit()
+            app.config["DATABASE_AVAILABLE"] = True
+            logger.info("PostgreSQL connection established; tables verified/created")
+        except SQLAlchemyError as error:
+            db.session.rollback()
+            logger.error("PostgreSQL is unavailable: %s", error)
 
     # -----------------------------------------------------------------------
     # CORS
@@ -135,16 +151,17 @@ def create_app(config_name: str | None = None) -> Flask:
         """Health check endpoint for load balancers and frontend."""
         from forecast.predict import get_predictor
         predictor = get_predictor()
+        database_available = app.config["DATABASE_AVAILABLE"]
         return jsonify({
-            "status": "healthy",
+            "status": "healthy" if database_available else "degraded",
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "version": "2.0.0",
             "services": {
-                "database": "connected",
+                "database": "connected" if database_available else "unavailable",
                 "ml_model": predictor._model_name,
                 "ml_trained": predictor.is_trained(),
             },
-        }), 200
+        }), 200 if database_available else 503
 
     @app.route("/", methods=["GET"])
     def root():
@@ -214,6 +231,10 @@ def create_app(config_name: str | None = None) -> Flask:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    app = create_app()
-    port = int(os.getenv("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    try:
+        app = create_app()
+    except RuntimeError as error:
+        logger.error("EcoTime startup configuration error: %s", error)
+    else:
+        port = int(os.getenv("PORT", 5000))
+        app.run(host="0.0.0.0", port=port, debug=app.config["DEBUG"])

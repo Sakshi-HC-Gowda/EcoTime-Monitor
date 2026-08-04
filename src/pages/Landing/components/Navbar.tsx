@@ -5,7 +5,7 @@ import { Logo } from '@/components/ui/Logo';
 const navLinks = [
   { href: '#features', label: 'Features' },
   { href: '#workflow', label: 'How it Works' },
-  { href: '#dashboard-preview', label: 'Preview' },
+  // { href: '#dashboard-preview', label: 'Preview' },
 ];
 
 export function Navbar() {
@@ -23,22 +23,22 @@ export function Navbar() {
         </nav>
 
         <div className="flex items-center gap-4">
-  <Button
-    to="/dashboard"
-    variant="ghost"
-    size="sm"
-  >
-    Sign In
-  </Button>
+          <Button
+            to="/dashboard"
+            variant="ghost"
+            size="sm"
+          >
+            Sign In
+          </Button>
 
-  <Button
-    to="/dashboard"
-    size="sm"
-    iconRight={<ArrowRight className="w-4 h-4" />}
-  >
-    Get Started
-  </Button>
-</div>
+          <Button
+            to="/dashboard"
+            size="sm"
+            iconRight={<ArrowRight className="w-4 h-4" />}
+          >
+            Get Started
+          </Button>
+        </div>
       </div>
     </header>
   );

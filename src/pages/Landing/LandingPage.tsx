@@ -1,9 +1,9 @@
-import { Navbar }       from './components/Navbar';
-import { Hero }         from './components/Hero';
-import { Features }     from './components/Features';
+import { Navbar } from './components/Navbar';
+import { Hero } from './components/Hero';
+import { Features } from './components/Features';
 import { VisualWorkflow } from './components/VisualWorkflow';
-import { DashboardPreview } from './components/DashboardPreview';
-import { Footer }       from './components/Footer';
+//import { DashboardPreview } from './components/DashboardPreview';
+import { Footer } from './components/Footer';
 
 export function LandingPage() {
   return (
@@ -12,7 +12,7 @@ export function LandingPage() {
       <Hero />
       <Features />
       <VisualWorkflow />
-      <DashboardPreview />
+      {/* <DashboardPreview /> */}
       <Footer />
     </div>
   );

@@ -1,6 +1,8 @@
-import { useState } from 'react';
 import { Activity, Globe, Leaf, Zap, TrendingDown } from 'lucide-react';
 import { useCarbon } from '@/features/carbon/hooks/useCarbon';
+import { useZone } from '@/app/ZoneProvider';
+import { DetectedLocationInfo } from '@/features/carbon/components/DetectedLocationInfo';
+import { MANUAL_ZONE_OPTIONS } from '@/features/carbon/constants/zoneOptions';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { MetricCard } from '@/components/ui/MetricCard';
 import { LoadingSkeleton } from '@/components/ui/LoadingSkeleton';
@@ -12,7 +14,7 @@ import { HourlyTimeline } from '@/features/carbon/components/HourlyTimeline';
 import { RegionComparison } from '@/features/carbon/components/RegionComparison';
 
 export function CarbonAnalyticsPage() {
-  const [selectedZone, setSelectedZone] = useState('US-CA');
+  const { selectedZone, setSelectedZone } = useZone();
   const { data: carbon, isLoading, isError, refetch } = useCarbon(selectedZone);
 
   if (isLoading) {
@@ -55,20 +57,20 @@ export function CarbonAnalyticsPage() {
           </p>
         </div>
 
-        {/* Zone selector */}
-        <div className="cluster flex-shrink-0">
-          <Globe className="ds-icon-sm text-slate-500" />
-          <select
-            value={selectedZone}
-            onChange={(e) => setSelectedZone(e.target.value)}
-            className="ds-control h-10 pl-3 pr-8 bg-slate-900/80 border border-white/[0.08] text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500/40 appearance-none cursor-pointer"
-          >
-            <option value="US-CA">US-CA — California</option>
-            <option value="US-NY">US-NY — New York</option>
-            <option value="DE">DE — Germany</option>
-            <option value="FR">FR — France</option>
-            <option value="GB">GB — Great Britain</option>
-          </select>
+        <div className="flex flex-col sm:items-end gap-2 flex-shrink-0">
+          <DetectedLocationInfo />
+          <div className="cluster">
+            <Globe className="ds-icon-sm text-slate-500" />
+            <select
+              value={selectedZone}
+              onChange={(e) => setSelectedZone(e.target.value)}
+              className="ds-control h-10 pl-3 pr-8 bg-slate-900/80 border border-white/[0.08] text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500/40 appearance-none cursor-pointer"
+            >
+              {MANUAL_ZONE_OPTIONS.map(({ value, label }) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 

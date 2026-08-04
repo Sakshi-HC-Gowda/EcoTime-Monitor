@@ -21,10 +21,12 @@ import {
   SlidersHorizontal,
   ArrowRight,
   ShieldCheck,
-  Clock,
 } from 'lucide-react';
 
 import { useCarbon, useGreenWindows } from '@/features/carbon/hooks/useCarbon';
+import { useZone } from '@/app/ZoneProvider';
+import { DashboardCarbonSummary } from '@/features/carbon/components/DashboardCarbonSummary';
+import { GreenWindowsList } from '@/features/carbon/components/GreenWindowsList';
 import { useActivitiesQuery } from '@/features/activities/hooks/useActivitiesQuery';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { MetricCard } from '@/components/ui/MetricCard';
@@ -46,15 +48,17 @@ function CustomTooltip({ active, payload, label }: any) {
 
 export function DashboardPage() {
   const navigate = useNavigate();
+  const { selectedZone } = useZone();
 
-  const { data: carbon, isLoading: carbonLoading, isError: carbonError, refetch: refetchCarbon } = useCarbon('US-CA');
-  const { data: windows, isLoading: windowsLoading } = useGreenWindows('US-CA', 180);
-  const { data: activitiesData, isLoading: activitiesLoading } = useActivitiesQuery(1, 200);
+  const { data: carbon, isLoading: carbonLoading, isError: carbonError, refetch: refetchCarbon } = useCarbon(selectedZone);
+  const { data: windows, isLoading: windowsLoading } = useGreenWindows(selectedZone, 180);
+  const { data: activitiesData, isLoading: activitiesLoading } = useActivitiesQuery(1, 10);
 
-  if (carbonLoading || windowsLoading || activitiesLoading) {
+  if (carbonLoading || windowsLoading) {
     return (
       <div className="page-shell page-stack">
         <LoadingSkeleton count={1} height="h-12" variant="row" />
+        <LoadingSkeleton count={1} height="h-24" />
         <div className="card-grid card-grid-sm-2 card-grid-lg-4">
           <LoadingSkeleton count={4} height="h-28" />
         </div>
@@ -87,10 +91,10 @@ export function DashboardPage() {
 
   const activeTasksCount = runningCount;
   const totalTasksCount = activitiesData?.total || 0;
-  const nextWindow = windows && windows.length > 0 ? windows[0] : null;
+  const greenWindows = windows ?? [];
 
-  // Forecast chart data
-  const miniForecastData = carbon.forecast.slice(0, 12).map((pt) => ({
+  // Forecast chart data — next 24 hours
+  const forecastData = carbon.forecast.slice(0, 24).map((pt) => ({
     time: new Date(pt.datetime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     intensity: pt.carbonIntensity,
   }));
@@ -124,6 +128,12 @@ export function DashboardPage() {
           </Button>
         </div>
       </div>
+
+      {/* ── Carbon Intelligence (location + zone + current carbon) ─────────── */}
+      <DashboardCarbonSummary
+        currentCarbon={currentIntensity}
+        isSimulated={carbon.isSimulated}
+      />
 
       {/* ── KPI metric row ─────────────────────────────────────────────────── */}
       <div className="card-grid card-grid-sm-2 card-grid-lg-4 items-stretch">
@@ -180,15 +190,17 @@ export function DashboardPage() {
         {/* Left column — 8 cols */}
         <div className="section-stack lg:col-span-8">
 
-          {/* Forecast chart */}
+          {/* Live Carbon Forecast */}
           <GlassCard hoverEffect onClick={() => navigate('/forecast')} className="cursor-pointer group">
             <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <TrendingUp className="w-4 h-4 text-purple-400 flex-shrink-0" />
-                  <h3 className="text-base font-bold leading-snug text-white">12-Hour Carbon Forecast</h3>
+                  <h3 className="text-base font-bold leading-snug text-white">Live Carbon Forecast</h3>
                 </div>
-                <p className="text-xs text-slate-500">Predicted grid intensity — next 12 hours</p>
+                <p className="text-xs text-slate-500">
+                  Predicted grid intensity for {selectedZone} — next 24 hours
+                </p>
               </div>
               <span className="cluster text-xs font-semibold text-purple-400 transition-colors group-hover:text-purple-300">
                 Full Forecast <ArrowRight className="w-3 h-3" />
@@ -197,7 +209,7 @@ export function DashboardPage() {
 
             <div className="h-[224px] w-full sm:h-[248px]">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={miniForecastData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                <AreaChart data={forecastData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorInt" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%"  stopColor="#a855f7" stopOpacity={0.3} />
@@ -240,45 +252,27 @@ export function DashboardPage() {
             </div>
           </GlassCard>
 
-          {/* Next Green Window */}
+          {/* Green Time Windows */}
           <GlassCard hoverEffect onClick={() => navigate('/windows')} className="cursor-pointer group">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2">
                 <Wind className="w-4 h-4 text-teal-400 flex-shrink-0" />
-                <h3 className="text-base font-bold leading-snug text-white">Next Green Window</h3>
+                <h3 className="text-base font-bold leading-snug text-white">Green Time Windows</h3>
               </div>
               <span className="text-xs font-semibold text-teal-400 flex items-center gap-1 group-hover:text-teal-300 transition-colors">
                 All Windows <ArrowRight className="w-3 h-3" />
               </span>
             </div>
 
-            {nextWindow ? (
-              <div className="p-4 rounded-xl bg-teal-500/[0.06] border border-teal-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div>
-                  <span className="text-[10px] font-mono font-bold text-teal-500 uppercase tracking-widest">{nextWindow.id}</span>
-                  <div className="text-sm font-semibold text-white mt-1.5 flex items-center gap-2">
-                    <Clock className="w-3.5 h-3.5 text-teal-400" />
-                    {new Date(nextWindow.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    <span className="text-slate-500 font-normal">({nextWindow.duration} min)</span>
-                  </div>
-                  <p className="text-xs text-slate-400 mt-1">
-                    Avg. intensity: <span className="text-white font-semibold">{Math.round(nextWindow.avgCarbonIntensity)} gCO₂/kWh</span>
-                  </p>
-                </div>
-                <div className="flex-shrink-0 text-left sm:text-right">
-                  <div className="text-2xl font-black text-teal-300">-{Math.round(nextWindow.carbonSavingPercent)}%</div>
-                  <p className="text-[11px] text-slate-500">carbon reduction</p>
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-slate-500 py-2">No low-carbon windows detected in current forecast window.</p>
-            )}
+            <GreenWindowsList windows={greenWindows.slice(0, 6)} />
           </GlassCard>
         </div>
 
         {/* Right column — 4 cols */}
         <div className="section-stack lg:col-span-4">
 
+          {/* Grid Region */}
+          <GlassCard hoverEffect onClick={() => navigate('/carbon')} className="cursor-pointer">
           <GlassCard hoverEffect onClick={() => navigate('/activities')} className="cursor-pointer">
             <div className="mb-3 flex items-center justify-between">
               <h4 className="text-[13px] font-bold text-white">Activity Lifecycle</h4>
@@ -307,18 +301,22 @@ export function DashboardPage() {
           {/* Grid Profile */}
           <GlassCard hoverEffect onClick={() => navigate('/settings')} className="cursor-pointer">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.08em]">Grid Profile</span>
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.08em]">Grid Region</span>
               <Globe className="w-3.5 h-3.5 text-green-400" />
             </div>
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h4 className="text-[15px] font-bold text-white">{carbon.zone} Region</h4>
+                <h4 className="text-[15px] font-bold text-white">{selectedZone}</h4>
                 <p className="text-xs text-slate-500 mt-0.5">
                   {carbon.isSimulated ? 'Simulated Model' : 'Live Electricity Maps'}
                 </p>
               </div>
-              <div className="px-2.5 py-1 rounded-full bg-green-500/10 text-green-400 border border-green-500/20 text-[11px] font-bold flex items-center gap-1.5 flex-shrink-0">
-                <ShieldCheck className="w-3 h-3" /> Optimal
+              <div className={`px-2.5 py-1 rounded-full text-[11px] font-bold flex items-center gap-1.5 flex-shrink-0 border ${
+                isLow
+                  ? 'bg-green-500/10 text-green-400 border-green-500/20'
+                  : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+              }`}>
+                <ShieldCheck className="w-3 h-3" /> {isLow ? 'Optimal' : 'Moderate'}
               </div>
             </div>
           </GlassCard>
@@ -349,6 +347,10 @@ export function DashboardPage() {
               </span>
             </div>
             <div className="space-y-2">
+              {activitiesLoading ? (
+                <LoadingSkeleton count={3} height="h-12" />
+              ) : (
+                <>
               {activitiesData?.items.slice(0, 4).map((act) => (
                 <div
                   key={act.id}
@@ -363,6 +365,8 @@ export function DashboardPage() {
               ))}
               {(!activitiesData?.items || activitiesData.items.length === 0) && (
                 <p className="text-xs text-slate-500 py-3 text-center">No recent activities</p>
+              )}
+                </>
               )}
             </div>
           </GlassCard>

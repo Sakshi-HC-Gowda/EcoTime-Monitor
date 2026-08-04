@@ -17,6 +17,7 @@ import logging
 import os
 from datetime import datetime, timezone
 
+from dotenv import load_dotenv
 from flask import Flask, jsonify
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
@@ -34,6 +35,9 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+# Load .env before any route modules read ELECTRICITY_MAPS_API_KEY
+load_dotenv()
 
 
 # ---------------------------------------------------------------------------

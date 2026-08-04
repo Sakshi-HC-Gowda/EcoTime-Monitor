@@ -161,7 +161,6 @@ def _apply_time_transitions(task: dict[str, Any]) -> None:
     if changed:
         task["updatedAt"] = now.isoformat()
 
-
 def create_activity(data: dict) -> tuple[dict | None, str | None]:
     """
     Create and persist a new activity.

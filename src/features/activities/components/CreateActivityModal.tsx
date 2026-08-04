@@ -46,24 +46,7 @@ export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
   const [name, setName] = useState('');
   const [activityType, setActivityType] = useState<ActivityType>('dataset-download');
   const [duration, setDuration] = useState(45);
-  const [powerDraw, setPowerDraw] = useState(350);
-  const [priorityScore, setPriorityScore] = useState(50);
-  const [flexibilityScore, setFlexibilityScore] = useState(80);
-
-  const estimateDraft = {
-    duration: Number(duration),
-    powerDraw: Number(powerDraw),
-    priorityScore: Number(priorityScore),
-    flexibilityScore: Number(flexibilityScore),
-    createdAt: new Date().toISOString(),
-  };
-
-  const estimatedEnergy = getEstimatedEnergyKwh(estimateDraft);
-  const estimatedCarbon = getEstimatedCarbonImpact(estimateDraft);
-  const estimatedEcoScore = getEstimatedEcoScore(estimateDraft);
-  const recommendation = getRecommendationText(estimateDraft);
-  const recommendedStart = formatRecommendedTime(getRecommendedStartTimeIso(estimateDraft, greenWindows));
-
+ 
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -74,10 +57,7 @@ export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
       name,
       type: 'flexible',
       activityType,
-      duration: Number(duration),
-      powerDraw: Number(powerDraw),
-      priorityScore: Number(priorityScore),
-      flexibilityScore: Number(flexibilityScore),
+      duration: Number(duration)
     });
 
     setName('');
@@ -146,86 +126,11 @@ export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
               <div>
                 <FieldLabel>Duration (min)</FieldLabel>
                 <input
-                  type="number"
-                  min="1"
-                  max="1440"
+                  type="number"                
                   value={duration}
                   onChange={(e) => setDuration(Number(e.target.value))}
                   className={numInputClass}
                 />
-              </div>
-            </div>
-
-            {/* Divider */}
-            <div className="border-t border-white/10 my-1" />
-
-            {/* Power + Priority + Flexibility */}
-            <div className="grid grid-cols-3 gap-5">
-              <div>
-                <FieldLabel>Power Draw (W)</FieldLabel>
-                <input
-                  type="number"
-                  min="10"
-                  max="10000"
-                  value={powerDraw}
-                  onChange={(e) => setPowerDraw(Number(e.target.value))}
-                  className={numInputClass}
-                />
-              </div>
-
-              <div>
-                <FieldLabel>Priority (0–100)</FieldLabel>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={priorityScore}
-                  onChange={(e) => setPriorityScore(Number(e.target.value))}
-                  className={numInputClass}
-                />
-              </div>
-
-              <div>
-                <FieldLabel>Flexibility (%)</FieldLabel>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={flexibilityScore}
-                  onChange={(e) => setFlexibilityScore(Number(e.target.value))}
-                  className={numInputClass}
-                />
-              </div>
-            </div>
-
-            {/* Estimated Values Box with generous inner padding */}
-            <div className="rounded-xl border border-green-500/25 bg-green-500/[0.08] p-6 space-y-4">
-              <p className="text-xs font-bold uppercase tracking-[0.08em] text-green-400">Estimated Values</p>
-              
-              <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-xs text-slate-300">
-                <p className="flex justify-between sm:justify-start sm:gap-2">
-                  <span className="text-slate-400">Estimated Power:</span>
-                  <span className="font-semibold text-white">{Number(powerDraw).toFixed(0)} W</span>
-                </p>
-                <p className="flex justify-between sm:justify-start sm:gap-2">
-                  <span className="text-slate-400">Estimated Energy:</span>
-                  <span className="font-semibold text-white">{estimatedEnergy.toFixed(2)} kWh</span>
-                </p>
-                <p className="flex justify-between sm:justify-start sm:gap-2">
-                  <span className="text-slate-400">Carbon Impact:</span>
-                  <span className="font-semibold text-white">{estimatedCarbon.toFixed(0)} gCO2</span>
-                </p>
-                <p className="flex justify-between sm:justify-start sm:gap-2">
-                  <span className="text-slate-400">EcoScore:</span>
-                  <span className="font-semibold text-white">{estimatedEcoScore.toFixed(1)} / 100</span>
-                </p>
-              </div>
-
-              <div className="pt-3 border-t border-green-500/20 text-xs text-slate-300 leading-relaxed">
-                <span className="text-slate-400">Recommendation:</span>{' '}
-                <span className="font-semibold text-white">{recommendation}</span>
-                {' '}at{' '}
-                <span className="font-semibold text-white">{recommendedStart}</span>
               </div>
             </div>
           </div>

@@ -77,12 +77,7 @@ export function DashboardPage() {
 
   const currentIntensity = carbon.current.carbonIntensity;
   const isLow = currentIntensity < 180;
-<<<<<<< HEAD
-  const activeTasksCount = activitiesData?.items.filter((t) => t.status === 'running').length || 0;
-  const totalTasksCount = activitiesData?.total || 0;
-  const greenWindows = windows ?? [];
 
-=======
   let pendingCount = 0;
   let scheduledCount = 0;
   let runningCount = 0;
@@ -99,7 +94,6 @@ export function DashboardPage() {
   const totalTasksCount = activitiesData?.total || 0;
   const greenWindows = windows ?? [];
 
->>>>>>> f55b0a069117478877ead42be399f654ac7f17c4
   // Forecast chart data — next 24 hours
   const forecastData = carbon.forecast.slice(0, 24).map((pt) => ({
     time: new Date(pt.datetime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -278,10 +272,6 @@ export function DashboardPage() {
         {/* Right column — 4 cols */}
         <div className="section-stack lg:col-span-4">
 
-          {/* Grid Region */}
-          <GlassCard hoverEffect onClick={() => navigate('/carbon')} className="cursor-pointer">
-<<<<<<< HEAD
-=======
           <GlassCard hoverEffect onClick={() => navigate('/activities')} className="cursor-pointer">
             <div className="mb-3 flex items-center justify-between">
               <h4 className="text-[13px] font-bold text-white">Activity Lifecycle</h4>
@@ -309,7 +299,6 @@ export function DashboardPage() {
 
           {/* Grid Profile */}
           <GlassCard hoverEffect onClick={() => navigate('/settings')} className="cursor-pointer">
->>>>>>> f55b0a069117478877ead42be399f654ac7f17c4
             <div className="flex items-center justify-between mb-3">
               <span className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.08em]">Grid Region</span>
               <Globe className="w-3.5 h-3.5 text-green-400" />

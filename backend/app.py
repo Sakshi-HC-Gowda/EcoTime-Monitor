@@ -122,13 +122,15 @@ def create_app(config_name: str | None = None) -> Flask:
     from routes.activities import activities_bp
     from routes.optimizer import optimizer_bp
     from routes.forecast import forecast_bp
+    from routes.upload import upload_bp
 
     app.register_blueprint(carbon_bp, url_prefix="/api")
     app.register_blueprint(activities_bp, url_prefix="/api")
     app.register_blueprint(optimizer_bp, url_prefix="/api")
     app.register_blueprint(forecast_bp, url_prefix="/api")
+    app.register_blueprint(upload_bp, url_prefix="/api")
 
-    logger.info("Blueprints registered: carbon, activities, optimizer, forecast")
+    logger.info("Blueprints registered: carbon, activities, optimizer, forecast, upload")
 
     # -----------------------------------------------------------------------
     # Health Check & Root
@@ -164,6 +166,7 @@ def create_app(config_name: str | None = None) -> Flask:
                 "zones": "/api/zones",
                 "activities": "/api/activities",
                 "scheduler": "/api/scheduler",
+                "upload": "/api/upload",
                 "eco_score": "/api/eco-score",
                 "forecast": "/api/forecast",
                 "forecast_info": "/api/forecast/info",

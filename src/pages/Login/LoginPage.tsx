@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Leaf } from "lucide-react";
-
 import { Button } from "@/components/ui/Button";
+import { Logo } from "@/components/ui/Logo";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -22,18 +21,14 @@ export default function LoginPage() {
       <div className="w-full max-w-md rounded-3xl border border-white/10 bg-[#0f172a] p-8 shadow-2xl">
 
         {/* Logo */}
-        <div className="flex flex-col items-center mb-8">
-          <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-green-500 to-teal-400 p-[1px]">
-            <div className="flex h-full w-full items-center justify-center rounded-2xl bg-[#070a13]">
-              <Leaf className="h-7 w-7 text-green-400" />
-            </div>
-          </div>
+        <div className="flex flex-col items-center mb-8 text-center">
+          <Logo size="lg" to="/" />
 
-          <h1 className="mt-4 text-3xl font-bold text-white">
+          <h1 className="mt-6 text-2xl font-bold text-white">
             Welcome Back
           </h1>
 
-          <p className="mt-2 text-sm text-slate-400">
+          <p className="mt-1.5 text-xs text-slate-400">
             Sign in to access your EcoTime dashboard
           </p>
         </div>

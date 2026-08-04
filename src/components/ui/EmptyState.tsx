@@ -29,14 +29,14 @@ export function EmptyState({
   accentColor = 'green',
 }: EmptyStateProps) {
   return (
-    <GlassCard padding="lg" className="py-12 text-center flex flex-col items-center justify-center">
+    <GlassCard padding="lg" className="py-14 text-center flex flex-col items-center justify-center">
       <div
-        className={`w-14 h-14 rounded-2xl border flex items-center justify-center mb-5 ${accentMap[accentColor]}`}
+        className={`w-16 h-16 rounded-2xl border flex items-center justify-center mb-6 ${accentMap[accentColor]}`}
       >
-        <Icon className="w-6 h-6" />
+        <Icon className="w-7 h-7" />
       </div>
-      <h3 className="text-lg font-semibold text-white mb-2">{title}</h3>
-      <p className="text-sm text-slate-400 max-w-sm mb-7 leading-relaxed">{description}</p>
+      <h3 className="text-lg font-semibold text-white mb-3">{title}</h3>
+      <p className="text-sm text-slate-400 max-w-md mb-8 leading-relaxed">{description}</p>
       {actionLabel && onAction && (
         <Button size="sm" onClick={onAction}>
           {actionLabel}

@@ -7,6 +7,7 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
+  type TooltipContentProps,
 } from 'recharts';
 import {
   Activity,
@@ -83,12 +84,16 @@ export function DashboardPage() {
 
   const currentIntensity = carbon.current.carbonIntensity;
   const isLow = currentIntensity < 180;
+
+  const activities: Task[] = activitiesData?.items ?? [];
+  const greenWindows: GreenWindow[] = windows ?? [];
+
   let pendingCount = 0;
   let scheduledCount = 0;
   let runningCount = 0;
   let completedCount = 0;
 
-  for (const task of activitiesData?.items ?? []) {
+  for (const task of activities) {
     if (task.status === 'pending') pendingCount += 1;
     else if (task.status === 'scheduled') scheduledCount += 1;
     else if (task.status === 'running') runningCount += 1;
@@ -97,7 +102,6 @@ export function DashboardPage() {
 
   const activeTasksCount = runningCount;
   const totalTasksCount = activitiesData?.total || 0;
-  const greenWindows = windows ?? [];
 
   // Forecast chart data — next 24 hours
   const forecastData = carbon.forecast.slice(0, 24).map((pt) => ({
@@ -109,7 +113,7 @@ export function DashboardPage() {
   const ecoScore = Math.max(10, Math.min(99, Math.round(100 - (currentIntensity / 400) * 100)));
 
   return (
-    <div className="page-shell page-stack">
+    <div className="page-shell page-stack max-w-[1650px] mx-auto">
 
       {/* ── Page header ────────────────────────────────────────────────────── */}
       <div className="page-header">
@@ -142,7 +146,7 @@ export function DashboardPage() {
       />
 
       {/* ── KPI metric row ─────────────────────────────────────────────────── */}
-      <div className="card-grid card-grid-sm-2 card-grid-lg-4 items-stretch">
+      <div className="card-grid card-grid-sm-2 card-grid-lg-4 items-stretch gap-6">
         <MetricCard
           title="Current Carbon"
           value={currentIntensity}
@@ -198,7 +202,7 @@ export function DashboardPage() {
 
           {/* Live Carbon Forecast */}
           <GlassCard hoverEffect onClick={() => navigate('/forecast')} className="cursor-pointer group">
-            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <TrendingUp className="w-4 h-4 text-purple-400 flex-shrink-0" />
@@ -213,12 +217,12 @@ export function DashboardPage() {
               </span>
             </div>
 
-            <div className="h-[224px] w-full sm:h-[248px]">
+            <div className="h-[260px] w-full sm:h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={forecastData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                <AreaChart data={forecastData} margin={{ top: 8, right: 16, left: 12, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorInt" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%"  stopColor="#a855f7" stopOpacity={0.3} />
+                      <stop offset="5%" stopColor="#a855f7" stopOpacity={0.3} />
                       <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
                     </linearGradient>
                   </defs>
@@ -240,9 +244,9 @@ export function DashboardPage() {
                     tick={{ fill: '#475569', fontSize: 10, fontFamily: 'Plus Jakarta Sans' }}
                     tickLine={false}
                     axisLine={false}
-                    width={36}
+                    width={48}
                   />
-                  <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(168,85,247,0.2)', strokeWidth: 1 }} />
+                  <Tooltip content={(props) => <CustomTooltip {...props} />} cursor={{ stroke: 'rgba(168,85,247,0.2)', strokeWidth: 1 }} />
                   <Area
                     type="monotone"
                     dataKey="intensity"
@@ -279,26 +283,26 @@ export function DashboardPage() {
 
           {/* Activity Lifecycle */}
           <GlassCard hoverEffect onClick={() => navigate('/activities')} className="cursor-pointer">
-            <div className="mb-3 flex items-center justify-between">
+            <div className="mb-3.5 flex items-center justify-between">
               <h4 className="text-[13px] font-bold text-white">Activity Lifecycle</h4>
               <ArrowRight className="h-3.5 w-3.5 text-slate-600" />
             </div>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="rounded-xl border border-blue-500/20 bg-blue-500/[0.06] p-2.5">
-                <p className="text-slate-400">Pending</p>
-                <p className="text-lg font-bold text-blue-300">{pendingCount}</p>
+            <div className="grid grid-cols-2 gap-2.5 text-xs">
+              <div className="rounded-xl border border-blue-500/20 bg-blue-500/[0.06] px-3.5 py-2.5 flex flex-col justify-between min-h-[58px]">
+                <p className="text-[11px] font-medium text-slate-400">Pending</p>
+                <p className="text-lg font-bold text-blue-300 leading-tight mt-0.5">{pendingCount}</p>
               </div>
-              <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-2.5">
-                <p className="text-slate-400">Scheduled</p>
-                <p className="text-lg font-bold text-amber-300">{scheduledCount}</p>
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] px-3.5 py-2.5 flex flex-col justify-between min-h-[58px]">
+                <p className="text-[11px] font-medium text-slate-400">Scheduled</p>
+                <p className="text-lg font-bold text-amber-300 leading-tight mt-0.5">{scheduledCount}</p>
               </div>
-              <div className="rounded-xl border border-green-500/20 bg-green-500/[0.06] p-2.5">
-                <p className="text-slate-400">Running</p>
-                <p className="text-lg font-bold text-green-300">{runningCount}</p>
+              <div className="rounded-xl border border-green-500/20 bg-green-500/[0.06] px-3.5 py-2.5 flex flex-col justify-between min-h-[58px]">
+                <p className="text-[11px] font-medium text-slate-400">Running</p>
+                <p className="text-lg font-bold text-green-300 leading-tight mt-0.5">{runningCount}</p>
               </div>
-              <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] p-2.5">
-                <p className="text-slate-400">Completed</p>
-                <p className="text-lg font-bold text-emerald-300">{completedCount}</p>
+              <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] px-3.5 py-2.5 flex flex-col justify-between min-h-[58px]">
+                <p className="text-[11px] font-medium text-slate-400">Completed</p>
+                <p className="text-lg font-bold text-emerald-300 leading-tight mt-0.5">{completedCount}</p>
               </div>
             </div>
           </GlassCard>
@@ -311,16 +315,15 @@ export function DashboardPage() {
             </div>
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h4 className="text-[15px] font-bold text-white">{selectedZone}</h4>
+                <h4 className="text-[14px] font-bold text-white">{selectedZone}</h4>
                 <p className="text-xs text-slate-500 mt-0.5">
                   {carbon.isSimulated ? 'Simulated Model' : 'Live Electricity Maps'}
                 </p>
               </div>
-              <div className={`px-2.5 py-1 rounded-full text-[11px] font-bold flex items-center gap-1.5 flex-shrink-0 border ${
-                isLow
-                  ? 'bg-green-500/10 text-green-400 border-green-500/20'
-                  : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-              }`}>
+              <div className={`px-2.5 py-1 rounded-full text-[11px] font-bold flex items-center gap-1.5 flex-shrink-0 border ${isLow
+                ? 'bg-green-500/10 text-green-400 border-green-500/20'
+                : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                }`}>
                 <ShieldCheck className="w-3 h-3" /> {isLow ? 'Optimal' : 'Moderate'}
               </div>
             </div>
@@ -330,13 +333,13 @@ export function DashboardPage() {
           <GlassCard hoverEffect onClick={() => navigate('/optimization')} className="cursor-pointer group">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <Brain className="w-3.5 h-3.5 text-purple-400" />
+                <Brain className="w-4 h-4 text-purple-400" />
                 <h4 className="text-[13px] font-bold text-white">AI Recommendation</h4>
               </div>
               <ArrowRight className="w-3.5 h-3.5 text-slate-600 group-hover:text-purple-400 transition-colors" />
             </div>
-            <div className="p-3 rounded-xl bg-purple-500/[0.05] border border-purple-500/15">
-              <p className="text-xs text-slate-300 leading-relaxed">
+            <div className="p-4 rounded-xl bg-purple-500/[0.08] border border-purple-500/20">
+              <p className="text-xs text-slate-200 leading-relaxed">
                 Delay batch training by <span className="text-white font-semibold">2 hours</span> to utilize Green Window GW-104.
                 Estimated saving: <span className="text-green-400 font-semibold">42% carbon</span>.
               </p>
@@ -345,55 +348,34 @@ export function DashboardPage() {
 
           {/* Recent Activities */}
           <GlassCard hoverEffect onClick={() => navigate('/activities')} className="cursor-pointer group">
-            <div className="flex items-center justify-between mb-3.5">
+            <div className="flex items-center justify-between mb-3">
               <h4 className="text-[13px] font-bold text-white">Recent Activities</h4>
               <span className="text-[11px] font-semibold text-slate-500 group-hover:text-white transition-colors flex items-center gap-1">
                 View all <ArrowRight className="w-3 h-3" />
               </span>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               {activitiesLoading ? (
-                <LoadingSkeleton count={3} height="h-12" />
+                <LoadingSkeleton count={3} height="h-10" />
               ) : (
                 <>
-              {activitiesData?.items.slice(0, 4).map((act) => (
-                <div
-                  key={act.id}
-                  className="flex items-center justify-between text-xs py-2 px-3 rounded-xl bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] transition-colors"
-                >
-                  <div className="min-w-0 pr-2">
-                    <p className="font-semibold text-white truncate">{act.name}</p>
-                    <p className="text-[10px] text-slate-500 mt-0.5">{act.duration} min · {act.powerDraw}W</p>
-                  </div>
-                  <StatusBadge status={act.status} />
-                </div>
-              ))}
-              {(!activitiesData?.items || activitiesData.items.length === 0) && (
-                <p className="text-xs text-slate-500 py-3 text-center">No recent activities</p>
-              )}
+                  {activitiesData?.items.slice(0, 4).map((act) => (
+                    <div
+                      key={act.id}
+                      className="flex items-center justify-between text-xs py-2.5 px-3.5 rounded-xl bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] transition-colors"
+                    >
+                      <div className="min-w-0 pr-2">
+                        <p className="font-semibold text-white truncate">{act.name}</p>
+                        <p className="text-[10px] text-slate-500 mt-0.5">{act.duration} min · {act.powerDraw}W</p>
+                      </div>
+                      <StatusBadge status={act.status} />
+                    </div>
+                  ))}
+                  {(!activitiesData?.items || activitiesData.items.length === 0) && (
+                    <p className="text-xs text-slate-500 py-3 text-center">No recent activities</p>
+                  )}
                 </>
               )}
-            </div>
-          </GlassCard>
-
-          {/* Quick Actions */}
-          <GlassCard variant="inset" padding="sm">
-            <p className="text-[10px] font-bold text-slate-600 uppercase tracking-[0.10em] mb-3">Quick Actions</p>
-            <div className="grid grid-cols-2 gap-2.5">
-              <button
-                onClick={() => navigate('/scheduler')}
-                className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] hover:border-white/[0.10] text-[12px] font-semibold text-slate-300 hover:text-white transition-all duration-200 text-left leading-tight group"
-              >
-                Open Scheduler
-                <ArrowRight className="w-3 h-3 mt-1.5 text-slate-600 group-hover:text-white transition-colors" />
-              </button>
-              <button
-                onClick={() => navigate('/forecast')}
-                className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] hover:border-white/[0.10] text-[12px] font-semibold text-slate-300 hover:text-white transition-all duration-200 text-left leading-tight group"
-              >
-                Forecast
-                <ArrowRight className="w-3 h-3 mt-1.5 text-slate-600 group-hover:text-white transition-colors" />
-              </button>
             </div>
           </GlassCard>
         </div>

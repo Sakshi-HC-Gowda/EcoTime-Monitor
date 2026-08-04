@@ -19,7 +19,7 @@ export function ForecastChart({ forecast }: Props) {
   return (
     <div className="h-80 w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data}>
+        <AreaChart data={data} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
           <defs>
             <linearGradient id="foreGradient" x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%" stopColor="#a855f7" stopOpacity={0.4} />
@@ -32,7 +32,7 @@ export function ForecastChart({ forecast }: Props) {
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.4} />
           <XAxis dataKey="time" stroke="#64748b" fontSize={11} tickLine={false} />
-          <YAxis stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
+          <YAxis stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} width={40} />
           <Tooltip
             contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px' }}
             labelStyle={{ color: '#94a3b8' }}

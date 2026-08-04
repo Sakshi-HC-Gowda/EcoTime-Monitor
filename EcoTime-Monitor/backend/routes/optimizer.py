@@ -18,12 +18,6 @@ from services.optimizer_service import compute_eco_score, run_scheduler, compute
 from services.activity_service import get_activity, update_activity
 from services.analytics_service import log_recommendation
 from services.persistence_service import persist_schedule_slot
-from services.scheduler_service import (
-    create_scheduler_entry,
-    delete_scheduler_entry,
-    get_scheduler_snapshot,
-    update_scheduler_entry,
-)
 from services.system_settings_service import get_simulation_config, set_simulation_config
 
 logger = logging.getLogger(__name__)
@@ -37,17 +31,6 @@ def _now_iso() -> str:
 # ---------------------------------------------------------------------------
 # Scheduler
 # ---------------------------------------------------------------------------
-
-@optimizer_bp.route("/scheduler", methods=["GET"])
-def scheduler_list():
-    """Return the full scheduler snapshot persisted in PostgreSQL/SQLite."""
-    snapshot = get_scheduler_snapshot()
-    return jsonify({
-        "success": True,
-        "data": snapshot,
-        "timestamp": _now_iso(),
-    }), 200
-
 
 @optimizer_bp.route("/scheduler", methods=["POST"])
 def schedule():
@@ -78,20 +61,6 @@ def schedule():
             "error": "Request body must be valid JSON",
             "timestamp": _now_iso(),
         }), 400
-
-    if isinstance(data, dict) and ("activityId" in data or "id" in data or data.get("action") in {"schedule", "reschedule"}):
-        activity, error = create_scheduler_entry(data)
-        if error:
-            return jsonify({
-                "success": False,
-                "error": error,
-                "timestamp": _now_iso(),
-            }), 400
-        return jsonify({
-            "success": True,
-            "data": {"activity": activity, "recommendation": activity.get("recommendation") if activity else None},
-            "timestamp": _now_iso(),
-        }), 200
 
     # Validate required fields
     missing = [f for f in ["tasks", "window"] if f not in data]
@@ -198,69 +167,6 @@ def schedule():
             "tasks": sched_result["tasks"],
             "savings": savings,
         },
-        "timestamp": _now_iso(),
-    }), 200
-
-
-@optimizer_bp.route("/scheduler", methods=["PATCH"])
-def scheduler_update():
-    """Apply a scheduler lifecycle action such as start, pause, complete, or cancel."""
-    data = request.get_json(silent=True) or {}
-    activity, error = update_scheduler_entry(data)
-    if error:
-        return jsonify({
-            "success": False,
-            "error": error,
-            "timestamp": _now_iso(),
-        }), 400
-    return jsonify({
-        "success": True,
-        "data": {"activity": activity},
-        "timestamp": _now_iso(),
-    }), 200
-
-
-@optimizer_bp.route("/scheduler", methods=["DELETE"])
-def scheduler_delete():
-    """Delete a scheduled activity from the scheduler and the database."""
-    data = request.get_json(silent=True) or {}
-    activity_id = data.get("activityId") or data.get("id")
-    if not activity_id:
-        return jsonify({
-            "success": False,
-            "error": "Missing activityId",
-            "timestamp": _now_iso(),
-        }), 400
-    result, error = delete_scheduler_entry(activity_id)
-    if error:
-        return jsonify({
-            "success": False,
-            "error": error,
-            "timestamp": _now_iso(),
-        }), 400
-    return jsonify({
-        "success": True,
-        "data": result,
-        "timestamp": _now_iso(),
-    }), 200
-
-
-@optimizer_bp.route("/scheduler/today", methods=["GET"])
-def scheduler_today():
-    snapshot = get_scheduler_snapshot()
-    return jsonify({
-        "success": True,
-        "data": snapshot.get("today", []),
-        "timestamp": _now_iso(),
-    }), 200
-
-
-@optimizer_bp.route("/scheduler/upcoming", methods=["GET"])
-def scheduler_upcoming():
-    snapshot = get_scheduler_snapshot()
-    return jsonify({
-        "success": True,
-        "data": snapshot.get("upcoming", []),
         "timestamp": _now_iso(),
     }), 200
 

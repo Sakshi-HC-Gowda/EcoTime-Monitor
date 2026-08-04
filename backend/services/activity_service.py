@@ -168,15 +168,15 @@ def create_activity(data: dict) -> tuple[dict | None, str | None]:
 
     Args:
        data: Request body dict with required fields:
-           name, type, duration
+           name, type, duration, powerDraw
 
-        Power draw, priority score, and flexibility score
-        are assigned automatically using workload profiles.
+        Priority and flexibility can be supplied by the caller. If they are
+        omitted, workload profiles provide sensible defaults.
     Returns:
         (task_dict, error_message) — one of them will be None
     """
     # Validate required fields
-    required = ["name", "type", "duration"]
+    required = ["name", "type", "duration", "powerDraw"]
     missing = [f for f in required if f not in data or data[f] is None]
     if missing:
         return None, f"Missing required fields: {', '.join(missing)}"
@@ -193,25 +193,32 @@ def create_activity(data: dict) -> tuple[dict | None, str | None]:
     # Validate numeric fields
     try:
         duration = float(data["duration"])
+        power_draw = float(data["powerDraw"])
     except (ValueError, TypeError):
-        return None, "Fields duration must be numeric"
+        return None, "Fields duration and powerDraw must be numeric"
     
 
     if duration <= 0:
         return None, "Field duration must be greater than 0"
+    if power_draw <= 0:
+        return None, "Field powerDraw must be greater than 0"
 
-       activity_name = data["name"].strip()
+    activity_name = data["name"].strip()
 
     profile = WORKLOAD_PROFILES.get(activity_name)
 
     if profile:
-        power_draw = float(profile.get("power", 150))
-        priority_score = min(100, max(0, int(profile.get("priority", 30))))
-        flexibility_score = min(100, max(0, int(profile.get("flexibility", 80))))
+        priority_default = profile.get("priority", 30)
+        flexibility_default = profile.get("flexibility", 80)
     else:
-        power_draw = 150.0
-        priority_score = 30
-        flexibility_score = 80
+        priority_default = 30
+        flexibility_default = 80
+
+    try:
+        priority_score = min(100, max(0, int(data.get("priorityScore", priority_default))))
+        flexibility_score = min(100, max(0, int(data.get("flexibilityScore", flexibility_default))))
+    except (ValueError, TypeError):
+        return None, "Fields priorityScore and flexibilityScore must be numeric"
 
     task_id = f"task-{datetime.now(timezone.utc).timestamp():.6f}"
     now = _now_iso()

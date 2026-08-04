@@ -52,6 +52,7 @@ export interface Task {
   name: string;
   type: TaskFlexibility;
   activityType: ActivityType;
+  category?: string;
   flexibilityScore: number; // 0-100
   priorityScore: number; // 0-100
   duration: number; // minutes
@@ -73,6 +74,52 @@ export interface CreateTaskRequest {
   powerDraw: number;
   priorityScore: number;
   flexibilityScore?: number;
+}
+
+export interface SchedulerRecommendation {
+  id?: number;
+  activityId?: string;
+  text: string;
+  reason?: string;
+  expectedCarbonSaving?: number;
+  expectedEnergySaving?: number;
+  recommendedStartTime?: string;
+  ecoScore?: number;
+  forecastUsed?: string;
+  status?: string;
+  createdAt?: string;
+}
+
+export interface SchedulerActivity extends Task {
+  scheduledAt?: string;
+  currentStatus?: string;
+  recommendation?: SchedulerRecommendation | null;
+  ecoScore?: number | null;
+  carbonSaved?: number | null;
+  scheduleSlot?: Record<string, unknown> | null;
+}
+
+export interface SchedulerSnapshot {
+  activities: SchedulerActivity[];
+  today: SchedulerActivity[];
+  upcoming: SchedulerActivity[];
+  summary: {
+    total: number;
+    pending: number;
+    scheduled: number;
+    running: number;
+    completed: number;
+    missed: number;
+    cancelled: number;
+  };
+}
+
+export interface SchedulerActionRequest {
+  activityId: string;
+  action?: string;
+  scheduledAt?: string;
+  assignedWindowId?: string;
+  status?: string;
 }
 
 export interface UpdateTaskRequest {

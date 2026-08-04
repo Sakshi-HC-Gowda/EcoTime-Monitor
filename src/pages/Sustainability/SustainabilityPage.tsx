@@ -3,7 +3,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 
 export function SustainabilityPage() {
   return (
-    <div className="page-shell page-stack">
+    <div className="page-shell page-stack max-w-[1650px] mx-auto">
       <div>
         <h1 className="page-header-title heading-row">
           Sustainability

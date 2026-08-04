@@ -200,7 +200,7 @@ def create_activity(data: dict) -> tuple[dict | None, str | None]:
     if duration <= 0:
         return None, "Field duration must be greater than 0"
 
-       activity_name = data["name"].strip()
+    activity_name = data["name"].strip()
 
     profile = WORKLOAD_PROFILES.get(activity_name)
 

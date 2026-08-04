@@ -18,18 +18,18 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 const variantClasses: Record<ButtonVariant, string> = {
   primary: `
     bg-gradient-to-r from-emerald-500 to-green-600 text-white
-    shadow-md shadow-green-500/20 hover:shadow-green-500/35 hover:brightness-110
+    shadow-md shadow-green-500/15 hover:shadow-green-500/25 hover:brightness-105
     active:scale-[0.98]
     focus-visible:ring-green-500/50
   `,
   secondary: `
-    bg-white/[0.05] text-slate-200 border border-white/[0.10]
-    hover:bg-white/[0.08] hover:border-white/[0.15] backdrop-blur-lg
+    bg-white/[0.035] text-slate-200 border border-white/[0.08]
+    hover:bg-white/[0.055] hover:border-white/[0.12] backdrop-blur-lg
     focus-visible:ring-white/20
   `,
   ghost: `
-    bg-transparent text-slate-400 border border-white/[0.07]
-    hover:text-white hover:bg-white/[0.05] hover:border-white/[0.12]
+    bg-transparent text-slate-400 border border-white/[0.06]
+    hover:text-white hover:bg-white/[0.04] hover:border-white/[0.10]
     focus-visible:ring-white/15
   `,
   danger: `
@@ -40,11 +40,11 @@ const variantClasses: Record<ButtonVariant, string> = {
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
-  xs:      'h-8 px-3 text-xs gap-1.5',
-  sm:      'h-10 px-4 text-sm gap-2',
-  md:      'h-11 px-5 text-sm gap-2',
-  icon:    'h-10 w-10 p-0 justify-center',
-  'icon-sm': 'h-8 w-8 p-0 justify-center',
+  xs:      'h-8 px-4 text-xs gap-2',
+  sm:      'h-11 px-5 text-sm gap-2.5',
+  md:      'h-12 px-6.5 text-sm gap-3',
+  icon:    'h-11 w-11 p-0 justify-center',
+  'icon-sm': 'h-9 w-9 p-0 justify-center',
 };
 
 const baseClasses = `

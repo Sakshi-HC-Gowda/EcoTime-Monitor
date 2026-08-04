@@ -54,7 +54,7 @@ export function Hero() {
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.24 }}
-            className="mb-10 flex flex-col items-stretch justify-center gap-[var(--space-3)] sm:flex-row sm:items-center md:mb-12 md:gap-[var(--space-4)]"
+            className="mb-10 flex flex-col items-stretch justify-center gap-[var(--space-4)] sm:flex-row sm:items-center md:mb-12 md:gap-[var(--space-5)]"
           >
             <Button
               to="/dashboard"
@@ -80,7 +80,7 @@ export function Hero() {
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.32 }}
-            className="card-grid card-grid-sm-2 card-grid-lg-4 rounded-[var(--radius-card)] border border-white/[0.06] bg-slate-900/40 p-[var(--card-padding-sm)] text-left backdrop-blur-2xl md:p-[var(--card-padding-md)]"
+            className="card-grid card-grid-sm-2 card-grid-lg-4 rounded-[var(--radius-card)] border border-white/[0.05] bg-slate-900/28 p-[var(--card-padding-sm)] text-left backdrop-blur-2xl md:p-[var(--card-padding-md)]"
           >
             {stats.map((stat) => {
               const Icon = stat.icon;

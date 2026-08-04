@@ -35,8 +35,14 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 
+type CustomTooltipProps = {
+  active?: boolean;
+  payload?: Array<{ value?: number | string }>;
+  label?: string | number;
+};
+
 // ─── Custom recharts tooltip ─────────────────────────────────────────────────
-function CustomTooltip({ active, payload, label }: any) {
+function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-slate-900 border border-white/[0.10] rounded-xl px-3.5 py-2.5 shadow-xl text-xs">
@@ -271,8 +277,7 @@ export function DashboardPage() {
         {/* Right column — 4 cols */}
         <div className="section-stack lg:col-span-4">
 
-          {/* Grid Region */}
-          <GlassCard hoverEffect onClick={() => navigate('/carbon')} className="cursor-pointer">
+          {/* Activity Lifecycle */}
           <GlassCard hoverEffect onClick={() => navigate('/activities')} className="cursor-pointer">
             <div className="mb-3 flex items-center justify-between">
               <h4 className="text-[13px] font-bold text-white">Activity Lifecycle</h4>

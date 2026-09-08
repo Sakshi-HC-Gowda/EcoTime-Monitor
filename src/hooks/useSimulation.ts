@@ -1,14 +1,3 @@
-/**
- * useSimulation — Time-based simulation loop.
- *
- * Manages:
- *   - Simulation on/off toggle
- *   - Clock offset advancement (minutes-per-real-second)
- *   - Per-tick task state machine (run → complete, pause on carbon spike, resume on green)
- *   - Carbon savings calculation per tick
- *   - Console log generation
- */
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchCarbonData } from '../services/electricityMaps';
 import type { CarbonResponse } from '../services/electricityMaps';
@@ -51,11 +40,11 @@ export function useSimulation({
   // Use refs for values accessed inside setInterval to avoid stale closures
   const offsetRef = useRef(currentOffsetHours);
   const speedRef = useRef(simulationSpeed);
-  const zoneRef = useRef(carbonData?.zone ?? 'US-CA');
+  const zoneRef = useRef<string | null | ''>(carbonData?.zone ?? '');
 
   useEffect(() => { offsetRef.current = currentOffsetHours; }, [currentOffsetHours]);
   useEffect(() => { speedRef.current = simulationSpeed; }, [simulationSpeed]);
-  useEffect(() => { if (carbonData) zoneRef.current = carbonData.zone; }, [carbonData]);
+  useEffect(() => { if (carbonData) zoneRef.current = carbonData.zone ?? ''; }, [carbonData]);
 
   const toggleSimulation = useCallback(() => setIsSimulating(s => !s), []);
 
@@ -73,7 +62,13 @@ export function useSimulation({
       offsetRef.current = newOffset;
 
       try {
-        const data = await fetchCarbonData(zoneRef.current, apiKey, newOffset);
+        const zoneToFetch = zoneRef.current;
+        if (!zoneToFetch) {
+          // Skip fetch if zone is not yet resolved
+          return;
+        }
+
+        const data = await fetchCarbonData(zoneToFetch, apiKey, newOffset);
         onCarbonUpdate(data);
 
         const currentIntensity = data.current.carbonIntensity;
@@ -94,53 +89,19 @@ export function useSimulation({
                 const kW = task.powerDraw / 1000;
                 const saved = hoursFraction * kW * Math.max(0, baselineIntensity - currentIntensity);
                 if (saved > 0) onSavings(saved);
-
-                // Auto-pause flexible tasks during carbon spike
-                if (task.type === 'flexible' && currentIntensity > lowCarbonThreshold * 1.5) {
-                  status = 'paused';
-                  addLog(
-                    `DeviceAgent: Carbon surge to ${currentIntensity} g/kWh — auto-pausing "${task.name}".`
-                  );
-                }
-              }
-            } else if (status === 'paused') {
-              // Auto-resume when grid returns to green
-              if (task.type === 'flexible' && currentIntensity < lowCarbonThreshold) {
-                status = 'running';
-                addLog(
-                  `DeviceAgent: Grid green (${currentIntensity} g/kWh) — resuming "${task.name}".`
-                );
-              }
-            } else if (status === 'delayed' || status === 'idle') {
-              // Start scheduled tasks when grid enters green window
-              if (currentIntensity < lowCarbonThreshold) {
-                status = 'running';
-                addLog(
-                  `DeviceAgent: Green Window active (${currentIntensity} g/kWh) — starting "${task.name}".`
-                );
               }
             }
 
             return { ...task, progress, status };
           })
         );
-      } catch (err) {
-        console.error('[useSimulation] tick error:', err);
+      } catch (err: any) {
+        console.error('[useSimulation] Tick error', err);
       }
     }, 1000);
 
     return () => clearInterval(intervalId);
-  }, [
-    isSimulating,
-    carbonData,
-    apiKey,
-    lowCarbonThreshold,
-    baselineIntensity,
-    onCarbonUpdate,
-    onTasksUpdate,
-    onSavings,
-    addLog,
-  ]);
+  }, [isSimulating, carbonData, apiKey, onCarbonUpdate, onTasksUpdate, onSavings, addLog, baselineIntensity]);
 
   return {
     isSimulating,

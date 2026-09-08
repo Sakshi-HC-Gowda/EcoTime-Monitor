@@ -93,7 +93,7 @@ export function Features() {
       <div className="landing-container">
         <div className="mx-auto mb-12 max-w-3xl text-center md:mb-16">
           <p className="section-eyebrow">Features</p>
-          <h2 className="section-title text-balance">Everything teams need to move work into cleaner hours.</h2>
+          <h2 className="section-title text-balance">Everything you need for carbon-aware scheduling.</h2>
         </div>
 
         <div className="content-grid content-grid-12 lg:gap-[var(--space-12)]">
@@ -106,16 +106,14 @@ export function Features() {
                 <button
                   key={feature.id}
                   onClick={() => setActiveTab(feature.id)}
-                  className={`ds-card ds-card-hover flex min-h-[104px] w-full items-start gap-4 p-5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500/40 ${
-                    isActive
-                      ? 'border-white/[0.12] bg-slate-900/60 shadow-lg shadow-black/30'
-                      : 'border-transparent bg-transparent hover:bg-white/[0.03]'
-                  }`}
+                  className={`ds-card ds-card-hover flex min-h-[104px] w-full items-start gap-4 p-5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500/40 ${isActive
+                    ? 'border-white/[0.12] bg-slate-900/60 shadow-lg shadow-black/30'
+                    : 'border-transparent bg-transparent hover:bg-white/[0.03]'
+                    }`}
                 >
                   <div
-                    className={`ds-icon-box h-11 w-11 transition-colors ${
-                      isActive ? `bg-gradient-to-br ${feature.color}` : 'bg-white/[0.05]'
-                    }`}
+                    className={`ds-icon-box h-11 w-11 transition-colors ${isActive ? `bg-gradient-to-br ${feature.color}` : 'bg-white/[0.05]'
+                      }`}
                   >
                     <Icon className={`h-5 w-5 ${isActive ? feature.iconColor : 'text-slate-400'}`} />
                   </div>

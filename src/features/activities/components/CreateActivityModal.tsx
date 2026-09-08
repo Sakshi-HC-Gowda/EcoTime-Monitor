@@ -2,6 +2,15 @@ import { useState } from 'react';
 import { X, ChevronDown } from 'lucide-react';
 import type { ActivityType, CreateTaskRequest } from '@/types/domain';
 import { Button } from '@/components/ui/Button';
+import { useGreenWindows } from '@/features/carbon/hooks/useCarbon';
+import {
+  formatRecommendedTime,
+  getEstimatedCarbonImpact,
+  getEstimatedEcoScore,
+  getEstimatedEnergyKwh,
+  getRecommendationText,
+  getRecommendedStartTimeIso,
+} from '@/features/activities/utils/activityMetrics';
 
 interface Props {
   isOpen: boolean;
@@ -20,26 +29,24 @@ const ACTIVITY_TYPES: { value: ActivityType; label: string }[] = [
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
-    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-[0.08em] mb-1.5">
+    <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-[0.08em] mb-2.5">
       {children}
     </label>
   );
 }
 
 const inputClass =
-  'w-full h-10 px-3 rounded-xl bg-slate-950/80 border border-white/[0.07] text-[13px] text-white font-medium focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500/40 transition-all placeholder:text-slate-700';
+  'w-full h-11 px-4 rounded-xl bg-slate-800/60 border border-white/10 text-sm text-white font-medium focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500/50 transition-all placeholder:text-slate-500 [&>option]:bg-slate-900 [&>option]:text-white';
 
 const numInputClass =
-  'w-full h-10 px-3 rounded-xl bg-slate-950/80 border border-white/[0.07] text-[13px] text-white font-mono font-medium focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500/40 transition-all';
+  'w-full h-11 px-4 rounded-xl bg-slate-800/60 border border-white/10 text-sm text-white font-mono font-medium focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500/50 transition-all';
 
 export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
+  const { data: greenWindows = [] } = useGreenWindows('US-CA', 180, 0, isOpen);
   const [name, setName] = useState('');
   const [activityType, setActivityType] = useState<ActivityType>('dataset-download');
   const [duration, setDuration] = useState(45);
-  const [powerDraw, setPowerDraw] = useState(350);
-  const [priorityScore, setPriorityScore] = useState(50);
-  const [flexibilityScore, setFlexibilityScore] = useState(80);
-
+ 
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -50,10 +57,7 @@ export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
       name,
       type: 'flexible',
       activityType,
-      duration: Number(duration),
-      powerDraw: Number(powerDraw),
-      priorityScore: Number(priorityScore),
-      flexibilityScore: Number(flexibilityScore),
+      duration: Number(duration)
     });
 
     setName('');
@@ -62,31 +66,31 @@ export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-md"
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-title"
     >
-      <div className="w-full max-w-lg rounded-2xl bg-slate-900 border border-white/[0.09] shadow-2xl overflow-hidden">
+      <div className="w-full max-w-2xl rounded-2xl bg-[#0f172a] border border-white/10 shadow-2xl overflow-hidden my-auto">
 
         {/* Modal header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-white/[0.07]">
+        <div className="flex items-center justify-between px-8 py-6 sm:px-9 sm:py-7 border-b border-white/10 bg-slate-900/50">
           <div>
-            <h3 id="modal-title" className="text-[17px] font-bold text-white">Register Activity</h3>
-            <p className="text-xs text-slate-500 mt-0.5">Schedule a new carbon-aware digital workload</p>
+            <h3 id="modal-title" className="text-xl font-bold text-white tracking-tight">Register Activity</h3>
+            <p className="text-xs sm:text-sm text-slate-400 mt-1.5">Schedule a new carbon-aware digital workload</p>
           </div>
           <button
             onClick={onClose}
-            className="h-8 w-8 rounded-xl text-slate-500 hover:text-white hover:bg-white/[0.06] transition-all flex items-center justify-center border border-transparent hover:border-white/[0.08]"
+            className="h-9 w-9 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-all flex items-center justify-center border border-transparent hover:border-white/10 ml-4"
             aria-label="Close modal"
           >
-            <X className="w-4 h-4" />
+            <X className="w-4.5 h-4.5" />
           </button>
         </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit}>
-          <div className="px-6 py-5 space-y-5">
+          <div className="px-8 py-7 sm:px-9 space-y-6 max-h-[calc(85vh-140px)] overflow-y-auto">
 
             {/* Activity name */}
             <div>
@@ -102,73 +106,29 @@ export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
             </div>
 
             {/* Category + Duration */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div>
                 <FieldLabel>Category</FieldLabel>
                 <div className="relative">
                   <select
                     value={activityType}
                     onChange={(e) => setActivityType(e.target.value as ActivityType)}
-                    className={`${inputClass} appearance-none pr-8`}
+                    className={`${inputClass} appearance-none pr-10`}
                   >
                     {ACTIVITY_TYPES.map(({ value, label }) => (
                       <option key={value} value={value}>{label}</option>
                     ))}
                   </select>
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
+                  <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                 </div>
               </div>
 
               <div>
                 <FieldLabel>Duration (min)</FieldLabel>
                 <input
-                  type="number"
-                  min="1"
-                  max="1440"
+                  type="number"                
                   value={duration}
                   onChange={(e) => setDuration(Number(e.target.value))}
-                  className={numInputClass}
-                />
-              </div>
-            </div>
-
-            {/* Divider */}
-            <div className="border-t border-white/[0.05]" />
-
-            {/* Power + Priority + Flexibility */}
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <FieldLabel>Power Draw (W)</FieldLabel>
-                <input
-                  type="number"
-                  min="10"
-                  max="10000"
-                  value={powerDraw}
-                  onChange={(e) => setPowerDraw(Number(e.target.value))}
-                  className={numInputClass}
-                />
-              </div>
-
-              <div>
-                <FieldLabel>Priority (0–100)</FieldLabel>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={priorityScore}
-                  onChange={(e) => setPriorityScore(Number(e.target.value))}
-                  className={numInputClass}
-                />
-              </div>
-
-              <div>
-                <FieldLabel>Flexibility (%)</FieldLabel>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={flexibilityScore}
-                  onChange={(e) => setFlexibilityScore(Number(e.target.value))}
                   className={numInputClass}
                 />
               </div>
@@ -176,7 +136,7 @@ export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
           </div>
 
           {/* Footer */}
-          <div className="flex justify-end gap-2.5 px-6 py-4 border-t border-white/[0.07] bg-white/[0.01]">
+          <div className="flex justify-end gap-3 px-8 py-5 sm:px-9 border-t border-white/10 bg-slate-900/50">
             <Button type="button" variant="ghost" size="sm" onClick={onClose}>
               Cancel
             </Button>

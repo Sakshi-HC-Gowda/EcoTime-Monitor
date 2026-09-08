@@ -45,7 +45,15 @@ export type ActivityType =
 
 export type TaskFlexibility = 'flexible' | 'non-flexible';
 
-export type TaskStatus = 'idle' | 'running' | 'paused' | 'delayed' | 'completed';
+export type TaskStatus =
+  | 'pending'
+  | 'scheduled'
+  | 'running'
+  | 'completed'
+  | 'idle'
+  | 'paused'
+  | 'delayed'
+  | 'failed';
 
 export interface Task {
   id: string;
@@ -57,10 +65,15 @@ export interface Task {
   duration: number; // minutes
   powerDraw: number; // Watts
   estimatedEnergyConsumption?: number; // kWh
+  estimatedCarbonImpact?: number; // grams CO2
+  ecoScore?: number; // 0-100
+  recommendation?: string;
+  recommendedStartTime?: string;
+  scheduledStartTime?: string;
   status: TaskStatus;
   progress: number; // 0-100
   assignedWindowId?: string;
-  executionStartTime?: number;
+  executionStartTime?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -70,15 +83,13 @@ export interface CreateTaskRequest {
   type: TaskFlexibility;
   activityType: ActivityType;
   duration: number;
-  powerDraw: number;
-  priorityScore: number;
-  flexibilityScore?: number;
 }
 
 export interface UpdateTaskRequest {
   status?: TaskStatus;
   progress?: number;
   assignedWindowId?: string;
+  scheduledStartTime?: string;
 }
 
 // ============================================================================
@@ -165,12 +176,19 @@ export interface SchedulingRequest {
   tasks: Task[];
   window: GreenWindow;
   method: 'greedy' | 'knapsack';
-  baselineIntensity: number;
+  baselineIntensity?: number;
+}
+
+export interface SchedulingSavings {
+  totalSavedCo2: number;
+  baselineCo2: number;
+  reductionPercent: number;
 }
 
 export interface SchedulingResponse {
   result: OptimizationResult;
   tasks: Task[]; // Updated task list with assignments
+  savings: SchedulingSavings;
 }
 
 // ============================================================================

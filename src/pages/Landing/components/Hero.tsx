@@ -2,13 +2,6 @@ import { motion } from 'framer-motion';
 import { ArrowRight, Play, Shield, Clock, Activity, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 
-const stats = [
-  { icon: Zap, value: '34%', label: 'Average emission reduction', color: 'text-green-400' },
-  { icon: Activity, value: 'Live', label: 'Grid carbon visibility', color: 'text-cyan-400' },
-  { icon: Clock, value: '36h', label: 'Forward-looking windows', color: 'text-emerald-400' },
-  { icon: Shield, value: 'SLA', label: 'Deadline-aware scheduling', color: 'text-teal-400' },
-];
-
 export function Hero() {
   return (
     <section className="relative w-full min-h-screen pt-24 pb-16 md:pt-28 md:pb-20 lg:pt-32 lg:pb-24 overflow-hidden flex items-center">
@@ -47,14 +40,13 @@ export function Hero() {
             transition={{ duration: 0.4, delay: 0.16 }}
             className="text-base md:text-lg lg:text-xl text-slate-300 font-normal leading-8 max-w-2xl mx-auto mb-8 md:mb-10"
           >
-            Shift flexible workloads into cleaner grid windows, lower emissions, and keep deadlines on track from one calm dashboard.
-          </motion.p>
+            EcoTime helps you schdeule digital activities during cleaner energy periods to reduce carbon emissions without missing deadlines          </motion.p>
 
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.24 }}
-            className="mb-10 flex flex-col items-stretch justify-center gap-[var(--space-3)] sm:flex-row sm:items-center md:mb-12 md:gap-[var(--space-4)]"
+            className="mb-10 flex flex-col items-stretch justify-center gap-[var(--space-4)] sm:flex-row sm:items-center md:mb-12 md:gap-[var(--space-5)]"
           >
             <Button
               to="/dashboard"
@@ -62,7 +54,7 @@ export function Hero() {
               className="sm:w-auto"
               iconRight={<ArrowRight className="w-5 h-5" />}
             >
-              Launch Dashboard
+              Get Started
             </Button>
 
             <Button
@@ -80,23 +72,8 @@ export function Hero() {
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.32 }}
-            className="card-grid card-grid-sm-2 card-grid-lg-4 rounded-[var(--radius-card)] border border-white/[0.06] bg-slate-900/40 p-[var(--card-padding-sm)] text-left backdrop-blur-2xl md:p-[var(--card-padding-md)]"
+            className="card-grid card-grid-sm-2 card-grid-lg-4 rounded-[var(--radius-card)] border border-white/[0.05] bg-slate-900/28 p-[var(--card-padding-sm)] text-left backdrop-blur-2xl md:p-[var(--card-padding-md)]"
           >
-            {stats.map((stat) => {
-              const Icon = stat.icon;
-              return (
-                <div
-                  key={stat.label}
-                  className="ds-card ds-card-pad-sm ds-card-hover h-full"
-                >
-                  <div className={`flex items-center gap-2 ${stat.color} mb-2`}>
-                    <Icon className="w-4 h-4 flex-shrink-0" />
-                    <span className="text-xl font-bold text-white whitespace-nowrap">{stat.value}</span>
-                  </div>
-                  <p className="text-sm text-slate-400 leading-snug">{stat.label}</p>
-                </div>
-              );
-            })}
           </motion.div>
         </div>
       </div>

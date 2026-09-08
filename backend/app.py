@@ -18,6 +18,7 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
+from dotenv import load_dotenv
 from flask import Flask, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -36,6 +37,9 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+# Load .env before any route modules read ELECTRICITY_MAPS_API_KEY
+load_dotenv()
 
 
 # ---------------------------------------------------------------------------
@@ -134,13 +138,15 @@ def create_app(config_name: str | None = None) -> Flask:
     from routes.activities import activities_bp
     from routes.optimizer import optimizer_bp
     from routes.forecast import forecast_bp
+    from routes.upload import upload_bp
 
     app.register_blueprint(carbon_bp, url_prefix="/api")
     app.register_blueprint(activities_bp, url_prefix="/api")
     app.register_blueprint(optimizer_bp, url_prefix="/api")
     app.register_blueprint(forecast_bp, url_prefix="/api")
+    app.register_blueprint(upload_bp, url_prefix="/api")
 
-    logger.info("Blueprints registered: carbon, activities, optimizer, forecast")
+    logger.info("Blueprints registered: carbon, activities, optimizer, forecast, upload")
 
     # -----------------------------------------------------------------------
     # Health Check & Root
@@ -177,6 +183,7 @@ def create_app(config_name: str | None = None) -> Flask:
                 "zones": "/api/zones",
                 "activities": "/api/activities",
                 "scheduler": "/api/scheduler",
+                "upload": "/api/upload",
                 "eco_score": "/api/eco-score",
                 "forecast": "/api/forecast",
                 "forecast_info": "/api/forecast/info",

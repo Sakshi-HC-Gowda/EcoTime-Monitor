@@ -42,6 +42,60 @@ GRID_ZONES: dict[str, dict] = {
         "amplitude": 120,
         "noise": 15,
     },
+    "IN-SO": {
+        "id": "IN-SO",
+        "name": "Southern India",
+        "country": "India",
+        "type": "mixed",
+        "baseIntensity": 650,
+        "amplitude": 110,
+        "noise": 14,
+    },
+    "IN-WE": {
+        "id": "IN-WE",
+        "name": "Western India",
+        "country": "India",
+        "type": "mixed",
+        "baseIntensity": 620,
+        "amplitude": 105,
+        "noise": 14,
+    },
+    "IN-NO": {
+        "id": "IN-NO",
+        "name": "Northern India",
+        "country": "India",
+        "type": "mixed",
+        "baseIntensity": 700,
+        "amplitude": 115,
+        "noise": 15,
+    },
+    "IN-EA": {
+        "id": "IN-EA",
+        "name": "Eastern India",
+        "country": "India",
+        "type": "mixed",
+        "baseIntensity": 720,
+        "amplitude": 120,
+        "noise": 15,
+    },
+    "IN-NE": {
+        "id": "IN-NE",
+        "name": "North-Eastern India",
+        "country": "India",
+        "type": "mixed",
+        "baseIntensity": 580,
+        "amplitude": 90,
+        "noise": 12,
+    },
+    "US-NY": {
+        "id": "US-NY",
+        "name": "New York (NYISO)",
+        "country": "USA",
+        "type": "mixed",
+        "baseIntensity": 220,
+        "amplitude": 100,
+        "noise": 12,
+    },
     "DK-DK2": {
         "id": "DK-DK2",
         "name": "Eastern Denmark",
@@ -99,6 +153,11 @@ GRID_ZONES: dict[str, dict] = {
 }
 
 _DEFAULT_ZONE_ID = "US-CA"
+
+# Green Window detection uses the cleanest band of each forecast rather than a
+# global absolute cutoff. 0.35 means "points in the lowest 35% of this
+# forecast's carbon-intensity range".
+GREEN_WINDOW_THRESHOLD_RATIO = 0.35
 
 # ---------------------------------------------------------------------------
 # Simulation Engine
@@ -192,6 +251,12 @@ def generate_simulated_data(zone_id: str, offset_hours: float = 0.0) -> dict:
 _EMAPS_BASE = "https://api.electricitymap.org/v3"
 
 
+def get_electricity_maps_api_key() -> str | None:
+    """Return the Electricity Maps API key from environment, if configured."""
+    key = os.getenv("ELECTRICITY_MAPS_API_KEY", "").strip()
+    return key or None
+
+
 def _fetch_live_data(zone_id: str, api_key: str) -> dict | None:
     """
     Fetch live carbon data from Electricity Maps API.
@@ -207,7 +272,15 @@ def _fetch_live_data(zone_id: str, api_key: str) -> dict | None:
             headers=headers,
             timeout=timeout,
         )
-        latest_res.raise_for_status()
+        if not latest_res.ok:
+            logger.error(
+                "Electricity Maps latest API failed for zone %s: HTTP %s — %s",
+                zone_id,
+                latest_res.status_code,
+                latest_res.text[:300],
+            )
+            return None
+
         latest_data = latest_res.json()
 
         current = {
@@ -230,8 +303,15 @@ def _fetch_live_data(zone_id: str, api_key: str) -> dict | None:
                     {"datetime": f["datetime"], "carbonIntensity": f["carbonIntensity"]}
                     for f in fc_data.get("forecast", [])
                 ]
+            else:
+                logger.warning(
+                    "Electricity Maps forecast API failed for zone %s: HTTP %s — %s",
+                    zone_id,
+                    forecast_res.status_code,
+                    forecast_res.text[:300],
+                )
         except Exception as e:
-            logger.warning("Forecast API failed: %s — using simulated forecast", e)
+            logger.warning("Forecast API failed for zone %s: %s — using simulated forecast", zone_id, e)
 
         # Fill missing forecast with simulation scaled to live baseline
         if not forecast_points:
@@ -269,9 +349,19 @@ def _fetch_live_data(zone_id: str, api_key: str) -> dict | None:
             "isSimulated": False,
         }
 
+    except requests.RequestException as e:
+        logger.error("Electricity Maps network error for zone %s: %s", zone_id, e)
+        return None
     except Exception as e:
         logger.error("Electricity Maps API error for zone %s: %s", zone_id, e)
         return None
+
+
+def _simulation_fallback(zone_id: str, offset_hours: float, reason: str) -> dict:
+    """Return simulated carbon data with an explanatory error field."""
+    data = generate_simulated_data(zone_id, offset_hours)
+    data["error"] = reason
+    return data
 
 
 # ---------------------------------------------------------------------------
@@ -286,13 +376,15 @@ def detect_green_windows(
     """
     Detect contiguous low-carbon periods in a forecast array.
 
-    A "green window" is any contiguous block of hourly forecast points
-    where carbonIntensity < threshold.
+    A "green window" is any contiguous block of hourly forecast points in
+    the cleanest band for this forecast. The threshold is derived from the
+    forecast range, so high-carbon grids still surface their relatively
+    cleanest periods instead of being compared to a global fixed cutoff.
 
     Args:
         forecast: List of {datetime, carbonIntensity} hourly points
         current_datetime: ISO timestamp for the current moment
-        threshold: Carbon intensity threshold (gCO2e/kWh) below which it's "green"
+        threshold: Kept for API compatibility; dynamic forecast threshold is used
 
     Returns:
         List of green window dicts with scoring info, sorted by start time
@@ -301,11 +393,57 @@ def detect_green_windows(
     current_block: list[dict] = []
     window_count = 0
 
-    forecast_peak = max((p["carbonIntensity"] for p in forecast), default=300)
+    def _is_valid_forecast_point(point: object) -> bool:
+        intensity = point.get("carbonIntensity") if isinstance(point, dict) else None
+        return (
+            isinstance(point, dict)
+            and not isinstance(intensity, bool)
+            and isinstance(intensity, (int, float))
+            and math.isfinite(intensity)
+            and bool(point.get("datetime"))
+        )
+
+    valid_forecast = [
+        point
+        for point in forecast
+        if _is_valid_forecast_point(point)
+    ]
+    forecast_values = [p["carbonIntensity"] for p in valid_forecast]
+    if not forecast_values:
+        logger.debug(
+            "Green Window detection skipped: no valid forecast carbonIntensity values"
+        )
+        return windows
+
+    forecast_min = min(forecast_values)
+    forecast_actual_peak = max(forecast_values)
+    forecast_peak = forecast_actual_peak
     forecast_peak = max(forecast_peak, 300)  # Minimum meaningful peak
 
+    # A fixed 180 gCO2/kWh threshold was too region-specific: it worked for
+    # low-carbon grids, but high-carbon grids such as Indian zones could have
+    # valid forecasts and still return no Green Windows at all.
+    #
+    # Dynamic threshold:
+    # 1. Find this forecast's minimum and maximum carbon intensity.
+    # 2. Treat the cleanest configured band of that local range as green.
+    #    With GREEN_WINDOW_THRESHOLD_RATIO = 0.35, a forecast ranging from
+    #    560 to 740 gCO2/kWh has a threshold of 623.
+    # 3. Detect contiguous points at or below that computed threshold.
+    #
+    # This is relative to local grid conditions, so low-carbon grids keep their
+    # genuinely clean windows while high-carbon grids still surface their
+    # cleanest available periods for carbon-aware scheduling.
+    forecast_range = forecast_actual_peak - forecast_min
+    dynamic_threshold = forecast_min + (
+        forecast_range * GREEN_WINDOW_THRESHOLD_RATIO
+    )
+
     for point in forecast:
-        if point["carbonIntensity"] < threshold:
+        if (
+            _is_valid_forecast_point(point)
+            and point["carbonIntensity"] <= dynamic_threshold
+        ):
             current_block.append(point)
         else:
             if current_block:
@@ -320,6 +458,15 @@ def detect_green_windows(
         windows.append(_build_window(
             current_block, forecast_peak, window_count, current_datetime
         ))
+
+    logger.debug(
+        "Green Window detection: forecast_min=%s forecast_max=%s "
+        "dynamic_threshold=%.2f windows_detected=%d",
+        forecast_min,
+        forecast_actual_peak,
+        dynamic_threshold,
+        len(windows),
+    )
 
     return windows
 
@@ -369,23 +516,37 @@ def get_carbon_data(
     Main entry point for obtaining carbon data.
 
     Tries live API first if api_key is provided; falls back to simulation.
-
-    Args:
-        zone_id: Grid zone identifier
-        api_key: Electricity Maps API key (optional)
-        offset_hours: Simulation time offset in hours
-
-    Returns:
-        CarbonResponse dict
+    Never raises — always returns a valid CarbonResponse dict.
     """
-    if api_key:
-        live_data = _fetch_live_data(zone_id, api_key)
-        if live_data:
-            logger.info("Using live Electricity Maps data for zone %s", zone_id)
-            return live_data
-        logger.warning("Falling back to simulation for zone %s", zone_id)
+    resolved_key = api_key if api_key is not None else get_electricity_maps_api_key()
 
-    return generate_simulated_data(zone_id, offset_hours)
+    try:
+        if resolved_key:
+            live_data = _fetch_live_data(zone_id, resolved_key)
+            if live_data:
+                logger.info("Using live Electricity Maps data for zone %s", zone_id)
+                return live_data
+
+            logger.warning(
+                "Electricity Maps unavailable for zone %s — switching to simulation",
+                zone_id,
+            )
+            return _simulation_fallback(
+                zone_id,
+                offset_hours,
+                "Live Electricity Maps data unavailable. Using simulated fallback.",
+            )
+
+        logger.info("No ELECTRICITY_MAPS_API_KEY configured — using simulation for zone %s", zone_id)
+        return generate_simulated_data(zone_id, offset_hours)
+
+    except Exception as e:
+        logger.exception("Unexpected error fetching carbon data for zone %s", zone_id)
+        return _simulation_fallback(
+            zone_id,
+            offset_hours,
+            f"Carbon data service error: {e}. Using simulated fallback.",
+        )
 
 
 def get_available_zones() -> list[dict]:

@@ -11,15 +11,17 @@ import { OptimizationPage } from '@/pages/Optimization/OptimizationPage';
 import { SchedulerPage } from '@/pages/Scheduler/SchedulerPage';
 import { SustainabilityPage } from '@/pages/Sustainability/SustainabilityPage';
 import { SettingsPage } from '@/pages/Settings/SettingsPage';
+import LoginPage from '@/pages/Login/LoginPage';
 
 export const router = createBrowserRouter([
   // Landing (marketing) — no sidebar
   {
-    element: <LandingLayout />,
-    children: [
-      { path: '/', element: <LandingPage /> },
-    ],
-  },
+  element: <LandingLayout />,
+  children: [
+    { path: '/', element: <LandingPage /> },
+    { path: '/login', element: <LoginPage /> },
+  ],
+},
   // App shell with sidebar
   {
     element: <AppLayout />,

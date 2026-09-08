@@ -83,9 +83,6 @@ export interface CreateTaskRequest {
   type: TaskFlexibility;
   activityType: ActivityType;
   duration: number;
-  powerDraw: number;
-  priorityScore: number;
-  flexibilityScore?: number;
 }
 
 export interface UpdateTaskRequest {
@@ -179,12 +176,19 @@ export interface SchedulingRequest {
   tasks: Task[];
   window: GreenWindow;
   method: 'greedy' | 'knapsack';
-  baselineIntensity: number;
+  baselineIntensity?: number;
+}
+
+export interface SchedulingSavings {
+  totalSavedCo2: number;
+  baselineCo2: number;
+  reductionPercent: number;
 }
 
 export interface SchedulingResponse {
   result: OptimizationResult;
   tasks: Task[]; // Updated task list with assignments
+  savings: SchedulingSavings;
 }
 
 // ============================================================================

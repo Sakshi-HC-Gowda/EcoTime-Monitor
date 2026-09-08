@@ -1,6 +1,7 @@
 import { apiClient } from './apiClient';
 import type { CarbonResponse, GreenWindow, GridZone, ApiResponse } from '../types/domain';
 
+/** Carbon data is fetched exclusively via the Flask backend (never Electricity Maps directly). */
 export const carbonService = {
   async getCarbonData(zone: string, offset: number = 0): Promise<ApiResponse<CarbonResponse>> {
     const params = new URLSearchParams({ zone, offset: String(offset) });

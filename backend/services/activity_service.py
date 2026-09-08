@@ -1,10 +1,13 @@
 """
 Activity Service
 ================
-Manages task/activity CRUD with SQLite persistence via SQLAlchemy.
+Manages task/activity CRUD with PostgreSQL persistence via SQLAlchemy
+(models.activity.Activity). Every status change is additionally logged to
+ActivityHistory so the Analytics module can report on execution time and
+status trends.
 
-Falls back to in-memory store if the database is not initialised yet,
-so routes work correctly even during startup.
+Function signatures and return shapes are unchanged from the previous
+in-memory implementation, so routes and the frontend require no changes.
 """
 
 from __future__ import annotations
@@ -14,6 +17,9 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from extensions import db
+from models.activity import Activity
+from models.activity_history import ActivityHistory
 from optimization.window_ranking import rank_windows
 from services.carbon_service import detect_green_windows, get_carbon_data
 
@@ -25,6 +31,7 @@ logger = logging.getLogger(__name__)
 
 _store: dict[str, dict[str, Any]] = {}
 
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Valid values
@@ -41,7 +48,7 @@ DEFAULT_ZONE = os.getenv("DEFAULT_ZONE", "US-CA")
 DEFAULT_GREEN_THRESHOLD = float(os.getenv("LOW_CARBON_THRESHOLD", "180"))
 
 # ---------------------------------------------------------------------------
-# CRUD Operations
+# Helpers
 # ---------------------------------------------------------------------------
 
 
@@ -161,6 +168,17 @@ def _apply_time_transitions(task: dict[str, Any]) -> None:
     if changed:
         task["updatedAt"] = now.isoformat()
 
+def _aware(dt: datetime | None) -> datetime | None:
+    """Ensure a database datetime is timezone-aware (UTC)."""
+    if dt is None:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+# ---------------------------------------------------------------------------
+# CRUD Operations
+# ---------------------------------------------------------------------------
+
 
 def create_activity(data: dict) -> tuple[dict | None, str | None]:
     """
@@ -168,20 +186,18 @@ def create_activity(data: dict) -> tuple[dict | None, str | None]:
 
     Args:
        data: Request body dict with required fields:
-           name, type, duration
+           name, type, duration, powerDraw
 
-        Power draw, priority score, and flexibility score
-        are assigned automatically using workload profiles.
+        Priority and flexibility can be supplied by the caller. If they are
+        omitted, workload profiles provide sensible defaults.
     Returns:
         (task_dict, error_message) — one of them will be None
     """
-    # Validate required fields
-    required = ["name", "type", "duration"]
+    required = ["name", "type", "duration", "powerDraw"]
     missing = [f for f in required if f not in data or data[f] is None]
     if missing:
         return None, f"Missing required fields: {', '.join(missing)}"
 
-    # Validate type values
     task_type = data["type"]
     if task_type not in VALID_TYPES:
         return None, f"Invalid type '{task_type}'. Must be one of: {sorted(VALID_TYPES)}"
@@ -190,63 +206,70 @@ def create_activity(data: dict) -> tuple[dict | None, str | None]:
     if activity_type not in VALID_ACTIVITY_TYPES:
         activity_type = "batch-processing"  # safe default
 
-    # Validate numeric fields
     try:
         duration = float(data["duration"])
+        power_draw = float(data["powerDraw"])
     except (ValueError, TypeError):
-        return None, "Fields duration must be numeric"
+        return None, "Fields duration and powerDraw must be numeric"
     
 
     if duration <= 0:
         return None, "Field duration must be greater than 0"
+    if power_draw <= 0:
+        return None, "Field powerDraw must be greater than 0"
 
-       activity_name = data["name"].strip()
+    activity_name = data["name"].strip()
 
     profile = WORKLOAD_PROFILES.get(activity_name)
 
     if profile:
-        power_draw = float(profile.get("power", 150))
-        priority_score = min(100, max(0, int(profile.get("priority", 30))))
-        flexibility_score = min(100, max(0, int(profile.get("flexibility", 80))))
+        priority_default = profile.get("priority", 30)
+        flexibility_default = profile.get("flexibility", 80)
     else:
-        power_draw = 150.0
-        priority_score = 30
-        flexibility_score = 80
+        priority_default = 30
+        flexibility_default = 80
+
+    try:
+        priority_score = min(100, max(0, int(data.get("priorityScore", priority_default))))
+        flexibility_score = min(100, max(0, int(data.get("flexibilityScore", flexibility_default))))
+    except (ValueError, TypeError):
+        return None, "Fields priorityScore and flexibilityScore must be numeric"
 
     task_id = f"task-{datetime.now(timezone.utc).timestamp():.6f}"
-    now = _now_iso()
 
     
 
-    task: dict[str, Any] = {
-        "id": task_id,
-        "name": str(data["name"]).strip(),
-        "type": task_type,
-        "activityType": activity_type,
-        "duration": duration,
-        "powerDraw": power_draw,
-        "priorityScore": min(100, max(0, int(priority_score))),
-        "flexibilityScore": min(100, max(0, int(flexibility_score))),
-        "status": "pending",
-        "progress": 0,
-        "assignedWindowId": None,
-        "scheduledStartTime": None,
-        "executionStartTime": None,
-        "createdAt": now,
-        "updatedAt": now,
-    }
+    activity = Activity(
+        id=task_id,
+        name=str(data["name"]).strip(),
+        type=task_type,
+        activity_type=activity_type,
+        duration=duration,
+        power_draw=power_draw,
+        priority_score=min(100, max(0, int(data.get("priorityScore", 50)))),
+        flexibility_score=min(100, max(0, int(flexibility_score))),
+        status="idle",
+        progress=0.0,
+        assigned_window_id=None,
+    )
 
-    task.update(_compute_derived_fields(task, now))
+    try:
+        db.session.add(activity)
+        # Seed the history trail with the initial "idle" state.
+        db.session.add(ActivityHistory(
+            activity_id=task_id,
+            previous_status=None,
+            new_status="idle",
+            execution_time=None,
+        ))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        logger.exception("Failed to create activity")
+        return None, "Failed to save activity to database"
 
-    _store[task_id] = task
-    logger.info("Created activity %s: '%s'", task_id, task["name"])
-
-    # TODO Phase D: persist to DB with Activity model
-    # db_task = Activity(**task)
-    # db.session.add(db_task)
-    # db.session.commit()
-
-    return task, None
+    logger.info("Created activity %s: '%s'", task_id, activity.name)
+    return activity.to_dict(), None
 
 
 def list_activities(
@@ -265,38 +288,34 @@ def list_activities(
     Returns:
         Paginated response dict
     """
-    page_size = min(page_size, 200)
-    items = list(_store.values())
+    page = max(1, page)
+    page_size = min(max(1, page_size), 200)
 
-    for task in items:
-        _apply_time_transitions(task)
-
+    query = Activity.query
     if status_filter:
-        items = [t for t in items if t.get("status") == status_filter]
+        query = query.filter_by(status=status_filter)
 
-    # Sort by createdAt descending (newest first)
-    items.sort(key=lambda t: t.get("createdAt", ""), reverse=True)
-
-    total = len(items)
-    start = (page - 1) * page_size
-    end = start + page_size
+    total = query.count()
+    items = (
+        query.order_by(Activity.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
 
     return {
-        "items": items[start:end],
+        "items": [a.to_dict() for a in items],
         "total": total,
         "page": page,
         "pageSize": page_size,
-        "hasMore": end < total,
+        "hasMore": (page - 1) * page_size + len(items) < total,
     }
 
 
 def get_activity(task_id: str) -> dict | None:
     """Retrieve a single activity by ID. Returns None if not found."""
-    # TODO Phase D: db.session.get(Activity, task_id)
-    task = _store.get(task_id)
-    if task:
-        _apply_time_transitions(task)
-    return task
+    activity = db.session.get(Activity, task_id)
+    return activity.to_dict() if activity else None
 
 
 def update_activity(task_id: str, updates: dict) -> tuple[dict | None, str | None]:
@@ -305,70 +324,130 @@ def update_activity(task_id: str, updates: dict) -> tuple[dict | None, str | Non
 
     Allowed update fields: status, progress, assignedWindowId, scheduledStartTime
 
+    Every status change is logged to ActivityHistory with the time spent
+    in the previous status, so Analytics can compute execution times.
+
     Returns:
         (updated_task, error_message)
     """
-    task = _store.get(task_id)
-    if not task:
+    activity = db.session.get(Activity, task_id)
+    if not activity:
         return None, f"Activity '{task_id}' not found"
 
+    previous_status = activity.status
+    previous_updated_at = _aware(activity.updated_at)
+    status_changed = False
+
+    # ---------------------------------------------------------------
+    # Status
+    # ---------------------------------------------------------------
     if "status" in updates:
         new_status = updates["status"]
+
         if new_status not in VALID_STATUSES:
-            return None, f"Invalid status '{new_status}'. Valid: {sorted(VALID_STATUSES)}"
-        task["status"] = new_status
+            return None, (
+                f"Invalid status '{new_status}'. "
+                f"Valid: {sorted(VALID_STATUSES)}"
+            )
+
+        status_changed = new_status != previous_status
+        activity.status = new_status
 
         if new_status == "pending":
-            task["progress"] = 0.0
-            task["executionStartTime"] = None
+            activity.progress = 0.0
 
-        if new_status == "scheduled":
-            scheduled_time = updates.get("scheduledStartTime") or task.get("recommendedStartTime") or _now_iso()
-            task["scheduledStartTime"] = scheduled_time
-            task["executionStartTime"] = None
+        elif new_status == "completed":
+            activity.progress = 100.0
 
-        if new_status == "running":
-            task["executionStartTime"] = _now_iso()
+        elif new_status == "running":
+            # Progress remains unchanged when execution starts.
+            pass
 
-        if new_status == "completed":
-            task["progress"] = 100.0
-
+    # ---------------------------------------------------------------
+    # Progress
+    # ---------------------------------------------------------------
     if "progress" in updates:
         try:
             progress = float(updates["progress"])
-            task["progress"] = max(0.0, min(100.0, progress))
+            activity.progress = max(0.0, min(100.0, progress))
         except (ValueError, TypeError):
             return None, "Field 'progress' must be numeric"
 
+    # ---------------------------------------------------------------
+    # Assigned green window
+    # ---------------------------------------------------------------
     if "assignedWindowId" in updates:
-        task["assignedWindowId"] = updates["assignedWindowId"]
+        activity.assigned_window_id = updates["assignedWindowId"]
 
+    # ---------------------------------------------------------------
+    # Scheduled start time
+    # ---------------------------------------------------------------
     if "scheduledStartTime" in updates:
-        task["scheduledStartTime"] = updates["scheduledStartTime"]
+        scheduled_start_time = updates["scheduledStartTime"]
 
-    _apply_time_transitions(task)
+        # Use the database field if the Activity model provides it.
+        if hasattr(activity, "scheduled_start_time"):
+            activity.scheduled_start_time = scheduled_start_time
 
-    task["updatedAt"] = _now_iso()
+    # ---------------------------------------------------------------
+    # Updated timestamp
+    # ---------------------------------------------------------------
+    now = datetime.now(timezone.utc)
+    activity.updated_at = now
+
+    # ---------------------------------------------------------------
+    # Activity history
+    # ---------------------------------------------------------------
+    try:
+        if status_changed:
+            execution_time = (
+                (now - previous_updated_at).total_seconds()
+                if previous_updated_at
+                else None
+            )
+
+            db.session.add(
+                ActivityHistory(
+                    activity_id=activity.id,
+                    previous_status=previous_status,
+                    new_status=activity.status,
+                    execution_time=execution_time,
+                )
+            )
+
+        db.session.commit()
+
+    except Exception:
+        db.session.rollback()
+        logger.exception("Failed to update activity %s", task_id)
+        return None, "Failed to save activity update"
 
     logger.debug("Updated activity %s: %s", task_id, updates)
-    # TODO Phase D: db.session.commit()
 
-    return task, None
+    return activity.to_dict(), None
 
 
 def delete_activity(task_id: str) -> tuple[bool, str | None]:
     """
-    Delete an activity by ID.
+    Delete an activity by ID (cascades its history rows).
 
     Returns:
         (success, error_message)
     """
-    if task_id not in _store:
+    activity = db.session.get(Activity, task_id)
+    if not activity:
         return False, f"Activity '{task_id}' not found"
 
-    del _store[task_id]
+    try:
+        ActivityHistory.query.filter_by(activity_id=task_id).delete()
+        db.session.delete(activity)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        logger.exception("Failed to delete activity %s", task_id)
+        return False, "Failed to delete activity"
+
     logger.info("Deleted activity %s", task_id)
-    # TODO Phase D: db.session.delete(db_task); db.session.commit()
     return True, None
 
 
@@ -383,11 +462,13 @@ def bulk_update_activities(updates: list[dict]) -> list[dict]:
     Returns:
         List of successfully updated tasks
     """
-    updated = []
+    updated: list[dict[str, Any]] = []
     for upd in updates:
-        task_id = upd.pop("id", None)
-        if task_id:
-            task, _ = update_activity(task_id, upd)
-            if task:
-                updated.append(task)
+        task_id = upd.get("id")
+        if not task_id:
+            continue
+        fields = {k: v for k, v in upd.items() if k != "id"}
+        task, _ = update_activity(task_id, fields)
+        if task:
+            updated.append(task)
     return updated

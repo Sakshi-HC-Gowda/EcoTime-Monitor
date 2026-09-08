@@ -45,7 +45,7 @@ export function DashboardPreview() {
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Button to="/dashboard" iconRight={<ArrowRight className="h-5 w-5" />}>
-                Launch Dashboard
+                Explore Dashboard
               </Button>
               <Button href="#features" variant="secondary">
                 Explore Features

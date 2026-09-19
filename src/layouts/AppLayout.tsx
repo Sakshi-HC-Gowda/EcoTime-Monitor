@@ -12,7 +12,6 @@ import {
   Leaf,
   Settings,
   ChevronRight,
-  Gauge,
   Home,
   type LucideProps,
 } from 'lucide-react';

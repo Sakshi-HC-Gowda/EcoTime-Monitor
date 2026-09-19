@@ -13,8 +13,8 @@ import type { LocationStatus } from '@/hooks/useLocation';
 export const ZONE_STORAGE_KEY = 'ecotime_zone';
 
 interface ZoneContextValue {
-  selectedZone: string;
-  setSelectedZone: (zone: string) => void;
+  selectedZone: string | null;
+  setSelectedZone: (zone: string | null) => void;
   detectedLocation: DetectedLocation | null;
   locationStatus: LocationStatus;
   locationError: string | null;
@@ -23,25 +23,35 @@ interface ZoneContextValue {
 
 const ZoneContext = createContext<ZoneContextValue | null>(null);
 
-function readStoredZone(): string {
-  if (typeof window === 'undefined') return 'US-CA';
-  return localStorage.getItem(ZONE_STORAGE_KEY) ?? 'US-CA';
+function readStoredZone(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(ZONE_STORAGE_KEY);
 }
 
 export function ZoneProvider({ children }: { children: ReactNode }) {
   const { status, location, errorMessage, retrigger } = useLocation();
-  const [selectedZone, setSelectedZoneState] = useState(readStoredZone);
+  const [selectedZone, setSelectedZoneState] = useState<string | null>(readStoredZone);
 
   useEffect(() => {
+    // On successful detection, adopt the detected zone (overrides empty/null stored)
     if (status === 'success' && location) {
       setSelectedZoneState(location.zone);
-      localStorage.setItem(ZONE_STORAGE_KEY, location.zone);
+      try {
+        localStorage.setItem(ZONE_STORAGE_KEY, location.zone);
+      } catch (e) {
+        // ignore storage errors
+      }
     }
   }, [status, location]);
 
-  const setSelectedZone = useCallback((zone: string) => {
+  const setSelectedZone = useCallback((zone: string | null) => {
     setSelectedZoneState(zone);
-    localStorage.setItem(ZONE_STORAGE_KEY, zone);
+    try {
+      if (zone) localStorage.setItem(ZONE_STORAGE_KEY, zone);
+      else localStorage.removeItem(ZONE_STORAGE_KEY);
+    } catch (e) {
+      // ignore storage errors
+    }
   }, []);
 
   return (

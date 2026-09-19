@@ -86,7 +86,7 @@ def generate_training_data(hours: int = 8760, zones: list[str] | None = None) ->
         zones: List of zone IDs to include (default: all 6 zones)
 
     Returns:
-        DataFrame with DatetimeIndex and 'carbonIntensity' column.
+        DataFrame with datetime, zone, and carbonIntensity columns.
     """
     zones = zones or _ZONES_FOR_TRAINING
     frames = []
@@ -101,6 +101,7 @@ def generate_training_data(hours: int = 8760, zones: list[str] | None = None) ->
             data = generate_simulated_data(zone_id, offset_hours=offset)
             records.append({
                 "datetime": data["current"]["datetime"],
+                "zone": zone_id,
                 "carbonIntensity": data["current"]["carbonIntensity"],
             })
         frames.append(pd.DataFrame(records))
@@ -108,6 +109,25 @@ def generate_training_data(hours: int = 8760, zones: list[str] | None = None) ->
     combined = pd.concat(frames, ignore_index=True)
     logger.info("Combined training dataset: %d rows across %d zones", len(combined), len(zones))
     return combined
+
+
+def order_features_for_timeseries(feat_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Order feature samples chronologically before TimeSeriesSplit.
+
+    Lag/rolling/target values are already computed per zone. This ordering step
+    must happen after feature engineering so validation folds represent later
+    time periods across zones instead of later zone blocks.
+    """
+    if "zone" in feat_df.columns:
+        ordered = (
+            feat_df.reset_index()
+            .sort_values(["datetime", "zone"], kind="mergesort")
+            .set_index("datetime")
+        )
+        return ordered
+
+    return feat_df.sort_index(kind="mergesort")
 
 
 # ---------------------------------------------------------------------------
@@ -178,6 +198,7 @@ def train(hours: int = 4380, zones: list[str] | None = None) -> dict:
 
     # 3. Feature engineering
     feat_df = build_features(clean_df, target_shift_hours=1, drop_na=True)
+    feat_df = order_features_for_timeseries(feat_df)
     feature_cols = get_feature_names()
     X = feat_df[feature_cols]
     y = feat_df["target"]
@@ -264,6 +285,12 @@ def train(hours: int = 4380, zones: list[str] | None = None) -> dict:
         "zones": zones or _ZONES_FOR_TRAINING,
         "elapsed_seconds": round(elapsed, 2),
         "cv_results": results,
+        "primary_evaluation_metric": "cv_mae",
+        "primary_evaluation_source": "TimeSeriesSplit cv_results",
+        "final_metrics_note": (
+            "Full-dataset metrics are in-sample diagnostics after retraining "
+            "and should not be reported as generalization accuracy."
+        ),
         "final_metrics": final_metrics,
     }
     with open(REPORT_PATH, "w") as f:
@@ -286,7 +313,7 @@ if __name__ == "__main__":
 
     zones = [args.zone] if args.zone else None
     report = train(hours=args.hours, zones=zones)
-    print(f"\n✅ Training complete. Best model: {report['best_model']}")
+    print(f"\nTraining complete. Best model: {report['best_model']}")
     print(f"   MAE={report['final_metrics']['mae']:.2f}  "
           f"RMSE={report['final_metrics']['rmse']:.2f}  "
-          f"R²={report['final_metrics']['r2']:.4f}")
+          f"R2={report['final_metrics']['r2']:.4f}")

@@ -13,6 +13,9 @@ Where NormalisedDuration = (window.duration / max_window_duration) × 100
 from __future__ import annotations
 
 
+# carbonSavingPercent is forecast-relative and exists for ranking windows.
+# Potential activity savings are calculated separately from baseline CI versus
+# the selected Green Window's average CI.
 def calculate_window_score(
     carbon_saving_percent: float,
     user_convenience: float,
@@ -23,7 +26,7 @@ def calculate_window_score(
     Calculate a composite score for a single green window.
 
     Args:
-        carbon_saving_percent: Estimated CO2 savings percentage [0-100]
+        carbon_saving_percent: Forecast-relative percentage [0-100]
         user_convenience: User convenience score [0-100]
             (higher = more convenient for users, e.g. overnight hours)
         duration_minutes: Window duration in minutes

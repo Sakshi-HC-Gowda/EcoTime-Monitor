@@ -162,15 +162,14 @@ export function ActivitiesPage() {
     : activitiesData.items.filter((task) => task.status === activeTab);
 
   return (
-    <div className="page-shell page-stack">
-      <input
-        ref={fileInputRef}
-        type="file"
-        multiple
-        className="hidden"
-        onChange={handleFileSelection}
-      />
-    <div className="page-shell page-stack activities-page">
+  <div className="page-shell page-stack activities-page">
+    <input
+      ref={fileInputRef}
+      type="file"
+      multiple
+      className="hidden"
+      onChange={handleFileSelection}
+    />
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="page-header activities-header">

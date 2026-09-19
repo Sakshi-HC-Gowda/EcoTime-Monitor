@@ -8,7 +8,7 @@ export const carbonService = {
     return apiClient.request<CarbonResponse>(`/carbon?${params.toString()}`);
   },
 
-  async getGreenWindows(zone: string = 'US-CA', threshold: number = 180, offset: number = 0): Promise<ApiResponse<GreenWindow[]>> {
+  async getGreenWindows(zone: string, threshold: number = 180, offset: number = 0): Promise<ApiResponse<GreenWindow[]>> {
     const params = new URLSearchParams({
       zone,
       threshold: String(threshold),

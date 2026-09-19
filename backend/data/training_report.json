@@ -1,7 +1,7 @@
 {
   "best_model": "RandomForest",
-  "trained_at": "2026-07-24T13:44:56.059767+00:00",
-  "training_samples": 26255,
+  "trained_at": "2026-08-24T17:40:44.660384+00:00",
+  "training_samples": 26130,
   "feature_count": 18,
   "features": [
     "hour",
@@ -32,24 +32,33 @@
     "FR",
     "DE"
   ],
-  "elapsed_seconds": 29.87,
+  "elapsed_seconds": 11.42,
   "cv_results": {
     "LinearRegression": {
-      "mae": 105.6885,
-      "rmse": 127.2931,
-      "r2": 0.642,
+      "mae": 11.3569,
+      "rmse": 15.8613,
+      "r2": 0.9943,
       "n_splits": 5
     },
     "RandomForest": {
-      "mae": 5.9195,
-      "rmse": 10.8429,
-      "r2": 0.9972,
+      "mae": 1.28,
+      "rmse": 3.7811,
+      "r2": 0.9996,
+      "n_splits": 5
+    },
+    "XGBoost": {
+      "mae": 1.3263,
+      "rmse": 2.9428,
+      "r2": 0.9998,
       "n_splits": 5
     }
   },
+  "primary_evaluation_metric": "cv_mae",
+  "primary_evaluation_source": "TimeSeriesSplit cv_results",
+  "final_metrics_note": "Full-dataset metrics are in-sample diagnostics after retraining and should not be reported as generalization accuracy.",
   "final_metrics": {
-    "mae": 2.7433,
-    "rmse": 6.138,
-    "r2": 0.9992
+    "mae": 0.5889,
+    "rmse": 2.0782,
+    "r2": 0.9999
   }
 }

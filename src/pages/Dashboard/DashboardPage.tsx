@@ -7,7 +7,6 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
-  type TooltipContentProps,
 } from 'recharts';
 import {
   Activity,
@@ -38,17 +37,22 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 
 type CustomTooltipProps = {
   active?: boolean;
-  payload?: Array<{ value?: number | string }>;
+  // recharts provides a readonly TooltipPayload array — accept readonly to match
+  // payload values sometimes arrive as a primitive or as a readonly array of primitives
+  payload?: readonly { value?: number | string | readonly (number | string)[] }[];
   label?: string | number;
 };
 
 // ─── Custom recharts tooltip ─────────────────────────────────────────────────
 function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
   if (!active || !payload?.length) return null;
+  const raw = payload[0]?.value as number | string | readonly (number | string)[] | undefined;
+  const display = Array.isArray(raw) ? raw[0] : raw;
+
   return (
     <div className="bg-slate-900 border border-white/[0.10] rounded-xl px-3.5 py-2.5 shadow-xl text-xs">
       <p className="text-slate-400 mb-1 font-medium">{label}</p>
-      <p className="text-purple-300 font-bold">{payload[0]?.value} <span className="text-slate-500 font-normal">gCO₂/kWh</span></p>
+      <p className="text-purple-300 font-bold">{display} <span className="text-slate-500 font-normal">gCO₂/kWh</span></p>
     </div>
   );
 }
@@ -85,8 +89,8 @@ export function DashboardPage() {
   const currentIntensity = carbon.current.carbonIntensity;
   const isLow = currentIntensity < 180;
 
-  const activities: Task[] = activitiesData?.items ?? [];
-  const greenWindows: GreenWindow[] = windows ?? [];
+  const activities = activitiesData?.items ?? [];
+  const greenWindows = windows ?? [];
 
   let pendingCount = 0;
   let scheduledCount = 0;

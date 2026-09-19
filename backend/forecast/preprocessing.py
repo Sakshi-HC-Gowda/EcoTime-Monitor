@@ -9,7 +9,8 @@ Cleans raw carbon intensity data before ML feature engineering:
   - Fill small gaps by linear interpolation
 
 Input/output:
-    pandas DataFrame with columns: ['datetime', 'carbonIntensity']
+    pandas DataFrame with columns: ['datetime', 'carbonIntensity'] and
+    optionally ['zone']
     datetime column must be parseable by pd.to_datetime()
 """
 
@@ -57,13 +58,25 @@ def clean_carbon_data(df: pd.DataFrame) -> pd.DataFrame:
     if n_bad_dates > 0:
         logger.warning("Dropping %d rows with unparseable datetime values", n_bad_dates)
     df = df.dropna(subset=["datetime"])
-    df = df.set_index("datetime").sort_index()
+    has_zone = "zone" in df.columns
+    if has_zone:
+        df["zone"] = df["zone"].astype(str)
+        df = df.sort_values(["zone", "datetime"]).set_index("datetime")
+    else:
+        df = df.set_index("datetime").sort_index()
 
-    # Remove duplicate timestamps (keep last)
-    n_dupes = df.index.duplicated().sum()
+    # Remove duplicate timestamps per zone. Without zone metadata, keep the
+    # original global behavior for backwards compatibility.
+    if has_zone:
+        duplicate_mask = df.reset_index().duplicated(
+            subset=["zone", "datetime"], keep="last"
+        ).to_numpy()
+    else:
+        duplicate_mask = df.index.duplicated(keep="last")
+    n_dupes = int(duplicate_mask.sum())
     if n_dupes > 0:
         logger.warning("Removing %d duplicate timestamps", n_dupes)
-        df = df[~df.index.duplicated(keep="last")]
+        df = df[~duplicate_mask]
 
     # --- 2. Coerce carbonIntensity to numeric ---
     df["carbonIntensity"] = pd.to_numeric(df["carbonIntensity"], errors="coerce")
@@ -81,15 +94,25 @@ def clean_carbon_data(df: pd.DataFrame) -> pd.DataFrame:
     )
 
     # --- 4. IQR-based outlier removal (replace with NaN, then interpolate) ---
-    q1 = df["carbonIntensity"].quantile(0.25)
-    q3 = df["carbonIntensity"].quantile(0.75)
-    iqr = q3 - q1
-    lower_fence = max(_MIN_INTENSITY, q1 - _IQR_FENCE * iqr)
-    upper_fence = min(_MAX_INTENSITY, q3 + _IQR_FENCE * iqr)
-
-    outlier_mask = (
-        (df["carbonIntensity"] < lower_fence) | (df["carbonIntensity"] > upper_fence)
-    )
+    if has_zone:
+        grouped = df.groupby("zone")["carbonIntensity"]
+        q1 = grouped.transform(lambda s: s.quantile(0.25))
+        q3 = grouped.transform(lambda s: s.quantile(0.75))
+        iqr = q3 - q1
+        lower_fence = (q1 - _IQR_FENCE * iqr).clip(lower=_MIN_INTENSITY)
+        upper_fence = (q3 + _IQR_FENCE * iqr).clip(upper=_MAX_INTENSITY)
+        outlier_mask = (
+            (df["carbonIntensity"] < lower_fence) | (df["carbonIntensity"] > upper_fence)
+        )
+    else:
+        q1 = df["carbonIntensity"].quantile(0.25)
+        q3 = df["carbonIntensity"].quantile(0.75)
+        iqr = q3 - q1
+        lower_fence = max(_MIN_INTENSITY, q1 - _IQR_FENCE * iqr)
+        upper_fence = min(_MAX_INTENSITY, q3 + _IQR_FENCE * iqr)
+        outlier_mask = (
+            (df["carbonIntensity"] < lower_fence) | (df["carbonIntensity"] > upper_fence)
+        )
     n_outliers = outlier_mask.sum()
     if n_outliers > 0:
         logger.warning(
@@ -99,9 +122,16 @@ def clean_carbon_data(df: pd.DataFrame) -> pd.DataFrame:
         df.loc[outlier_mask, "carbonIntensity"] = np.nan
 
     # --- 5. Interpolate small gaps ---
-    df["carbonIntensity"] = df["carbonIntensity"].interpolate(
-        method="time", limit=_MAX_INTERP_GAP, limit_direction="both"
-    )
+    if has_zone:
+        df["carbonIntensity"] = df.groupby("zone", group_keys=False)["carbonIntensity"].apply(
+            lambda s: s.interpolate(
+                method="time", limit=_MAX_INTERP_GAP, limit_direction="both"
+            )
+        )
+    else:
+        df["carbonIntensity"] = df["carbonIntensity"].interpolate(
+            method="time", limit=_MAX_INTERP_GAP, limit_direction="both"
+        )
 
     # --- 6. Drop rows that are still NaN after interpolation ---
     n_remaining_nans = df["carbonIntensity"].isna().sum()
@@ -115,7 +145,10 @@ def clean_carbon_data(df: pd.DataFrame) -> pd.DataFrame:
     logger.info("Preprocessing complete: %d rows, intensity range [%.0f, %.0f]",
                 len(df), df["carbonIntensity"].min(), df["carbonIntensity"].max())
 
-    return df[["carbonIntensity"]].astype(float)
+    columns = ["carbonIntensity"] + (["zone"] if has_zone else [])
+    result = df[columns].copy()
+    result["carbonIntensity"] = result["carbonIntensity"].astype(float)
+    return result
 
 
 def validate_dataframe(df: pd.DataFrame) -> dict:

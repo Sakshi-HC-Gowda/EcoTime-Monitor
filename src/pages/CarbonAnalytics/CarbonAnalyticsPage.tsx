@@ -62,7 +62,7 @@ export function CarbonAnalyticsPage() {
           <div className="cluster">
             <Globe className="ds-icon-sm text-slate-500" />
             <select
-              value={selectedZone}
+              value={selectedZone ?? ''}
               onChange={(e) => setSelectedZone(e.target.value)}
               className="ds-control h-10 pl-3 pr-8 bg-slate-900/80 border border-white/[0.08] text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500/40 appearance-none cursor-pointer"
             >

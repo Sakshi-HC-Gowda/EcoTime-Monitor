@@ -21,7 +21,6 @@ from pathlib import Path
 from dotenv import load_dotenv
 from flask import Flask, jsonify
 from flask_cors import CORS
-from dotenv import load_dotenv
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from extensions import db
@@ -37,9 +36,6 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
 )
 logger = logging.getLogger(__name__)
-
-# Load .env before any route modules read ELECTRICITY_MAPS_API_KEY
-load_dotenv()
 
 
 # ---------------------------------------------------------------------------
@@ -189,6 +185,7 @@ def create_app(config_name: str | None = None) -> Flask:
                 "forecast_info": "/api/forecast/info",
                 "ml_train": "/api/ml/train",
                 "config": "/api/config/simulation",
+                "analytics_recommendations": "/api/analytics/recommendations",
             },
         }), 200
 

@@ -80,7 +80,7 @@ export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
       powerDraw: Number(powerDraw),
       priorityScore: Number(priorityScore),
       flexibilityScore: Number(flexibilityScore),
-      zone: selectedZone,
+      zone: selectedZone ?? undefined,
     } satisfies CreateTaskRequest);
 
     setName('');

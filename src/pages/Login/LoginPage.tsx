@@ -2,18 +2,22 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/Button";
 import { Logo } from "@/components/ui/Logo";
+import { AUTH_STORAGE_KEY } from "@/components/auth/AuthGuard";
 
-export default function LoginPage() {
+export function LoginPage() {
   const navigate = useNavigate();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
+  const completeAuth = () => {
+    localStorage.setItem(AUTH_STORAGE_KEY, "true");
+    navigate("/dashboard");
+  };
+
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-
-    // Demo Login
-    navigate("/dashboard");
+    completeAuth();
   };
 
   return (
@@ -83,7 +87,7 @@ export default function LoginPage() {
           <Button
             className="mt-4 w-full"
             variant="secondary"
-            onClick={() => navigate("/dashboard")}
+            onClick={completeAuth}
           >
             Continue as Demo
           </Button>
@@ -94,3 +98,5 @@ export default function LoginPage() {
     </div>
   );
 }
+
+export default LoginPage;

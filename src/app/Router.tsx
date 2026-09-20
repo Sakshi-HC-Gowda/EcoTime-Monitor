@@ -11,32 +11,39 @@ import { OptimizationPage } from '@/pages/Optimization/OptimizationPage';
 import { SchedulerPage } from '@/pages/Scheduler/SchedulerPage';
 import { SustainabilityPage } from '@/pages/Sustainability/SustainabilityPage';
 import { SettingsPage } from '@/pages/Settings/SettingsPage';
-import LoginPage from '@/pages/Login/LoginPage';
+import { LoginPage } from '@/pages/Login/LoginPage';
+import { AuthGuard } from '@/components/auth/AuthGuard';
 
 export const router = createBrowserRouter([
   // Landing (marketing) — no sidebar
   {
-  element: <LandingLayout />,
-  children: [
-    { path: '/', element: <LandingPage /> },
-    { path: '/login', element: <LoginPage /> },
-  ],
-},
-  // App shell with sidebar
-  {
-    element: <AppLayout />,
+    element: <LandingLayout />,
     children: [
-      { path: '/dashboard',    element: <DashboardPage /> },
-      { path: '/carbon',       element: <CarbonAnalyticsPage /> },
-      { path: '/forecast',     element: <ForecastPage /> },
-      { path: '/windows',      element: <GreenWindowsPage /> },
-      { path: '/activities',   element: <ActivitiesPage /> },
-      { path: '/optimization', element: <OptimizationPage /> },
-      { path: '/scheduler',    element: <SchedulerPage /> },
-      { path: '/sustainability',element: <SustainabilityPage /> },
-      { path: '/settings',     element: <SettingsPage /> },
-      // Redirect any unknown /app/** to dashboard
-      { path: '*', element: <Navigate to="/dashboard" replace /> },
+      { path: '/', element: <LandingPage /> },
+      { path: '/login', element: <LoginPage /> },
+    ],
+  },
+  // App shell with sidebar (protected)
+  {
+    element: <AuthGuard />,
+    children: [
+      {
+        element: <AppLayout />,
+        children: [
+          { path: '/dashboard',     element: <DashboardPage /> },
+          { path: '/carbon',        element: <CarbonAnalyticsPage /> },
+          { path: '/forecast',      element: <ForecastPage /> },
+          { path: '/windows',       element: <GreenWindowsPage /> },
+          { path: '/activities',    element: <ActivitiesPage /> },
+          { path: '/optimization',  element: <OptimizationPage /> },
+          { path: '/scheduler',     element: <SchedulerPage /> },
+          { path: '/sustainability',element: <SustainabilityPage /> },
+          { path: '/settings',      element: <SettingsPage /> },
+          // Redirect any unknown /app/** to dashboard
+          { path: '*', element: <Navigate to="/dashboard" replace /> },
+        ],
+      },
     ],
   },
 ]);
+

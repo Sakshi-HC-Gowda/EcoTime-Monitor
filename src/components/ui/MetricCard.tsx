@@ -23,9 +23,9 @@ export function MetricCard({
   unit,
   subtitle,
   icon: Icon,
-  iconColor = 'text-green-400',
-  iconBg = 'bg-green-500/10 border-green-500/20',
-  accentClass = 'metric-accent-green',
+  iconColor = 'text-emerald-400',
+  iconBg = 'bg-emerald-500/15 border-emerald-500/25',
+  accentClass = '',
   trend,
   onClick,
 }: MetricCardProps) {
@@ -34,33 +34,32 @@ export function MetricCard({
       onClick={onClick}
       hoverEffect={!!onClick}
       padding="md"
-      className={`relative h-full min-h-[168px] overflow-hidden ${accentClass} ${onClick ? 'cursor-pointer' : ''}`}
+      className={`relative h-full min-h-[140px] overflow-hidden p-5 flex flex-col justify-between transition-all duration-200 border border-white/[0.07] hover:border-emerald-500/30 ${accentClass} ${onClick ? 'cursor-pointer group' : ''}`}
     >
-      <div className="flex h-full items-start justify-between gap-4">
+      <div className="flex items-start gap-3.5">
+        <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 border shadow-md transition-transform duration-200 group-hover:scale-105 ${iconBg} ${iconColor}`}>
+          <Icon size={20} />
+        </div>
         <div className="min-w-0 flex-1">
-          <p className="label-text mb-2.5">{title}</p>
-          <div className="flex items-baseline gap-2 flex-wrap">
-            <span className="text-[1.875rem] font-extrabold text-white tracking-tight leading-none md:text-[2.1rem]">{value}</span>
-            {unit && <span className="text-xs font-medium text-slate-400">{unit}</span>}
+          <p className="text-[12px] font-semibold text-slate-400 truncate mb-1">{title}</p>
+          <div className="flex items-baseline gap-1.5 flex-wrap">
+            <span className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-none">{value}</span>
+            {unit && <span className="text-xs font-semibold text-slate-400">{unit}</span>}
           </div>
           {subtitle && (
-            <p className="text-xs text-slate-500 mt-2.5 leading-relaxed max-w-[14rem]">{subtitle}</p>
+            <p className="text-[11px] text-slate-400 font-medium mt-1.5 leading-snug truncate">{subtitle}</p>
           )}
           {trend && (
-            <div
-              className={`inline-flex items-center gap-1 mt-4 text-[11px] font-bold px-2.5 py-1 rounded-full ${
+            <div className="mt-2">
+              <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md border ${
                 trend.positive
-                  ? 'bg-green-500/10 text-green-400 border border-green-500/20'
-                  : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-              }`}
-            >
-              <span>{trend.positive ? '↓' : '↑'} {trend.value}</span>
+                  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                  : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+              }`}>
+                {trend.positive ? '↑' : '↓'} {trend.value}
+              </span>
             </div>
           )}
-        </div>
-
-        <div className={`ds-icon-box ${iconBg} ${iconColor}`}>
-          <Icon className="ds-icon-lg" />
         </div>
       </div>
     </GlassCard>

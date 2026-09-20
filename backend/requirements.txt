@@ -4,9 +4,13 @@ Flask-SQLAlchemy==3.1.1
 python-dotenv==1.0.0
 psycopg2-binary==2.9.9
 requests==2.31.0
+gunicorn==21.2.0
 # ML / Data Science
 scikit-learn==1.4.2
 xgboost==2.0.3
 pandas==2.2.2
 numpy==1.26.4
 joblib==1.4.2
+# Testing
+pytest==9.1.1
+

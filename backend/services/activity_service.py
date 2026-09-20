@@ -55,6 +55,33 @@ DEFAULT_GREEN_THRESHOLD = float(os.getenv("LOW_CARBON_THRESHOLD", "180"))
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
+
+def _calculate_energy_kwh(power_watts: float, duration_minutes: float) -> float:
+    """Calculate energy consumption in kWh from power draw (W) and duration (minutes)."""
+    return round((power_watts * duration_minutes) / 60000.0, 4)
+
+
+def _calculate_carbon_grams(energy_kwh: float, intensity_g_per_kwh: float) -> float:
+    """Calculate carbon emissions in grams CO2e from energy (kWh) and grid intensity (g/kWh)."""
+    return round(energy_kwh * intensity_g_per_kwh, 4)
+
+
+def _calculate_savings(
+    energy_kwh: float, baseline_intensity: float, optimized_intensity: float
+) -> dict[str, float]:
+    """Calculate carbon baseline, optimized impact, and carbon savings."""
+    baseline = round(energy_kwh * baseline_intensity, 4)
+    optimized = round(energy_kwh * optimized_intensity, 4)
+    savings = round(baseline - optimized, 4)
+    pct = (savings / baseline * 100.0) if baseline > 0 else 0.0
+    return {
+        "baselineCarbonImpact": baseline,
+        "optimizedCarbonImpact": optimized,
+        "carbonSavings": savings,
+        "carbonSavingsPercent": pct,
+    }
+
+
 WORKLOAD_PROFILES = {
     "Model Training": {"power": 450, "priority": 40, "flexibility": 90},
     "Dataset Download": {"power": 200, "priority": 20, "flexibility": 95},

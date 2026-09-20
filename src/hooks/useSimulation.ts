@@ -26,7 +26,7 @@ interface UseSimulationResult {
 export function useSimulation({
   carbonData,
   apiKey,
-  lowCarbonThreshold,
+  lowCarbonThreshold: _lowCarbonThreshold,
   baselineIntensity,
   onCarbonUpdate,
   onTasksUpdate,

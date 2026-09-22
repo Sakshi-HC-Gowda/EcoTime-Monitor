@@ -14,6 +14,9 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 from flask import Blueprint, request, jsonify
+from auth_utils import require_auth
+from extensions import db
+from models.activity import Activity
 
 from services.activity_service import (
     create_activity,
@@ -37,6 +40,7 @@ def _now_iso() -> str:
 # ---------------------------------------------------------------------------
 
 @activities_bp.route("/activities", methods=["POST"])
+@require_auth
 def create():
     """
     Create a new activity/task.
@@ -61,7 +65,7 @@ def create():
             "timestamp": _now_iso(),
         }), 400
 
-    task, error = create_activity(data)
+    task, error = create_activity(data, request.user.organization_id)
 
     if error:
         return jsonify({
@@ -82,6 +86,7 @@ def create():
 # ---------------------------------------------------------------------------
 
 @activities_bp.route("/activities", methods=["GET"])
+@require_auth
 def list_all():
     """
     List activities with optional filtering and pagination.
@@ -97,7 +102,12 @@ def list_all():
     page_size = request.args.get("pageSize", 50, type=int)
     status_filter = request.args.get("status", None)
 
-    result = list_activities(page=page, page_size=page_size, status_filter=status_filter)
+    result = list_activities(
+        organization_id=request.user.organization_id,
+        page=page,
+        page_size=page_size,
+        status_filter=status_filter,
+    )
 
     return jsonify({
         "success": True,
@@ -111,6 +121,7 @@ def list_all():
 # ---------------------------------------------------------------------------
 
 @activities_bp.route("/activities/<task_id>", methods=["GET"])
+@require_auth
 def get_one(task_id: str):
     """
     Get a specific activity by ID.
@@ -118,7 +129,7 @@ def get_one(task_id: str):
     Returns 200: { success: true, data: Task }
     Returns 404: { success: false, error: str }
     """
-    task = get_activity(task_id)
+    task = get_activity(task_id, request.user.organization_id)
 
     if not task:
         return jsonify({
@@ -139,6 +150,7 @@ def get_one(task_id: str):
 # ---------------------------------------------------------------------------
 
 @activities_bp.route("/activities/<task_id>", methods=["PATCH"])
+@require_auth
 def update(task_id: str):
     """
     Update status, progress, or window assignment for an activity.
@@ -159,7 +171,7 @@ def update(task_id: str):
             "timestamp": _now_iso(),
         }), 400
 
-    task, error = update_activity(task_id, data)
+    task, error = update_activity(task_id, data, request.user.organization_id)
 
     if error:
         status_code = 404 if "not found" in error.lower() else 400
@@ -181,6 +193,7 @@ def update(task_id: str):
 # ---------------------------------------------------------------------------
 
 @activities_bp.route("/activities/<task_id>", methods=["DELETE"])
+@require_auth
 def delete(task_id: str):
     """
     Delete an activity by ID.
@@ -188,7 +201,7 @@ def delete(task_id: str):
     Returns 200: { success: true, data: { message: str } }
     Returns 404: { success: false, error: str }
     """
-    success, error = delete_activity(task_id)
+    success, error = delete_activity(task_id, request.user.organization_id)
 
     if not success:
         return jsonify({
@@ -209,6 +222,7 @@ def delete(task_id: str):
 # ---------------------------------------------------------------------------
 
 @activities_bp.route("/activities/bulk", methods=["POST"])
+@require_auth
 def bulk_update():
     """
     Bulk-update multiple activities in one request.
@@ -229,7 +243,19 @@ def bulk_update():
             "timestamp": _now_iso(),
         }), 400
 
-    updated_tasks = bulk_update_activities(updates)
+    task_ids = {item.get("id") for item in updates if isinstance(item, dict) and item.get("id")}
+    owned_count = Activity.query.filter(
+        Activity.organization_id == request.user.organization_id,
+        Activity.id.in_(task_ids or {""}),
+    ).count()
+    if owned_count != len(task_ids):
+        return jsonify({
+            "success": False,
+            "error": "One or more activities do not belong to your organization",
+            "timestamp": _now_iso(),
+        }), 403
+
+    updated_tasks = bulk_update_activities(updates, request.user.organization_id)
 
     return jsonify({
         "success": True,

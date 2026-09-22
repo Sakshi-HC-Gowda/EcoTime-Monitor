@@ -21,7 +21,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from flask import Flask, jsonify
 from flask_cors import CORS
-from dotenv import load_dotenv
+from flask_jwt_extended import JWTManager
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from extensions import db
@@ -63,20 +63,34 @@ def create_app(config_name: str | None = None) -> Flask:
     # Configuration
     # -----------------------------------------------------------------------
     config_name = config_name or os.getenv("FLASK_ENV", "development")
-    database_url = os.getenv("DATABASE_URL")
+    database_url = (
+        os.getenv("TEST_DATABASE_URL", "sqlite:///:memory:")
+        if config_name == "testing"
+        else os.getenv("DATABASE_URL")
+    )
     secret_key = os.getenv("SECRET_KEY")
+    if not secret_key:
+        if config_name in {"production", "prod"}:
+            raise RuntimeError("SECRET_KEY is required in production.")
+        secret_key = "ecotime-development-only-secret-key"
 
     if not database_url:
-        raise RuntimeError(
-            "DATABASE_URL is not configured. Add it to backend/.env before starting EcoTime."
-        )
-    if not database_url.startswith(("postgresql://", "postgresql+psycopg2://")):
-        raise RuntimeError("DATABASE_URL must use a PostgreSQL URL.")
-    if not secret_key:
-        raise RuntimeError("SECRET_KEY is not configured. Add it to backend/.env.")
+        if config_name == "testing":
+            database_url = "sqlite:///:memory:"
+        else:
+            raise RuntimeError(
+                "DATABASE_URL is not configured. Add it to backend/.env before starting EcoTime."
+            )
+    if config_name == "testing":
+        valid_database_prefixes = ("postgresql://", "postgresql+psycopg2://", "sqlite://")
+    else:
+        valid_database_prefixes = ("postgresql://", "postgresql+psycopg2://")
+    if not database_url.startswith(valid_database_prefixes):
+        raise RuntimeError("DATABASE_URL must use a PostgreSQL URL outside testing.")
 
     app.config.update(
         SECRET_KEY=secret_key,
+        JWT_SECRET_KEY=secret_key,
         DEBUG=config_name == "development",
         TESTING=config_name == "testing",
         SQLALCHEMY_DATABASE_URI=database_url,
@@ -88,6 +102,10 @@ def create_app(config_name: str | None = None) -> Flask:
         DATABASE_AVAILABLE=False,
     )
 
+    JWTManager(app)
+    app.config["JWT_TOKEN_LOCATION"] = ["headers"]
+    app.config["JWT_HEADER_NAME"] = "Authorization"
+    app.config["JWT_HEADER_TYPE"] = "Bearer"
     logger.info("Starting EcoTime backend [%s mode]", config_name)
 
     # -----------------------------------------------------------------------
@@ -101,19 +119,24 @@ def create_app(config_name: str | None = None) -> Flask:
             Activity,
             ActivityHistory,
             AnalyticsRecommendation,
+            Organization,
+            OrganizationMember,
+            Role,
             SimulationConfig,
+            User,
         )
         try:
             # Flask-SQLAlchemy delegates to SQLAlchemy's safe table check:
             # create_all() creates only absent tables and never drops data.
             db.create_all()
+            _ensure_organization_ownership_schema()
             db.session.execute(text("SELECT 1"))
             db.session.commit()
             app.config["DATABASE_AVAILABLE"] = True
-            logger.info("PostgreSQL connection established; tables verified/created")
+            logger.info("Database ready; tables verified/created")
         except SQLAlchemyError as error:
             db.session.rollback()
-            logger.error("PostgreSQL is unavailable: %s", error)
+            logger.error("Database unavailable: %s", error)
 
     # -----------------------------------------------------------------------
     # CORS
@@ -134,19 +157,23 @@ def create_app(config_name: str | None = None) -> Flask:
     # -----------------------------------------------------------------------
     # Blueprint Registration
     # -----------------------------------------------------------------------
+    from routes.auth import auth_bp
     from routes.carbon import carbon_bp
     from routes.activities import activities_bp
     from routes.optimizer import optimizer_bp
     from routes.forecast import forecast_bp
+    from routes.organizations import organizations_bp
     from routes.upload import upload_bp
 
+    app.register_blueprint(auth_bp, url_prefix="/api")
     app.register_blueprint(carbon_bp, url_prefix="/api")
     app.register_blueprint(activities_bp, url_prefix="/api")
     app.register_blueprint(optimizer_bp, url_prefix="/api")
     app.register_blueprint(forecast_bp, url_prefix="/api")
+    app.register_blueprint(organizations_bp, url_prefix="/api")
     app.register_blueprint(upload_bp, url_prefix="/api")
 
-    logger.info("Blueprints registered: carbon, activities, optimizer, forecast, upload")
+    logger.info("Blueprints registered: auth, carbon, activities, optimizer, forecast, organizations, upload")
 
     # -----------------------------------------------------------------------
     # Health Check & Root
@@ -231,6 +258,65 @@ def create_app(config_name: str | None = None) -> Flask:
         }), 500
 
     return app
+
+
+def _ensure_organization_ownership_schema() -> None:
+    """Add tenant ownership columns without replacing existing PostgreSQL data."""
+    if db.engine.dialect.name != "postgresql":
+        return
+
+    db.session.execute(text(
+        "ALTER TABLE activities ADD COLUMN IF NOT EXISTS organization_id INTEGER"
+    ))
+    db.session.execute(text(
+        "ALTER TABLE analytics_recommendations "
+        "ADD COLUMN IF NOT EXISTS organization_id INTEGER"
+    ))
+
+    db.session.execute(text(
+        "UPDATE activities SET organization_id = "
+        "(SELECT MIN(id) FROM organizations) WHERE organization_id IS NULL"
+    ))
+    db.session.execute(text(
+        "UPDATE analytics_recommendations recommendation SET organization_id = activity.organization_id "
+        "FROM activities activity "
+        "WHERE recommendation.activity_id = activity.id "
+        "AND recommendation.organization_id IS NULL"
+    ))
+
+    db.session.execute(text(
+        "CREATE INDEX IF NOT EXISTS ix_activities_organization_id "
+        "ON activities (organization_id)"
+    ))
+    db.session.execute(text(
+        "CREATE INDEX IF NOT EXISTS ix_analytics_recommendations_organization_id "
+        "ON analytics_recommendations (organization_id)"
+    ))
+    db.session.execute(text(
+        "DO $$ BEGIN "
+        "IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = "
+        "'activities_organization_id_fkey') THEN "
+        "ALTER TABLE activities ADD CONSTRAINT activities_organization_id_fkey "
+        "FOREIGN KEY (organization_id) REFERENCES organizations(id); "
+        "END IF; END $$"
+    ))
+    db.session.execute(text(
+        "DO $$ BEGIN "
+        "IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = "
+        "'analytics_recommendations_organization_id_fkey') THEN "
+        "ALTER TABLE analytics_recommendations ADD CONSTRAINT "
+        "analytics_recommendations_organization_id_fkey "
+        "FOREIGN KEY (organization_id) REFERENCES organizations(id); "
+        "END IF; END $$"
+    ))
+
+    orphan_count = db.session.execute(text(
+        "SELECT COUNT(*) FROM activities WHERE organization_id IS NULL"
+    )).scalar_one()
+    if orphan_count == 0:
+        db.session.execute(text(
+            "ALTER TABLE activities ALTER COLUMN organization_id SET NOT NULL"
+        ))
 
 
 # ---------------------------------------------------------------------------

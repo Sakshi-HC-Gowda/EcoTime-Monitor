@@ -170,92 +170,93 @@ export function ActivitiesPage() {
         className="hidden"
         onChange={handleFileSelection}
       />
-    <div className="page-shell page-stack activities-page">
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="page-header activities-header">
-        <div>
-          <h1 className="page-header-title heading-row">
-            Digital Workloads
-            <span className="ds-badge bg-amber-500/10 text-amber-400 border-amber-500/20">
-              {activitiesData.total} Total
-            </span>
-          </h1>
-          <p className="page-header-subtitle">
-            Register, monitor, and manage carbon-aware digital workloads with full lifecycle status controls.
-          </p>
+      <div className="page-shell page-stack activities-page">
+        {/* ── Header ─────────────────────────────────────────────────────────── */}
+        <div className="page-header activities-header">
+          <div>
+            <h1 className="page-header-title heading-row">
+              Digital Workloads
+              <span className="ds-badge bg-amber-500/10 text-amber-400 border-amber-500/20">
+                {activitiesData.total} Total
+              </span>
+            </h1>
+            <p className="page-header-subtitle">
+              Register, monitor, and manage carbon-aware digital workloads with full lifecycle status controls.
+            </p>
+          </div>
+
+          <div className="cluster">
+            <Button size="sm" onClick={() => setIsModalOpen(true)} iconLeft={<Plus className="w-3.5 h-3.5" />}>
+              Register Activity
+            </Button>
+          </div>
         </div>
 
-        <div className="cluster">
-          <Button size="sm" onClick={() => setIsModalOpen(true)} iconLeft={<Plus className="w-3.5 h-3.5" />}>
-            Register Activity
-          </Button>
+        {/* ── Segment control tabs ────────────────────────────────────────────── */}
+        <div className="segment-control activities-segment w-full sm:w-auto">
+          {TABS.map(({ value, label }) => {
+            const count = value === 'all'
+              ? activitiesData.total
+              : activitiesData.items.filter(t => t.status === value).length;
+
+            return (
+              <button
+                key={value}
+                onClick={() => setActiveTab(value)}
+                className={`segment-tab ${activeTab === value ? 'active' : ''}`}
+                aria-current={activeTab === value ? 'page' : undefined}
+              >
+                {label}
+                {count > 0 && (
+                  <span className={`ds-badge ml-0.5 px-1.5 py-0.5 ${
+                    activeTab === value
+                      ? 'bg-white/10 text-white'
+                      : 'bg-white/[0.05] text-slate-500'
+                  }`}>
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
-      </div>
 
-      {/* ── Segment control tabs ────────────────────────────────────────────── */}
-      <div className="segment-control activities-segment w-full sm:w-auto">
-        {TABS.map(({ value, label }) => {
-          const count = value === 'all'
-            ? activitiesData.total
-            : activitiesData.items.filter(t => t.status === value).length;
+        {/* ── Activity grid ───────────────────────────────────────────────────── */}
+        {tasks.length === 0 ? (
+          <EmptyState
+            icon={Filter}
+            title="No activities in this status"
+            description="Register a new digital workload or switch tabs to see other workloads."
+            actionLabel="Register Activity"
+            onAction={() => setIsModalOpen(true)}
+            accentColor="amber"
+          />
+        ) : (
+          <div className="card-grid card-grid-sm-2 card-grid-lg-3 activities-grid">
+            {tasks.map((task) => (
+              <ActivityCard
+                key={task.id}
+                activity={task}
+                onUpdateStatus={(id, status, scheduledStartTime) =>
+                  updateMutation.mutate({ id, update: { status, scheduledStartTime } })
+                }
+                onRunNow={(activity) => openFilePicker(activity, 'run')}
+                onScheduleUpload={(activity, scheduledStartTime) => openFilePicker(activity, 'schedule', scheduledStartTime)}
+                onDelete={(id) => deleteMutation.mutate(id)}
+                uploadState={uploadStates[task.id]}
+              />
+            ))}
+          </div>
+        )}
 
-          return (
-            <button
-              key={value}
-              onClick={() => setActiveTab(value)}
-              className={`segment-tab ${activeTab === value ? 'active' : ''}`}
-              aria-current={activeTab === value ? 'page' : undefined}
-            >
-              {label}
-              {count > 0 && (
-                <span className={`ds-badge ml-0.5 px-1.5 py-0.5 ${
-                  activeTab === value
-                    ? 'bg-white/10 text-white'
-                    : 'bg-white/[0.05] text-slate-500'
-                }`}>
-                  {count}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* ── Activity grid ───────────────────────────────────────────────────── */}
-      {tasks.length === 0 ? (
-        <EmptyState
-          icon={Filter}
-          title="No activities in this status"
-          description="Register a new digital workload or switch tabs to see other workloads."
-          actionLabel="Register Activity"
-          onAction={() => setIsModalOpen(true)}
-          accentColor="amber"
+        {/* ── Modal ──────────────────────────────────────────────────────────── */}
+        <CreateActivityModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          onSubmit={(newTask) => createMutation.mutate(newTask)}
         />
-      ) : (
-        <div className="card-grid card-grid-sm-2 card-grid-lg-3 activities-grid">
-          {tasks.map((task) => (
-            <ActivityCard
-              key={task.id}
-              activity={task}
-              onUpdateStatus={(id, status, scheduledStartTime) =>
-                updateMutation.mutate({ id, update: { status, scheduledStartTime } })
-              }
-              onRunNow={(activity) => openFilePicker(activity, 'run')}
-              onScheduleUpload={(activity, scheduledStartTime) => openFilePicker(activity, 'schedule', scheduledStartTime)}
-              onDelete={(id) => deleteMutation.mutate(id)}
-              uploadState={uploadStates[task.id]}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* ── Modal ──────────────────────────────────────────────────────────── */}
-      <CreateActivityModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSubmit={(newTask) => createMutation.mutate(newTask)}
-      />
+      </div>
     </div>
   );
 }

@@ -203,7 +203,6 @@ export function ActivityCard({ activity, onUpdateStatus, onRunNow, onScheduleUpl
         </div>
       )}
 
-      <div className="flex items-center gap-2 border-t border-white/[0.04] bg-white/[0.01] px-[var(--card-padding-md)] py-3.5">
       <div className="flex items-center gap-2.5 border-t border-white/[0.04] bg-white/[0.01] px-[var(--card-padding-md)] py-4">
         {canAcceptRecommendation && (
           <button

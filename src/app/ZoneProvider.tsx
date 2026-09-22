@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import {
   createContext,
   useContext,
@@ -34,8 +35,11 @@ export function ZoneProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (status === 'success' && location) {
-      setSelectedZoneState(location.zone);
-      localStorage.setItem(ZONE_STORAGE_KEY, location.zone);
+      const timer = window.setTimeout(() => {
+        setSelectedZoneState(location.zone);
+        localStorage.setItem(ZONE_STORAGE_KEY, location.zone);
+      }, 0);
+      return () => window.clearTimeout(timer);
     }
   }, [status, location]);
 

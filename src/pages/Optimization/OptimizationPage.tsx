@@ -40,7 +40,7 @@ export function OptimizationPage() {
   const optimization = scheduleQuery.data;
   const result = optimization?.result;
   const savings = optimization?.savings;
-  const selectedTasks = result?.selectedTasks ?? [];
+  const selectedTasks = useMemo(() => result?.selectedTasks ?? [], [result?.selectedTasks]);
   const selectedTaskIds = useMemo(
     () => new Set(selectedTasks.map((task) => task.id)),
     [selectedTasks],

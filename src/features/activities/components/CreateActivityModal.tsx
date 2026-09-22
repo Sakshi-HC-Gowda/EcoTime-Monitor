@@ -2,15 +2,6 @@ import { useState } from 'react';
 import { X, ChevronDown } from 'lucide-react';
 import type { ActivityType, CreateTaskRequest } from '@/types/domain';
 import { Button } from '@/components/ui/Button';
-import { useGreenWindows } from '@/features/carbon/hooks/useCarbon';
-import {
-  formatRecommendedTime,
-  getEstimatedCarbonImpact,
-  getEstimatedEcoScore,
-  getEstimatedEnergyKwh,
-  getRecommendationText,
-  getRecommendedStartTimeIso,
-} from '@/features/activities/utils/activityMetrics';
 
 interface Props {
   isOpen: boolean;
@@ -42,7 +33,6 @@ const numInputClass =
   'w-full h-11 px-4 rounded-xl bg-slate-800/60 border border-white/10 text-sm text-white font-mono font-medium focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500/50 transition-all';
 
 export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
-  const { data: greenWindows = [] } = useGreenWindows('US-CA', 180, 0, isOpen);
   const [name, setName] = useState('');
   const [activityType, setActivityType] = useState<ActivityType>('dataset-download');
   const [duration, setDuration] = useState(45);

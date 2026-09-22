@@ -180,7 +180,7 @@ def _aware(dt: datetime | None) -> datetime | None:
 # ---------------------------------------------------------------------------
 
 
-def create_activity(data: dict) -> tuple[dict | None, str | None]:
+def create_activity(data: dict, organization_id: int) -> tuple[dict | None, str | None]:
     """
     Create and persist a new activity.
 
@@ -241,6 +241,7 @@ def create_activity(data: dict) -> tuple[dict | None, str | None]:
 
     activity = Activity(
         id=task_id,
+        organization_id=organization_id,
         name=str(data["name"]).strip(),
         type=task_type,
         activity_type=activity_type,
@@ -273,6 +274,7 @@ def create_activity(data: dict) -> tuple[dict | None, str | None]:
 
 
 def list_activities(
+    organization_id: int,
     page: int = 1,
     page_size: int = 50,
     status_filter: str | None = None,
@@ -291,7 +293,7 @@ def list_activities(
     page = max(1, page)
     page_size = min(max(1, page_size), 200)
 
-    query = Activity.query
+    query = Activity.query.filter_by(organization_id=organization_id)
     if status_filter:
         query = query.filter_by(status=status_filter)
 
@@ -312,13 +314,16 @@ def list_activities(
     }
 
 
-def get_activity(task_id: str) -> dict | None:
+def get_activity(task_id: str, organization_id: int) -> dict | None:
     """Retrieve a single activity by ID. Returns None if not found."""
-    activity = db.session.get(Activity, task_id)
+    activity = Activity.query.filter_by(
+        id=task_id,
+        organization_id=organization_id,
+    ).first()
     return activity.to_dict() if activity else None
 
 
-def update_activity(task_id: str, updates: dict) -> tuple[dict | None, str | None]:
+def update_activity(task_id: str, updates: dict, organization_id: int) -> tuple[dict | None, str | None]:
     """
     Update allowed fields on an existing activity.
 
@@ -330,7 +335,10 @@ def update_activity(task_id: str, updates: dict) -> tuple[dict | None, str | Non
     Returns:
         (updated_task, error_message)
     """
-    activity = db.session.get(Activity, task_id)
+    activity = Activity.query.filter_by(
+        id=task_id,
+        organization_id=organization_id,
+    ).first()
     if not activity:
         return None, f"Activity '{task_id}' not found"
 
@@ -427,14 +435,17 @@ def update_activity(task_id: str, updates: dict) -> tuple[dict | None, str | Non
     return activity.to_dict(), None
 
 
-def delete_activity(task_id: str) -> tuple[bool, str | None]:
+def delete_activity(task_id: str, organization_id: int) -> tuple[bool, str | None]:
     """
     Delete an activity by ID (cascades its history rows).
 
     Returns:
         (success, error_message)
     """
-    activity = db.session.get(Activity, task_id)
+    activity = Activity.query.filter_by(
+        id=task_id,
+        organization_id=organization_id,
+    ).first()
     if not activity:
         return False, f"Activity '{task_id}' not found"
 
@@ -451,7 +462,7 @@ def delete_activity(task_id: str) -> tuple[bool, str | None]:
     return True, None
 
 
-def bulk_update_activities(updates: list[dict]) -> list[dict]:
+def bulk_update_activities(updates: list[dict], organization_id: int) -> list[dict]:
     """
     Apply status/progress updates to multiple activities at once.
     Used by the orchestrator to batch-update after scheduling.
@@ -468,7 +479,7 @@ def bulk_update_activities(updates: list[dict]) -> list[dict]:
         if not task_id:
             continue
         fields = {k: v for k, v in upd.items() if k != "id"}
-        task, _ = update_activity(task_id, fields)
+        task, _ = update_activity(task_id, fields, organization_id)
         if task:
             updated.append(task)
     return updated

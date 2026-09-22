@@ -7,7 +7,6 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
-  type TooltipContentProps,
 } from 'recharts';
 import {
   Activity,
@@ -38,7 +37,9 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 
 type CustomTooltipProps = {
   active?: boolean;
-  payload?: Array<{ value?: number | string }>;
+  payload?: ReadonlyArray<{
+    value?: number | string | readonly (number | string)[];
+  }>;
   label?: string | number;
 };
 
@@ -85,8 +86,8 @@ export function DashboardPage() {
   const currentIntensity = carbon.current.carbonIntensity;
   const isLow = currentIntensity < 180;
 
-  const activities: Task[] = activitiesData?.items ?? [];
-  const greenWindows: GreenWindow[] = windows ?? [];
+  const activities = activitiesData?.items ?? [];
+  const greenWindows = windows ?? [];
 
   let pendingCount = 0;
   let scheduledCount = 0;

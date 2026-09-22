@@ -22,9 +22,11 @@ def log_recommendation(
     expected_energy_saving: float | None,
     status: str,
     activity_id: str | None = None,
+    organization_id: int | None = None,
 ) -> dict:
     """Persist a recommendation event in PostgreSQL and return its payload."""
     event = AnalyticsRecommendation(
+        organization_id=organization_id,
         activity_id=activity_id,
         text=str(text),
         reason=str(reason),

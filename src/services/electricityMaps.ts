@@ -47,13 +47,14 @@ export function getSimulatedIntensity(zone: GridZone, date: Date): number {
       wave = Math.cos((2 * Math.PI * (hours - 13)) / 24);
       break;
 
-    case 'wind':
+    case 'wind': {
       // Wind fluctuates with varying periodicities (simulating weather patterns)
       const dayOfYear = date.getDate();
       const wave1 = Math.sin((2 * Math.PI * hours) / 18 + dayOfYear);
       const wave2 = 0.45 * Math.cos((2 * Math.PI * hours) / 6);
       wave = (wave1 + wave2) / 1.45;
       break;
+    }
 
     case 'nuclear':
       // Nuclear is extremely flat, minor fluctuations
@@ -65,12 +66,13 @@ export function getSimulatedIntensity(zone: GridZone, date: Date): number {
       wave = -0.7 * Math.cos((4 * Math.PI * (hours - 8)) / 24);
       break;
 
-    case 'mixed':
+    case 'mixed': {
       // Germany: solar dip + general industrial peak
       const solarDip = -0.6 * Math.exp(-Math.pow(hours - 13, 2) / 12);
       const loadPeak = 0.4 * Math.sin((2 * Math.PI * (hours - 8)) / 12);
       wave = solarDip + loadPeak;
       break;
+    }
   }
 
   // Calculate base intensity plus wave modification

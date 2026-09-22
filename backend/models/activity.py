@@ -33,6 +33,12 @@ class Activity(db.Model):
     # Primary Key
     # -----------------------------------------------------------------------
     id = db.Column(db.String(64), primary_key=True)
+    organization_id = db.Column(
+        db.Integer,
+        db.ForeignKey("organizations.id"),
+        nullable=False,
+        index=True,
+    )
 
     # -----------------------------------------------------------------------
     # Core Fields
@@ -114,6 +120,7 @@ class Activity(db.Model):
         """
         return {
             "id": self.id,
+            "organizationId": self.organization_id,
             "name": self.name,
             "type": self.type,
             "activityType": self.activity_type,

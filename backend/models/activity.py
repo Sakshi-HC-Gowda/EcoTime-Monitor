@@ -3,7 +3,7 @@ Activity Model
 ==============
 SQLAlchemy model for digital tasks/activities managed by EcoTime.
 
-Maps to the 'activities' table in SQLite (or PostgreSQL in production).
+Maps to the PostgreSQL ``activities`` table.
 Mirrors the domain type defined in src/types/domain.ts for frontend compatibility.
 """
 
@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from app import db
+from extensions import db
 
 
 class Activity(db.Model):
@@ -93,6 +93,14 @@ class Activity(db.Model):
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    history = db.relationship(
+        "ActivityHistory",
+        back_populates="activity",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="ActivityHistory.created_at",
     )
 
     # -----------------------------------------------------------------------

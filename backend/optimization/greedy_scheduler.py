@@ -12,7 +12,7 @@ Provides two scheduling algorithms:
 2. 0/1 Knapsack Optimizer
    - Given a single green window and a list of flexible tasks
    - Treats window duration as knapsack capacity
-   - Value = CO2 savings in grams if task runs in this window
+   - Value = CO2 savings weighted by priority and flexibility
    - Uses dynamic programming to maximise total savings
 """
 
@@ -22,6 +22,31 @@ from datetime import datetime
 
 from .carbon_calculator import calculate_savings_grams
 from .window_ranking import rank_windows
+
+
+def _score_factor(task: dict, field: str, default: float) -> float:
+    """Return a positive 0-100 score so missing or zero scores do not erase carbon value."""
+    try:
+        score = float(task.get(field, default))
+    except (TypeError, ValueError):
+        score = default
+    return max(1.0, min(100.0, score))
+
+
+def _knapsack_task_value(
+    task: dict,
+    baseline_intensity: float,
+    window_intensity: float,
+) -> float:
+    savings = calculate_savings_grams(
+        task.get("duration", 0),
+        task.get("powerDraw", 0),
+        baseline_intensity,
+        window_intensity,
+    )
+    priority = _score_factor(task, "priorityScore", 50.0)
+    flexibility = _score_factor(task, "flexibilityScore", 70.0)
+    return savings * priority * flexibility
 
 
 # ---------------------------------------------------------------------------
@@ -170,17 +195,7 @@ def optimize_knapsack(
     # Pre-compute integer values (scaled ×100 for precision) and weights
     weights = [max(1, int(round(t.get("duration", 1)))) for t in candidates]
     values = [
-        int(
-            round(
-                calculate_savings_grams(
-                    t.get("duration", 0),
-                    t.get("powerDraw", 0),
-                    baseline_intensity,
-                    window_intensity,
-                )
-                * 100  # scale for integer DP
-            )
-        )
+        int(round(_knapsack_task_value(t, baseline_intensity, window_intensity) * 100))
         for t in candidates
     ]
 
@@ -205,7 +220,15 @@ def optimize_knapsack(
             w -= weights[i - 1]
 
     selected.reverse()
-    total_saved_co2 = dp[n][W] / 100.0  # unscale
+    total_saved_co2 = sum(
+        calculate_savings_grams(
+            t.get("duration", 0),
+            t.get("powerDraw", 0),
+            baseline_intensity,
+            window_intensity,
+        )
+        for t in selected
+    )
     total_duration = sum(t.get("duration", 0) for t in selected)
     utilisation_percent = (
         round((total_duration / window_duration) * 100.0, 1)

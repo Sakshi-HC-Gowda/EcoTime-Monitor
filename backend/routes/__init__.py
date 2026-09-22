@@ -6,5 +6,6 @@ from .carbon import carbon_bp
 from .activities import activities_bp
 from .optimizer import optimizer_bp
 from .forecast import forecast_bp
+from .upload import upload_bp
 
-__all__ = ['carbon_bp', 'activities_bp', 'optimizer_bp', 'forecast_bp']
+__all__ = ['carbon_bp', 'activities_bp', 'optimizer_bp', 'forecast_bp', 'upload_bp']

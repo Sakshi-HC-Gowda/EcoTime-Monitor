@@ -6,5 +6,8 @@ after a single import.
 """
 
 from .activity import Activity
+from .activity_history import ActivityHistory
+from .analytics_recommendation import AnalyticsRecommendation
+from .simulation_config import SimulationConfig
 
-__all__ = ["Activity"]
+__all__ = ["Activity", "ActivityHistory", "AnalyticsRecommendation", "SimulationConfig"]

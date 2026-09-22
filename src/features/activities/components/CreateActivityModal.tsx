@@ -20,12 +20,12 @@ interface Props {
 }
 
 const ACTIVITY_TYPES: { value: ActivityType; label: string }[] = [
-  { value: 'dataset-download',  label: 'Dataset Download' },
-  { value: 'ci-cd-pipeline',    label: 'CI/CD Pipeline' },
-  { value: 'cloud-backup',      label: 'Cloud Backup' },
-  { value: 'software-update',   label: 'Software Update' },
-  { value: 'batch-processing',  label: 'Batch Processing' },
-  { value: 'file-upload',       label: 'File Upload' },
+  { value: 'dataset-download', label: 'Dataset Download' },
+  { value: 'ci-cd-pipeline', label: 'CI/CD Pipeline' },
+  { value: 'cloud-backup', label: 'Cloud Backup' },
+  { value: 'software-update', label: 'Software Update' },
+  { value: 'batch-processing', label: 'Batch Processing' },
+  { value: 'file-upload', label: 'File Upload' },
 ];
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
@@ -44,9 +44,16 @@ const numInputClass =
 
 export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
   const { selectedZone } = useZone();
-  const { data: greenWindows = [] } = useGreenWindows(selectedZone, 180, 0, isOpen);
+  const { data: greenWindows = [] } = useGreenWindows(
+    selectedZone,
+    180,
+    0,
+    isOpen
+  );
+
   const [name, setName] = useState('');
-  const [activityType, setActivityType] = useState<ActivityType>('dataset-download');
+  const [activityType, setActivityType] =
+    useState<ActivityType>('dataset-download');
   const [duration, setDuration] = useState(45);
   const [powerDraw, setPowerDraw] = useState(350);
   const [priorityScore, setPriorityScore] = useState(50);
@@ -64,12 +71,15 @@ export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
   const estimatedCarbon = getEstimatedCarbonImpact(estimateDraft);
   const estimatedEcoScore = getEstimatedEcoScore(estimateDraft);
   const recommendation = getRecommendationText(estimateDraft);
-  const recommendedStart = formatRecommendedTime(getRecommendedStartTimeIso(estimateDraft, greenWindows));
+  const recommendedStart = formatRecommendedTime(
+    getRecommendedStartTimeIso(estimateDraft, greenWindows)
+  );
 
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
     if (!name.trim()) return;
 
     onSubmit({
@@ -95,13 +105,20 @@ export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
       aria-labelledby="modal-title"
     >
       <div className="w-full max-w-2xl rounded-2xl bg-[#0f172a] border border-white/10 shadow-2xl overflow-hidden my-auto">
-
         {/* Modal header */}
         <div className="flex items-center justify-between px-8 py-6 sm:px-9 sm:py-7 border-b border-white/10 bg-slate-900/50">
           <div>
-            <h3 id="modal-title" className="text-xl font-bold text-white tracking-tight">Register Activity</h3>
-            <p className="text-xs sm:text-sm text-slate-400 mt-1.5">Schedule a new carbon-aware digital workload</p>
+            <h3
+              id="modal-title"
+              className="text-xl font-bold text-white tracking-tight"
+            >
+              Register Activity
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-400 mt-1.5">
+              Schedule a new carbon-aware digital workload
+            </p>
           </div>
+
           <button
             onClick={onClose}
             className="h-9 w-9 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-all flex items-center justify-center border border-transparent hover:border-white/10 ml-4"
@@ -114,7 +131,6 @@ export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
         {/* Form */}
         <form onSubmit={handleSubmit}>
           <div className="px-8 py-7 sm:px-9 space-y-6 max-h-[calc(85vh-140px)] overflow-y-auto">
-
             {/* Activity name */}
             <div>
               <FieldLabel>Activity Name</FieldLabel>
@@ -135,13 +151,18 @@ export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
                 <div className="relative">
                   <select
                     value={activityType}
-                    onChange={(e) => setActivityType(e.target.value as ActivityType)}
+                    onChange={(e) =>
+                      setActivityType(e.target.value as ActivityType)
+                    }
                     className={`${inputClass} appearance-none pr-10`}
                   >
                     {ACTIVITY_TYPES.map(({ value, label }) => (
-                      <option key={value} value={value}>{label}</option>
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
                     ))}
                   </select>
+
                   <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                 </div>
               </div>
@@ -195,40 +216,59 @@ export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
                   min="0"
                   max="100"
                   value={flexibilityScore}
-                  onChange={(e) => setFlexibilityScore(Number(e.target.value))}
+                  onChange={(e) =>
+                    setFlexibilityScore(Number(e.target.value))
+                  }
                   className={numInputClass}
                 />
               </div>
             </div>
 
-            {/* Estimated Values Box with generous inner padding */}
+            {/* Estimated Values Box */}
             <div className="rounded-xl border border-green-500/25 bg-green-500/[0.08] p-6 space-y-4">
-              <p className="text-xs font-bold uppercase tracking-[0.08em] text-green-400">Estimated Values</p>
-              
+              <p className="text-xs font-bold uppercase tracking-[0.08em] text-green-400">
+                Estimated Values
+              </p>
+
               <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-xs text-slate-300">
                 <p className="flex justify-between sm:justify-start sm:gap-2">
                   <span className="text-slate-400">Estimated Power:</span>
-                  <span className="font-semibold text-white">{Number(powerDraw).toFixed(0)} W</span>
+                  <span className="font-semibold text-white">
+                    {Number(powerDraw).toFixed(0)} W
+                  </span>
                 </p>
+
                 <p className="flex justify-between sm:justify-start sm:gap-2">
                   <span className="text-slate-400">Estimated Energy:</span>
-                  <span className="font-semibold text-white">{estimatedEnergy.toFixed(2)} kWh</span>
+                  <span className="font-semibold text-white">
+                    {estimatedEnergy.toFixed(2)} kWh
+                  </span>
                 </p>
+
                 <p className="flex justify-between sm:justify-start sm:gap-2">
                   <span className="text-slate-400">Carbon Impact:</span>
-                  <span className="font-semibold text-white">{estimatedCarbon.toFixed(0)} gCO2</span>
+                  <span className="font-semibold text-white">
+                    {estimatedCarbon.toFixed(0)} gCO2
+                  </span>
                 </p>
+
                 <p className="flex justify-between sm:justify-start sm:gap-2">
                   <span className="text-slate-400">EcoScore:</span>
-                  <span className="font-semibold text-white">{estimatedEcoScore.toFixed(1)} / 100</span>
+                  <span className="font-semibold text-white">
+                    {estimatedEcoScore.toFixed(1)} / 100
+                  </span>
                 </p>
               </div>
 
               <div className="pt-3 border-t border-green-500/20 text-xs text-slate-300 leading-relaxed">
                 <span className="text-slate-400">Recommendation:</span>{' '}
-                <span className="font-semibold text-white">{recommendation}</span>
-                {' '}at{' '}
-                <span className="font-semibold text-white">{recommendedStart}</span>
+                <span className="font-semibold text-white">
+                  {recommendation}
+                </span>{' '}
+                at{' '}
+                <span className="font-semibold text-white">
+                  {recommendedStart}
+                </span>
               </div>
             </div>
           </div>
@@ -238,6 +278,7 @@ export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
             <Button type="button" variant="ghost" size="sm" onClick={onClose}>
               Cancel
             </Button>
+
             <Button type="submit" size="sm">
               Register Activity
             </Button>
@@ -247,3 +288,5 @@ export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
     </div>
   );
 }
+
+export default CreateActivityModal;

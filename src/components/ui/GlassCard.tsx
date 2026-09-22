@@ -18,9 +18,9 @@ const paddingMap = {
 };
 
 const variantMap: Record<GlassCardVariant, string> = {
-  default:  'bg-[#0b1220]/90 border-white/[0.07] shadow-lg shadow-black/20 rounded-2xl',
-  elevated: 'bg-[#10192c]/95 border-emerald-500/20 shadow-xl shadow-black/30 rounded-2xl',
-  inset:    'bg-[#070c16]/80 border-white/[0.04] rounded-2xl',
+  default:  'bg-slate-900/36 border-white/[0.05]',
+  elevated: 'bg-slate-800/48 border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]',
+  inset:    'bg-[rgba(7,10,19,0.42)] border-white/[0.035]',
 };
 
 export function GlassCard({

@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 
+from config.scoring_rules import SCORING_RULES, get_points
 from services.ecopoints_service import (
-    POINT_RULES,
     award_points,
     get_user_score,
     get_user_transactions,
@@ -58,12 +58,12 @@ def award_ecopoints():
         }), 400
 
     # Only allow predefined scoring rules.
-    if event_type not in POINT_RULES:
+    if event_type not in SCORING_RULES:
         return jsonify({
             "error": f"Unsupported event type: {event_type}"
         }), 400
 
-    points = POINT_RULES[event_type]
+    points = get_points(event_type)
 
     try:
         transaction = award_points(
@@ -128,3 +128,21 @@ def get_sustainability_score(user_id: str):
         }), 404
 
     return jsonify(score), 200
+@ecopoints_bp.get("/ecopoints/transactions")
+def get_my_transactions():
+    user_id = request.args.get("userId")
+
+    if not user_id:
+        return jsonify({
+            "error": "userId query parameter is required"
+        }), 400
+
+    transactions = get_user_transactions(user_id)
+
+    return jsonify({
+        "userId": user_id,
+        "transactions": [
+            transaction.to_dict()
+            for transaction in transactions
+        ]
+    }), 200

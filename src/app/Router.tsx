@@ -9,7 +9,7 @@ import { GreenWindowsPage } from '@/pages/GreenWindows/GreenWindowsPage';
 import { ActivitiesPage } from '@/pages/Activities/ActivitiesPage';
 import { OptimizationPage } from '@/pages/Optimization/OptimizationPage';
 import { SchedulerPage } from '@/pages/Scheduler/SchedulerPage';
-import { SustainabilityPage } from '@/pages/Sustainability/SustainabilityPage';
+import {SustainabilityPage}  from '@/pages/Sustainability/SustainabilityPage';
 import { SettingsPage } from '@/pages/Settings/SettingsPage';
 import { LoginPage } from '@/pages/Login/LoginPage';
 import { AuthGuard } from '@/components/auth/AuthGuard';
@@ -37,7 +37,7 @@ export const router = createBrowserRouter([
           { path: '/activities',    element: <ActivitiesPage /> },
           { path: '/optimization',  element: <OptimizationPage /> },
           { path: '/scheduler',     element: <SchedulerPage /> },
-          { path: '/sustainability',element: <SustainabilityPage /> },
+          { path: '/impact',        element: <SustainabilityPage /> },
           { path: '/settings',      element: <SettingsPage /> },
           // Redirect any unknown /app/** to dashboard
           { path: '*', element: <Navigate to="/dashboard" replace /> },

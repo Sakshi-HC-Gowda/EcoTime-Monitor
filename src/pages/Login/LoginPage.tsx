@@ -11,10 +11,15 @@ export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  const completeAuth = () => {
+  const completeAuth = (loginEmail?: string) => {
     localStorage.setItem(
       AUTH_STORAGE_KEY,
       'true'
+    );
+
+    localStorage.setItem(
+      'ecotime_user_id',
+      loginEmail || 'demo-user'
     );
 
     navigate('/dashboard');
@@ -24,7 +29,7 @@ export function LoginPage() {
     e: React.FormEvent
   ) => {
     e.preventDefault();
-    completeAuth();
+    completeAuth(email);
   };
 
   return (
@@ -106,7 +111,7 @@ export function LoginPage() {
           <Button
             className="mt-4 w-full"
             variant="secondary"
-            onClick={completeAuth}
+            onClick={() => completeAuth('demo-user')}
           >
             Continue as Demo
           </Button>

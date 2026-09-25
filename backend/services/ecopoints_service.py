@@ -2,7 +2,8 @@
 EcoPoints Service
 =================
 Handles EcoPoint awarding, duplicate prevention,
-sustainability score updates, and streak tracking.
+daily anti-gaming protection, sustainability score
+updates, and streak tracking.
 
 Important:
 EcoPoints must always be linked to a legitimate
@@ -11,7 +12,7 @@ EcoTime activity/recommendation event.
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from uuid import uuid4
 
 from sqlalchemy.exc import IntegrityError
@@ -25,13 +26,10 @@ from models import (
     Badge,
 )
 
-
-# Initial scoring rules
-POINT_RULES = {
-    "follow_green_window": 10,
-    "delay_flexible_activity": 5,
-    "complete_green_window": 10,
-}
+from config.scoring_rules import (
+    get_points,
+    get_anti_gaming_rule,
+)
 
 
 def award_points(
@@ -49,14 +47,20 @@ def award_points(
 
     Returns:
         EcoPointTransaction if points are awarded.
-        None if the same event has already been rewarded.
+        None if the same event has already been rewarded
+        or the daily EcoPoints cap has been reached.
     """
 
-    if points <= 0:
-        raise ValueError("Points must be greater than zero.")
+    expected_points = get_points(event_type)
+
+    if points != expected_points:
+        raise ValueError(
+            f"Invalid points for event type '{event_type}'. "
+            f"Expected {expected_points}."
+        )
 
     # ---------------------------------------------------------
-    # 1. Validate the source event
+    # 1. Validate the source activity
     # ---------------------------------------------------------
 
     if activity_id is None:
@@ -72,22 +76,33 @@ def award_points(
         )
 
     # ---------------------------------------------------------
-    # 2. Verify that the activity has a logged lifecycle event
+    # 2. Verify the exact ActivityHistory event
     # ---------------------------------------------------------
+
+    try:
+        history_event_id = int(event_id)
+    except (TypeError, ValueError):
+        raise ValueError(
+            "eventId must reference a valid ActivityHistory ID."
+        )
 
     history_event = (
         ActivityHistory.query
-        .filter_by(activity_id=activity_id)
+        .filter_by(
+            id=history_event_id,
+            activity_id=activity_id,
+        )
         .first()
     )
 
     if history_event is None:
         raise ValueError(
-            f"No legitimate activity history found for '{activity_id}'."
+            f"Activity history event '{event_id}' does not exist "
+            f"for activity '{activity_id}'."
         )
 
-    # ---------------------------------------------------------
-    # 3. Prevent duplicate rewards
+        # ---------------------------------------------------------
+    # 3. Prevent duplicate and near-duplicate rewards
     # ---------------------------------------------------------
 
     existing = (
@@ -103,8 +118,111 @@ def award_points(
     if existing:
         return None
 
+    # Prevent repeated scoring of near-identical activity events
+    # within the configured anti-gaming time window.
+    near_duplicate_window = get_anti_gaming_rule(
+        "near_duplicate_window_minutes"
+    )
+
+    near_duplicate_cutoff = (
+        history_event.created_at
+        - timedelta(minutes=near_duplicate_window)
+    )
+
+    recent_history = (
+        ActivityHistory.query
+        .filter(
+            ActivityHistory.activity_id == activity_id,
+            ActivityHistory.id != history_event.id,
+            ActivityHistory.created_at >= near_duplicate_cutoff,
+            ActivityHistory.created_at <= history_event.created_at,
+        )
+        .order_by(ActivityHistory.created_at.desc())
+        .first()
+    )
+
+    if recent_history is not None:
+        recent_transaction = (
+            EcoPointTransaction.query
+            .filter(
+                EcoPointTransaction.user_id == user_id,
+                EcoPointTransaction.event_type == event_type,
+                EcoPointTransaction.event_id == str(recent_history.id),
+            )
+            .first()
+        )
+
+        if recent_transaction is not None:
+            return None
+
+       # ---------------------------------------------------------
+    # 4. Apply daily and weekly EcoPoints caps
     # ---------------------------------------------------------
-    # 4. Create immutable transaction
+
+    now = datetime.now(timezone.utc)
+
+    # -------------------------
+    # Daily cap
+    # -------------------------
+
+    daily_cap = get_anti_gaming_rule("daily_points_cap")
+
+    start_of_day = datetime(
+        now.year,
+        now.month,
+        now.day,
+        tzinfo=timezone.utc,
+    )
+
+    daily_points = (
+        db.session.query(
+            db.func.coalesce(
+                db.func.sum(EcoPointTransaction.points),
+                0,
+            )
+        )
+        .filter(
+            EcoPointTransaction.user_id == user_id,
+            EcoPointTransaction.created_at >= start_of_day,
+        )
+        .scalar()
+    )
+
+    if daily_points + points > daily_cap:
+        return None
+
+
+    # -------------------------
+    # Weekly cap
+    # -------------------------
+
+    weekly_cap = get_anti_gaming_rule("weekly_points_cap")
+
+    # Monday 00:00 UTC is the beginning of the current week.
+    start_of_week = (
+        start_of_day
+        - timedelta(days=start_of_day.weekday())
+    )
+
+    weekly_points = (
+        db.session.query(
+            db.func.coalesce(
+                db.func.sum(EcoPointTransaction.points),
+                0,
+            )
+        )
+        .filter(
+            EcoPointTransaction.user_id == user_id,
+            EcoPointTransaction.created_at >= start_of_week,
+        )
+        .scalar()
+    )
+
+    if weekly_points + points > weekly_cap:
+        return None
+
+    # ---------------------------------------------------------
+    # 5. Create immutable transaction
     # ---------------------------------------------------------
 
     transaction = EcoPointTransaction(
@@ -128,7 +246,7 @@ def award_points(
         return None
 
     # ---------------------------------------------------------
-    # 5. Update sustainability score
+    # 6. Update sustainability score
     # ---------------------------------------------------------
 
     score = (
@@ -146,14 +264,16 @@ def award_points(
             total_points=0,
             current_streak=0,
             longest_streak=0,
+            leaderboard_opt_in=False,
         )
+
         db.session.add(score)
 
     score.total_points += points
     score.score += points
 
     # ---------------------------------------------------------
-    # 6. Update sustainability streak
+    # 7. Update sustainability streak
     # ---------------------------------------------------------
 
     today = date.today()
@@ -162,7 +282,7 @@ def award_points(
         score.current_streak = 1
 
     elif score.last_sustainable_date == today:
-        # Already received sustainable activity today.
+        # Already received a sustainable activity today.
         pass
 
     elif score.last_sustainable_date == today - timedelta(days=1):
@@ -176,15 +296,27 @@ def award_points(
 
     score.last_sustainable_date = today
 
+    # ---------------------------------------------------------
+    # 8. Award eligible badges
+    # ---------------------------------------------------------
+
     award_badges(
-    user_id=user_id,
-    organization_id=organization_id,
-)
-    db.session.commit()
+        user_id=user_id,
+        organization_id=organization_id,
+    )
+
+    db.session.flush()
+
     return transaction
-def award_badges(user_id: str, organization_id: str | None = None) -> list[Badge]:
+
+
+def award_badges(
+    user_id: str,
+    organization_id: str | None = None,
+) -> list[Badge]:
     """
     Award badges based on the user's sustainability progress.
+
     Badges are awarded only once per user.
     """
 
@@ -233,6 +365,7 @@ def award_badges(user_id: str, organization_id: str | None = None) -> list[Badge
     ]
 
     for badge_type, name, description, condition in badge_rules:
+
         if not condition:
             continue
 
@@ -261,7 +394,7 @@ def award_badges(user_id: str, organization_id: str | None = None) -> list[Badge
         badges.append(badge)
 
     if badges:
-        db.session.commit()
+        db.session.flush()
 
     return badges
 
@@ -278,7 +411,10 @@ def get_user_transactions(user_id: str) -> list[dict]:
         .all()
     )
 
-    return [transaction.to_dict() for transaction in transactions]
+    return [
+        transaction.to_dict()
+        for transaction in transactions
+    ]
 
 
 def get_user_score(user_id: str) -> dict | None:

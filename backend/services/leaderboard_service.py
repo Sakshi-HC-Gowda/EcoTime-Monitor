@@ -17,14 +17,17 @@ def get_organization_leaderboard(
     """
 
     scores = (
-        SustainabilityScore.query
-        .filter_by(organization_id=organization_id)
-        .order_by(
-            SustainabilityScore.score.desc(),
-            SustainabilityScore.total_points.desc(),
-        )
-        .all()
+    SustainabilityScore.query
+    .filter(
+        SustainabilityScore.organization_id == organization_id,
+        SustainabilityScore.leaderboard_opt_in.is_(True),
     )
+    .order_by(
+        SustainabilityScore.score.desc(),
+        SustainabilityScore.total_points.desc(),
+    )
+    .all()
+  )
 
     leaderboard = []
 

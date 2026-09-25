@@ -82,6 +82,11 @@ class SustainabilityScore(db.Model):
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )
+    leaderboard_opt_in = db.Column(
+    db.Boolean,
+    nullable=False,
+    default=False,
+    )
 
     def to_dict(self) -> dict:
         """Return a JSON-serialisable representation."""
@@ -108,6 +113,7 @@ class SustainabilityScore(db.Model):
                 if self.updated_at
                 else None
             ),
+            "leaderboardOptIn": self.leaderboard_opt_in,
         }
 
     def __repr__(self) -> str:

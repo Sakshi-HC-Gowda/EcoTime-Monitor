@@ -11,7 +11,7 @@ import { OptimizationPage } from '@/pages/Optimization/OptimizationPage';
 import { SchedulerPage } from '@/pages/Scheduler/SchedulerPage';
 import { SustainabilityPage } from '@/pages/Sustainability/SustainabilityPage';
 import { SettingsPage } from '@/pages/Settings/SettingsPage';
-import LoginPage from '@/pages/Login/LoginPage';
+import { LoginPage } from '@/pages/Login/LoginPage';
 import { ProtectedRoute } from '@/features/auth/ProtectedRoute';
 
 export const router = createBrowserRouter([
@@ -48,3 +48,4 @@ export const router = createBrowserRouter([
     ],
   },
 ]);
+

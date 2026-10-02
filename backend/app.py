@@ -38,9 +38,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Load .env before any route modules read ELECTRICITY_MAPS_API_KEY
-load_dotenv()
-
 
 # ---------------------------------------------------------------------------
 # Application Factory
@@ -216,6 +213,7 @@ def create_app(config_name: str | None = None) -> Flask:
                 "forecast_info": "/api/forecast/info",
                 "ml_train": "/api/ml/train",
                 "config": "/api/config/simulation",
+                "analytics_recommendations": "/api/analytics/recommendations",
             },
         }), 200
 

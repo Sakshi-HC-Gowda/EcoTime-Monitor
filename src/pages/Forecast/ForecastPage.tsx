@@ -10,7 +10,7 @@ import { ForecastStats } from '@/features/forecast/components/ForecastStats';
 
 export function ForecastPage() {
   const { selectedZone } = useZone();
-  const { data: forecastData, isLoading, isError, refetch } = useForecast(selectedZone, 36);
+  const { data: forecastData, isLoading, isError, refetch } = useForecast(selectedZone ?? undefined, 36);
   const { data: modelInfo } = useForecastInfo();
   const trainMutation = useTrainModel();
 

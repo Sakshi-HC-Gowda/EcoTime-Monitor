@@ -326,21 +326,30 @@ p {
   cursor: pointer;
 }
 
-.nav-link:hover {
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text-primary);
+.nav-section-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: 8px;
+  padding-left: 12px;
+  padding-right: 12px;
 }
 
-.nav-link.active {
-  background: var(--green-glow);
-  color: var(--green);
-  border: 1px solid var(--green-border);
+.nav-link.active,
+.nav-link-accent.active {
+  background: linear-gradient(90deg, rgba(6, 78, 59, 0.7) 0%, rgba(16, 185, 129, 0.15) 100%) !important;
+  color: #34d399 !important;
+  border: 1px solid rgba(16, 185, 129, 0.35) !important;
+  box-shadow: 0 0 15px -2px rgba(16, 185, 129, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
   font-weight: 600;
 }
 
-.nav-link.active svg {
-  color: var(--green);
+.nav-link-accent.active svg {
+  color: #34d399 !important;
 }
+
 
 .sidebar-footer {
   padding-top: 20px;

@@ -29,9 +29,14 @@ out/
 .env.local
 .env.*.local
 .env.*
+**/.env
+**/.env.*
+backend/.env
 
-# Keep sample env if you create one
+# Keep sample env files
 !.env.example
+!**/.env.example
+!backend/.env.example
 
 # ==========================
 # Python

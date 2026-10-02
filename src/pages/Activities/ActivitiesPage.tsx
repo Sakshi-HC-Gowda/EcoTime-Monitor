@@ -162,7 +162,7 @@ export function ActivitiesPage() {
     : activitiesData.items.filter((task) => task.status === activeTab);
 
   return (
-    <div className="page-shell page-stack">
+  <div className="page-shell page-stack activities-page">
       <input
         ref={fileInputRef}
         type="file"
@@ -170,8 +170,6 @@ export function ActivitiesPage() {
         className="hidden"
         onChange={handleFileSelection}
       />
-
-      <div className="page-shell page-stack activities-page">
         {/* ── Header ─────────────────────────────────────────────────────────── */}
         <div className="page-header activities-header">
           <div>
@@ -256,7 +254,6 @@ export function ActivitiesPage() {
           onClose={() => setIsModalOpen(false)}
           onSubmit={(newTask) => createMutation.mutate(newTask)}
         />
-      </div>
     </div>
   );
 }

@@ -138,6 +138,7 @@ class ForecastPredictor:
                 feature_row = build_inference_features(
                     recent_history=buffer[-48:],  # Use last 48 points max
                     target_datetime=target_dt,
+                    zone_id=zone_id,
                 )
                 # Align feature columns to what the model was trained on
                 feature_row = feature_row.reindex(columns=self._feature_names, fill_value=0)
@@ -157,6 +158,7 @@ class ForecastPredictor:
             # Append prediction to buffer for next iteration
             buffer.append({
                 "datetime": target_dt.isoformat(),
+                "zone": zone_id,
                 "carbonIntensity": predicted_intensity,
             })
 

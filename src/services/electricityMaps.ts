@@ -16,6 +16,12 @@ export interface GridZone {
 export const GRID_ZONES: GridZone[] = [
   { id: 'US-CA', name: 'California (CAISO)', country: 'USA', type: 'solar', baseIntensity: 180, amplitude: 140, noise: 10 },
   { id: 'IN', name: 'India (National Grid)', country: 'India', type: 'mixed', baseIntensity: 680, amplitude: 120, noise: 15 },
+  { id: 'IN-SO', name: 'Southern India', country: 'India', type: 'mixed', baseIntensity: 650, amplitude: 110, noise: 14 },
+  { id: 'IN-WE', name: 'Western India', country: 'India', type: 'mixed', baseIntensity: 620, amplitude: 105, noise: 14 },
+  { id: 'IN-NO', name: 'Northern India', country: 'India', type: 'mixed', baseIntensity: 700, amplitude: 115, noise: 15 },
+  { id: 'IN-EA', name: 'Eastern India', country: 'India', type: 'mixed', baseIntensity: 720, amplitude: 120, noise: 15 },
+  { id: 'IN-NE', name: 'North-Eastern India', country: 'India', type: 'mixed', baseIntensity: 580, amplitude: 90, noise: 12 },
+  { id: 'US-NY', name: 'New York (NYISO)', country: 'USA', type: 'mixed', baseIntensity: 220, amplitude: 100, noise: 12 },
   { id: 'DK-DK2', name: 'Eastern Denmark', country: 'Denmark', type: 'wind', baseIntensity: 90, amplitude: 70, noise: 15 },
   { id: 'GB', name: 'Great Britain', country: 'United Kingdom', type: 'mixed', baseIntensity: 170, amplitude: 80, noise: 12 },
   { id: 'FR', name: 'France (Nuclear)', country: 'France', type: 'nuclear', baseIntensity: 55, amplitude: 15, noise: 5 },

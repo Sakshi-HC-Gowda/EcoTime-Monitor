@@ -479,6 +479,9 @@ def _build_window(
 ) -> dict:
     """Build a GreenWindow dict from a contiguous block of low-carbon points."""
     avg_intensity = sum(p["carbonIntensity"] for p in points) / len(points)
+    # This percentage is relative to the forecast peak and is used only for
+    # Green Window ranking. Potential activity savings must be calculated from
+    # baseline/current carbon intensity versus this window's average intensity.
     savings_pct = max(5.0, ((forecast_peak - avg_intensity) / forecast_peak) * 100.0)
 
     start_dt = datetime.fromisoformat(points[0]["datetime"].replace("Z", "+00:00"))

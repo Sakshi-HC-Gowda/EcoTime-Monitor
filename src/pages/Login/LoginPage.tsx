@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { Logo } from '@/components/ui/Logo';
 import { useAuth } from '@/features/auth/AuthProvider';
 
-export default function LoginPage() {
+export function LoginPage() {
   const navigate = useNavigate();
   const { login, register } = useAuth();
 
@@ -188,3 +188,5 @@ export default function LoginPage() {
     </div>
   );
 }
+
+export default LoginPage;

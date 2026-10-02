@@ -18,6 +18,7 @@ from auth_utils import require_auth, require_organization_admin
 from extensions import db
 from models.activity import Activity
 from models.simulation_config import SimulationConfig
+from models.analytics_recommendation import AnalyticsRecommendation
 from services.optimizer_service import compute_eco_score, run_scheduler, compute_savings_summary
 from services.activity_service import get_activity
 from services.analytics_service import log_recommendation
@@ -168,8 +169,6 @@ def schedule():
         },
         "timestamp": _now_iso(),
     }), 200
-
-
 # ---------------------------------------------------------------------------
 # EcoScore
 # ---------------------------------------------------------------------------
@@ -324,3 +323,42 @@ def get_config():
         "data": _get_simulation_config().to_dict(),
         "timestamp": _now_iso(),
     }), 200
+
+
+# ---------------------------------------------------------------------------
+# Analytics Recommendations
+# ---------------------------------------------------------------------------
+
+@optimizer_bp.route("/analytics/recommendations", methods=["GET"])
+@require_auth
+def get_recommendations():
+    """
+    Retrieve stored analytics recommendations.
+
+    Query parameters:
+        limit (int, optional): Max records to retrieve (default: 50, max: 200)
+
+    Returns 200: { success: true, data: list[dict], count: int, timestamp: str }
+    """
+    limit = min(request.args.get("limit", 50, type=int), 200)
+    try:
+        recs = (
+            AnalyticsRecommendation.query.filter_by(
+                organization_id=request.user.organization_id
+            )
+            .order_by(AnalyticsRecommendation.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        data = [recommendation.to_dict() for recommendation in recs]
+    except Exception as exc:
+        logger.warning("Could not fetch analytics recommendations: %s", exc)
+        data = []
+
+    return jsonify({
+        "success": True,
+        "data": data,
+        "count": len(data),
+        "timestamp": _now_iso(),
+    }), 200
+

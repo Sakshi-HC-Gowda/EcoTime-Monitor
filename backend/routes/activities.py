@@ -65,7 +65,7 @@ def create():
             "timestamp": _now_iso(),
         }), 400
 
-    task, error = create_activity(data, request.user.organization_id)
+    task, error = create_activity(data, request.user)
 
     if error:
         return jsonify({

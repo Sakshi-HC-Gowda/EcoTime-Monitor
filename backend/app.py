@@ -259,7 +259,7 @@ def create_app(config_name: str | None = None) -> Flask:
 
 
 def _ensure_organization_ownership_schema() -> None:
-    """Add tenant ownership columns without replacing existing PostgreSQL data."""
+    """Add tenant ownership columns without guessing ownership for legacy rows."""
     if db.engine.dialect.name != "postgresql":
         return
 
@@ -271,10 +271,6 @@ def _ensure_organization_ownership_schema() -> None:
         "ADD COLUMN IF NOT EXISTS organization_id INTEGER"
     ))
 
-    db.session.execute(text(
-        "UPDATE activities SET organization_id = "
-        "(SELECT MIN(id) FROM organizations) WHERE organization_id IS NULL"
-    ))
     db.session.execute(text(
         "UPDATE analytics_recommendations recommendation SET organization_id = activity.organization_id "
         "FROM activities activity "

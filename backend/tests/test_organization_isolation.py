@@ -1,7 +1,8 @@
 import pytest
 
-from app import create_app
+from app import _ensure_organization_ownership_schema, create_app
 from extensions import db
+from models.activity import Activity
 
 
 @pytest.fixture
@@ -148,17 +149,48 @@ def test_company_isolation_for_activity_and_optimizer_apis(client):
     assert client.get("/api/users/me").status_code == 401
 
 
-def test_activity_ownership_is_server_derived(client):
+def test_activity_ownership_is_server_derived(client, app):
     admin_a = register(client, "owner-a@example.com", "Owner A")
     admin_b = register(client, "owner-b@example.com", "Owner B")
+    organization_a_id = admin_a["user"]["organizationId"]
+    organization_b_id = admin_b["user"]["organizationId"]
 
     response = client.post(
         "/api/activities",
         headers=auth_header(admin_a["token"]),
-        json={**activity_payload("Server-owned task"), "organization_id": 2},
+        json={
+            **activity_payload("Server-owned task"),
+            "organization_id": organization_b_id,
+        },
     )
     assert response.status_code == 201
-    assert response.get_json()["data"]["organizationId"] == 1
+    task = response.get_json()["data"]
+    assert task["organizationId"] == organization_a_id
+
+    with app.app_context():
+        persisted_activity = db.session.get(Activity, task["id"])
+        assert persisted_activity is not None
+        assert persisted_activity.organization_id == organization_a_id
+
+    own_activity = client.get(
+        f"/api/activities/{task['id']}",
+        headers=auth_header(admin_a["token"]),
+    )
+    assert own_activity.status_code == 200
+    assert own_activity.get_json()["data"]["organizationId"] == organization_a_id
+
+    updated_activity = client.patch(
+        f"/api/activities/{task['id']}",
+        headers=auth_header(admin_a["token"]),
+        json={"status": "completed"},
+    )
+    assert updated_activity.status_code == 200
+
+    deleted_activity = client.delete(
+        f"/api/activities/{task['id']}",
+        headers=auth_header(admin_a["token"]),
+    )
+    assert deleted_activity.status_code == 200
 
     listed_by_b = client.get(
         "/api/activities",
@@ -166,3 +198,39 @@ def test_activity_ownership_is_server_derived(client):
     )
     assert listed_by_b.status_code == 200
     assert listed_by_b.get_json()["data"]["items"] == []
+
+
+def test_legacy_activity_migration_leaves_unowned_rows_unresolved(app, monkeypatch):
+    with app.app_context():
+        statements = []
+        session = db.session()
+
+        def capture_execute(statement, *args, **kwargs):
+            statements.append(str(statement))
+
+            class Result:
+                @staticmethod
+                def scalar_one():
+                    return 1
+
+            return Result()
+
+        monkeypatch.setattr(db.engine.dialect, "name", "postgresql")
+        monkeypatch.setattr(session, "execute", capture_execute)
+
+        _ensure_organization_ownership_schema()
+
+    normalized_statements = [" ".join(statement.split()) for statement in statements]
+    assert not any(
+        statement.startswith("UPDATE activities SET organization_id")
+        for statement in normalized_statements
+    )
+    assert not any("MIN(organizations.id)" in statement for statement in normalized_statements)
+    assert any(
+        "SELECT COUNT(*) FROM activities WHERE organization_id IS NULL" in statement
+        for statement in normalized_statements
+    )
+    assert not any(
+        "ALTER TABLE activities ALTER COLUMN organization_id SET NOT NULL" in statement
+        for statement in normalized_statements
+    )

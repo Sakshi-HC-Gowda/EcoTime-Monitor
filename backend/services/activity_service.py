@@ -20,6 +20,7 @@ from typing import Any
 from extensions import db
 from models.activity import Activity
 from models.activity_history import ActivityHistory
+from models.user import User
 from optimization.window_ranking import rank_windows
 from services.carbon_service import detect_green_windows, get_carbon_data
 
@@ -207,7 +208,7 @@ def _aware(dt: datetime | None) -> datetime | None:
 # ---------------------------------------------------------------------------
 
 
-def create_activity(data: dict, organization_id: int) -> tuple[dict | None, str | None]:
+def create_activity(data: dict, authenticated_user: User) -> tuple[dict | None, str | None]:
     """
     Create and persist a new activity.
 
@@ -268,7 +269,7 @@ def create_activity(data: dict, organization_id: int) -> tuple[dict | None, str 
 
     activity = Activity(
         id=task_id,
-        organization_id=organization_id,
+        organization_id=authenticated_user.organization_id,
         name=str(data["name"]).strip(),
         type=task_type,
         activity_type=activity_type,

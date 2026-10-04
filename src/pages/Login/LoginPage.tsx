@@ -29,31 +29,30 @@ export function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#070a13] px-6">
-      <div className="w-full max-w-md rounded-3xl border border-white/10 bg-[#0f172a] p-8 shadow-2xl">
+      <div className="w-full max-w-[440px] rounded-[24px] border border-white/[0.05] bg-[#0f172a]/90 backdrop-blur-xl p-8 sm:p-10 shadow-2xl">
         {/* Logo */}
-        <div className="mb-8 flex flex-col items-center text-center">
+        <div className="mb-10 flex flex-col items-center text-center">
           <Logo
             size="lg"
             to="/"
           />
 
-          <h1 className="mt-6 text-2xl font-bold text-white">
+          <h1 className="mt-8 text-2xl font-extrabold text-white sm:text-3xl tracking-tight">
             Welcome Back
           </h1>
 
-          <p className="mt-1.5 text-xs text-slate-400">
-            Sign in to access your EcoTime
-            dashboard
+          <p className="mt-2 text-sm text-slate-400">
+            Sign in to access your EcoTime dashboard
           </p>
         </div>
 
         {/* Form */}
         <form
           onSubmit={handleLogin}
-          className="space-y-5"
+          className="flex flex-col gap-5"
         >
-          <div>
-            <label className="mb-2 block text-sm text-slate-300">
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-semibold text-slate-300">
               Email
             </label>
 
@@ -64,12 +63,12 @@ export function LoginPage() {
               onChange={(e) =>
                 setEmail(e.target.value)
               }
-              className="w-full rounded-xl border border-white/10 bg-[#111827] px-4 py-3 text-white outline-none focus:border-green-500"
+              className="h-12 w-full rounded-xl border border-white/[0.08] bg-black/20 px-4 text-white outline-none transition-colors focus:border-green-500/50 focus:bg-black/40"
             />
           </div>
 
-          <div>
-            <label className="mb-2 block text-sm text-slate-300">
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-semibold text-slate-300">
               Password
             </label>
 
@@ -80,36 +79,37 @@ export function LoginPage() {
               onChange={(e) =>
                 setPassword(e.target.value)
               }
-              className="w-full rounded-xl border border-white/10 bg-[#111827] px-4 py-3 text-white outline-none focus:border-green-500"
+              className="h-12 w-full rounded-xl border border-white/[0.08] bg-black/20 px-4 text-white outline-none transition-colors focus:border-green-500/50 focus:bg-black/40"
             />
           </div>
 
           <Button
             type="submit"
-            className="w-full"
+            className="mt-2 h-[52px] w-full text-base font-bold"
           >
             Sign In
           </Button>
         </form>
 
         {/* Demo */}
-        <div className="mt-6 rounded-xl border border-green-500/20 bg-green-500/5 p-4">
-          <p className="text-center text-xs text-green-300">
-            Demo Mode
-          </p>
+        <div className="mt-8 rounded-2xl border border-green-500/10 bg-green-500/5 p-5">
+          <div className="flex flex-col items-center text-center">
+            <span className="mb-1 rounded-full bg-green-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-green-400">
+              Demo Mode
+            </span>
 
-          <p className="mt-2 text-center text-sm text-slate-400">
-            Authentication is simulated for
-            project demonstration.
-          </p>
+            <p className="mb-4 text-xs text-slate-400">
+              Authentication is simulated for project demonstration.
+            </p>
 
-          <Button
-            className="mt-4 w-full"
-            variant="secondary"
-            onClick={completeAuth}
-          >
-            Continue as Demo
-          </Button>
+            <Button
+              className="h-11 w-full text-sm font-semibold"
+              variant="secondary"
+              onClick={completeAuth}
+            >
+              Continue as Demo
+            </Button>
+          </div>
         </div>
       </div>
     </div>

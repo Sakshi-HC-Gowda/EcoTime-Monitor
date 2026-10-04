@@ -291,27 +291,26 @@ export function DashboardPage() {
   /* ------------------------------------------------------------------------ */
 
   return (
-    <div className="page-shell page-stack max-w-[1680px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+    <div className="page-shell page-stack" style={{ maxWidth: '1440px' }}>
       {/* ------------------------------------------------------------------ */}
       {/* Header                                                             */}
       {/* ------------------------------------------------------------------ */}
 
-      <div className="flex flex-col gap-4 rounded-2xl border border-white/[0.07] bg-gradient-to-r from-[#0b1424] via-[#09111e] to-[#070c14] p-6 shadow-xl backdrop-blur-md sm:p-7 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-6 rounded-2xl border border-white/[0.07] bg-gradient-to-r from-[#0b1424] via-[#09111e] to-[#070c14] p-8 shadow-xl backdrop-blur-md sm:p-10 lg:flex-row lg:items-center lg:justify-between mb-8">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
+          <h1 className="flex items-center gap-3 text-3xl font-extrabold tracking-tight text-white sm:text-4xl mb-2">
             Good Evening, Sakshi!{' '}
             <span className="inline-block animate-pulse">
               👋
             </span>
           </h1>
 
-          <p className="mt-1 text-xs font-medium text-slate-400 sm:text-sm">
-            Let's make your digital work
-            greener today.
+          <p className="mt-2 text-sm font-medium text-slate-400 sm:text-base">
+            Let's make your digital work greener today.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-4">
           {/* Date */}
           <div className="flex items-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.04] px-3.5 py-2 text-xs font-semibold text-slate-300">
             <Calendar
@@ -424,9 +423,9 @@ export function DashboardPage() {
       {/* Main Content Grid                                                  */}
       {/* ------------------------------------------------------------------ */}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* Left Column */}
-        <div className="space-y-6 lg:col-span-8">
+      <div className="grid grid-cols-1 gap-8 xl:grid-cols-12">
+        {/* Left Column — ~67% */}
+        <div className="space-y-8 xl:col-span-8">
           {/* -------------------------------------------------------------- */}
           {/* Carbon Forecast                                                */}
           {/* -------------------------------------------------------------- */}
@@ -461,7 +460,7 @@ export function DashboardPage() {
               </span>
             </div>
 
-            <div className="h-[280px] w-full">
+            <div className="h-[340px] w-full">
               <ResponsiveContainer
                 width="100%"
                 height="100%"
@@ -638,7 +637,8 @@ export function DashboardPage() {
         {/* Right Column                                                     */}
         {/* ---------------------------------------------------------------- */}
 
-        <div className="space-y-6 lg:col-span-4">
+        {/* Right Column — ~33% */}
+        <div className="space-y-8 xl:col-span-4">
           {/* -------------------------------------------------------------- */}
           {/* Activity Lifecycle                                             */}
           {/* -------------------------------------------------------------- */}
@@ -651,14 +651,14 @@ export function DashboardPage() {
             className="cursor-pointer p-6"
           >
             <div className="mb-4 flex items-center justify-between">
-              <h4 className="text-sm font-bold text-white">
+              <h4 className="text-base font-bold text-white">
                 Activity Lifecycle
               </h4>
 
               <ArrowRight className="h-4 w-4 text-slate-500" />
             </div>
 
-            <div className="relative flex h-44 items-center justify-center">
+            <div className="relative flex h-56 items-center justify-center my-4">
               <ResponsiveContainer
                 width="100%"
                 height="100%"
@@ -668,8 +668,8 @@ export function DashboardPage() {
                     data={pieData}
                     cx="50%"
                     cy="50%"
-                    innerRadius={55}
-                    outerRadius={75}
+                    innerRadius={70}
+                    outerRadius={95}
                     paddingAngle={4}
                     dataKey="value"
                   >
@@ -687,61 +687,61 @@ export function DashboardPage() {
               </ResponsiveContainer>
 
               <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-                <span className="text-2xl font-black text-white">
+                <span className="text-3xl font-black text-white">
                   {totalTasksCount}
                 </span>
 
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                <span className="text-xs mt-1 font-semibold uppercase tracking-wider text-slate-400">
                   Total Activities
                 </span>
               </div>
             </div>
 
-            <div className="mt-2 grid grid-cols-2 gap-2.5 text-xs">
-              <div className="flex items-center gap-2 rounded-xl border border-blue-500/20 bg-blue-500/10 p-2.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />
+            <div className="mt-6 grid grid-cols-2 gap-4 text-xs">
+              <div className="flex items-center gap-3 rounded-xl border border-blue-500/20 bg-blue-500/10 p-3">
+                <span className="h-3 w-3 rounded-full bg-blue-500" />
 
                 <span className="font-medium text-slate-300">
-                  Pending:
+                  Pending
                 </span>
 
-                <span className="ml-auto font-bold text-white">
+                <span className="ml-auto font-bold text-white text-sm">
                   {pendingCount}
                 </span>
               </div>
 
-              <div className="flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 p-2.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
+              <div className="flex items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3">
+                <span className="h-3 w-3 rounded-full bg-amber-500" />
 
                 <span className="font-medium text-slate-300">
-                  Scheduled:
+                  Scheduled
                 </span>
 
-                <span className="ml-auto font-bold text-white">
+                <span className="ml-auto font-bold text-white text-sm">
                   {scheduledCount}
                 </span>
               </div>
 
-              <div className="flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-2.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+              <div className="flex items-center gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
+                <span className="h-3 w-3 rounded-full bg-emerald-500" />
 
                 <span className="font-medium text-slate-300">
-                  Running:
+                  Running
                 </span>
 
-                <span className="ml-auto font-bold text-white">
+                <span className="ml-auto font-bold text-white text-sm">
                   {runningCount}
                 </span>
               </div>
 
-              <div className="flex items-center gap-2 rounded-xl border border-slate-500/20 bg-slate-500/10 p-2.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-slate-500" />
+              <div className="flex items-center gap-3 rounded-xl border border-slate-500/20 bg-slate-500/10 p-3">
+                <span className="h-3 w-3 rounded-full bg-slate-500" />
 
                 <span className="font-medium text-slate-300">
-                  Completed:
+                  Completed
                 </span>
 
-                <span className="ml-auto font-bold text-white">
+                <span className="ml-auto font-bold text-white text-sm">
                   {completedCount}
                 </span>
               </div>

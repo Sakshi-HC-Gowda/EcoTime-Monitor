@@ -104,20 +104,20 @@ const NAV_SECTIONS = [
         color: 'text-purple-400',
       },
       {
-        label: 'Energy Insights',
-        to: '/energy',
+        label: 'Forecast',
+        to: '/forecast',
         icon: Zap,
         color: 'text-amber-400',
       },
       {
-        label: 'AI Recommendations',
-        to: '/recommendations',
+        label: 'Green Windows',
+        to: '/windows',
         icon: Brain,
         color: 'text-violet-400',
       },
       {
         label: 'Schedule',
-        to: '/schedule',
+        to: '/scheduler',
         icon: CalendarClock,
         color: 'text-teal-400',
       },
@@ -128,7 +128,7 @@ const NAV_SECTIONS = [
     items: [
       {
         label: 'Impact',
-        to: '/impact',
+        to: '/sustainability',
         icon: Leaf,
         color: 'text-green-400',
       },
@@ -192,13 +192,12 @@ function NavItem({
       title={collapsed ? item.label : undefined}
       className={({ isActive }) =>
         [
-          'group relative flex items-center rounded-xl border transition-all duration-200',
-          collapsed
-            ? 'mx-auto h-11 w-11 justify-center'
-            : 'w-full gap-3 px-3 py-2.5',
+          'group relative flex items-center rounded-xl border transition-all duration-300',
+          collapsed ? 'w-11' : 'w-[calc(100%-28px)]',
+          'mx-[14px] h-11',
           isActive
-            ? 'border-white/[0.08] bg-white/[0.06] text-white shadow-sm'
-            : 'border-transparent text-slate-400 hover:bg-white/[0.035] hover:text-white',
+            ? 'border-green-500/30 bg-green-500/[0.08] text-white shadow-sm'
+            : 'border-transparent text-slate-400 hover:bg-white/[0.04] hover:text-white',
         ].join(' ')
       }
     >
@@ -211,34 +210,38 @@ function NavItem({
             />
           )}
 
-          <Icon
-            size={collapsed ? 19 : 16}
-            strokeWidth={isActive ? 2.2 : 1.9}
-            className={`flex-shrink-0 transition-colors ${
-              isActive ? item.color : 'text-slate-500 group-hover:text-slate-300'
+          <div className="flex w-11 flex-shrink-0 items-center justify-center">
+            <Icon
+              size={19}
+              strokeWidth={isActive ? 2.2 : 1.9}
+              className={`transition-colors ${
+                isActive ? item.color : 'text-slate-500 group-hover:text-slate-300'
+              }`}
+            />
+          </div>
+
+          <div
+            className={`flex flex-1 items-center overflow-hidden transition-all duration-300 ${
+              collapsed ? 'w-0 opacity-0' : 'opacity-100'
             }`}
-          />
+          >
+            <span
+              className={`min-w-0 flex-1 truncate text-[13px] font-medium ${
+                isActive ? 'text-white' : ''
+              }`}
+            >
+              {item.label}
+            </span>
 
-          {!collapsed && (
-            <>
-              <span
-                className={`min-w-0 flex-1 truncate text-[13px] font-medium ${
-                  isActive ? 'text-white' : ''
-                }`}
-              >
-                {item.label}
-              </span>
-
-              <ChevronRight
-                size={14}
-                className={`flex-shrink-0 transition-all ${
-                  isActive
-                    ? 'translate-x-0 text-slate-400 opacity-100'
-                    : '-translate-x-1 text-slate-600 opacity-0 group-hover:translate-x-0 group-hover:opacity-100'
-                }`}
-              />
-            </>
-          )}
+            <ChevronRight
+              size={14}
+              className={`flex-shrink-0 mx-3 transition-all ${
+                isActive
+                  ? 'translate-x-0 text-slate-400 opacity-100'
+                  : '-translate-x-1 text-slate-600 opacity-0 group-hover:translate-x-0 group-hover:opacity-100'
+              }`}
+            />
+          </div>
 
           {collapsed && (
             <span className="pointer-events-none absolute left-full z-50 ml-3 hidden whitespace-nowrap rounded-lg border border-white/[0.08] bg-slate-900 px-3 py-2 text-xs font-semibold text-white shadow-xl group-hover:block">
@@ -455,15 +458,9 @@ export function AppLayout() {
       : collapsed;
 
     return (
-      <div className="flex h-full flex-col">
+      <div className="flex h-full flex-col overflow-x-hidden">
         {/* Logo */}
-        <div
-          className={`flex h-[76px] items-center ${
-            sidebarCollapsed
-              ? 'justify-center px-3'
-              : 'justify-between px-5'
-          }`}
-        >
+        <div className="flex h-[76px] items-center pl-[18px]">
           <Logo
             collapsed={sidebarCollapsed}
             showSubtitle={!sidebarCollapsed}
@@ -474,7 +471,7 @@ export function AppLayout() {
             <button
               type="button"
               onClick={() => setMobileMenuOpen(false)}
-              className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-white/[0.05] hover:text-white"
+              className="ml-auto mr-3 flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-white/[0.05] hover:text-white"
               aria-label="Close menu"
             >
               <X size={18} />
@@ -483,23 +480,24 @@ export function AppLayout() {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto px-3 pb-4">
+        <nav className="flex-1 overflow-y-auto pb-4 overflow-x-hidden">
           {NAV_SECTIONS.map((section) => (
             <div
               key={section.label}
               className="mb-5"
             >
-              {!sidebarCollapsed && (
-                <p className="mb-2 px-3 text-[9px] font-bold uppercase tracking-[0.16em] text-slate-600">
-                  {section.label}
-                </p>
-              )}
+              <div className="relative h-6 w-full mb-2">
+                <div className={`absolute inset-0 flex items-center transition-opacity duration-300 ${sidebarCollapsed ? 'opacity-0' : 'opacity-100'}`}>
+                  <p className="px-[26px] text-[9px] font-bold uppercase tracking-[0.16em] text-slate-600 whitespace-nowrap">
+                    {section.label}
+                  </p>
+                </div>
+                <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${sidebarCollapsed ? 'opacity-100' : 'opacity-0'}`}>
+                  <div className="h-px w-6 bg-white/[0.05]" />
+                </div>
+              </div>
 
-              {sidebarCollapsed && (
-                <div className="mx-auto mb-2 h-px w-6 bg-white/[0.05]" />
-              )}
-
-              <div className="space-y-1">
+              <div className="space-y-3">
                 {section.items.map((item) => (
                   <NavItem
                     key={item.to}
@@ -518,15 +516,16 @@ export function AppLayout() {
 
           {/* Settings */}
           <div className="mb-5">
-            {!sidebarCollapsed && (
-              <p className="mb-2 px-3 text-[9px] font-bold uppercase tracking-[0.16em] text-slate-600">
-                System
-              </p>
-            )}
-
-            {sidebarCollapsed && (
-              <div className="mx-auto mb-2 h-px w-6 bg-white/[0.05]" />
-            )}
+            <div className="relative h-6 w-full mb-2">
+              <div className={`absolute inset-0 flex items-center transition-opacity duration-300 ${sidebarCollapsed ? 'opacity-0' : 'opacity-100'}`}>
+                <p className="px-[26px] text-[9px] font-bold uppercase tracking-[0.16em] text-slate-600 whitespace-nowrap">
+                  System
+                </p>
+              </div>
+              <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${sidebarCollapsed ? 'opacity-100' : 'opacity-0'}`}>
+                <div className="h-px w-6 bg-white/[0.05]" />
+              </div>
+            </div>
 
             <NavItem
               item={{
@@ -546,82 +545,87 @@ export function AppLayout() {
         </nav>
 
         {/* Bottom sidebar section */}
-        <div className="border-t border-white/[0.05] p-3">
-          {!sidebarCollapsed ? (
-            <div className="space-y-3">
-              {/* System status */}
-              <div className="rounded-xl border border-white/[0.05] bg-white/[0.02] px-3 py-2.5">
+        <div className="border-t border-white/[0.05] py-3 overflow-x-hidden">
+          <div className="flex flex-col gap-2.5">
+            {/* System status */}
+            {!sidebarCollapsed && (
+              <div className="w-[calc(100%-28px)] mx-[14px] rounded-xl border border-white/[0.05] bg-white/[0.02] px-3 py-2.5 whitespace-nowrap animate-in fade-in duration-300">
                 <div className="flex items-center gap-2">
-                  <span className="relative flex h-2 w-2">
+                  <span className="relative flex h-2 w-2 flex-shrink-0">
                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-50" />
                     <span className="relative inline-flex h-2 w-2 rounded-full bg-green-400" />
                   </span>
 
-                  <span className="text-[11px] font-semibold text-slate-300">
+                  <span className="text-[11px] font-semibold text-slate-300 truncate">
                     System operational
                   </span>
                 </div>
 
-                <p className="mt-1 pl-4 text-[10px] text-slate-600">
+                <p className="mt-1 pl-4 text-[10px] text-slate-600 truncate">
                   Carbon monitoring active
                 </p>
               </div>
+            )}
 
-              {/* Help */}
-              <button
-                type="button"
-                onClick={() => setHelpOpen(true)}
-                className="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-slate-500 transition hover:bg-white/[0.035] hover:text-white"
-              >
+            {/* Help */}
+            <button
+              type="button"
+              onClick={() => setHelpOpen(true)}
+              className={`group relative flex items-center rounded-xl text-slate-500 transition hover:bg-white/[0.035] hover:text-white ${
+                sidebarCollapsed ? 'w-11' : 'w-[calc(100%-28px)]'
+              } mx-[14px] h-11`}
+            >
+              <div className="flex w-11 flex-shrink-0 items-center justify-center">
                 <HelpCircle
-                  size={16}
+                  size={19}
                   className="flex-shrink-0"
                 />
+              </div>
 
-                <span className="flex-1 text-[12px] font-medium">
+              <div
+                className={`flex flex-1 items-center overflow-hidden transition-all duration-300 ${
+                  sidebarCollapsed ? 'w-0 opacity-0' : 'opacity-100'
+                }`}
+              >
+                <span className="flex-1 text-[12px] font-medium whitespace-nowrap text-left">
                   Help & Feedback
                 </span>
 
                 <ChevronRight
                   size={14}
-                  className="opacity-0 transition group-hover:opacity-100"
+                  className="flex-shrink-0 mx-3 opacity-0 transition group-hover:opacity-100"
                 />
-              </button>
+              </div>
 
-              {/* Sustainability card */}
-              <div className="overflow-hidden rounded-2xl border border-green-500/[0.12] bg-gradient-to-br from-green-500/[0.08] to-teal-500/[0.04] p-3">
-                <div className="mb-2 flex items-center gap-2">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-green-500/10">
+              {sidebarCollapsed && (
+                <span className="pointer-events-none absolute left-full z-50 ml-3 hidden whitespace-nowrap rounded-lg border border-white/[0.08] bg-slate-900 px-3 py-2 text-xs font-semibold text-white shadow-xl group-hover:block">
+                  Help & Feedback
+                </span>
+              )}
+            </button>
+
+            {/* Sustainability card */}
+            {!sidebarCollapsed && (
+              <div className="w-[calc(100%-28px)] mx-[14px] overflow-hidden rounded-2xl border border-green-500/[0.12] bg-gradient-to-br from-green-500/[0.08] to-teal-500/[0.04] p-3 animate-in fade-in duration-300">
+                <div className="mb-2 flex items-center gap-2 whitespace-nowrap">
+                  <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-green-500/10">
                     <Leaf
                       size={14}
                       className="text-green-400"
                     />
                   </div>
 
-                  <span className="text-[11px] font-bold text-green-300">
+                  <span className="text-[11px] font-bold text-green-300 truncate">
                     Think Green
                   </span>
                 </div>
 
-                <p className="text-[10px] leading-relaxed text-slate-500">
+                <p className="text-[10px] leading-relaxed text-slate-500 line-clamp-2">
                   Schedule energy-intensive work during cleaner grid windows.
                 </p>
               </div>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setHelpOpen(true)}
-              title="Help & Feedback"
-              className="group relative mx-auto flex h-11 w-11 items-center justify-center rounded-xl text-slate-500 transition hover:bg-white/[0.035] hover:text-white"
-            >
-              <HelpCircle size={18} />
-
-              <span className="pointer-events-none absolute left-full z-50 ml-3 hidden whitespace-nowrap rounded-lg border border-white/[0.08] bg-slate-900 px-3 py-2 text-xs font-semibold text-white shadow-xl group-hover:block">
-                Help & Feedback
-              </span>
-            </button>
-          )}
+            )}
+          </div>
         </div>
       </div>
     );
@@ -639,7 +643,7 @@ export function AppLayout() {
 
       <aside
         className={`fixed inset-y-0 left-0 z-40 hidden border-r border-white/[0.05] bg-[#080e1a] transition-[width] duration-300 lg:block ${
-          collapsed ? 'w-[72px]' : 'w-[260px]'
+          collapsed ? 'sidebar-collapsed' : 'sidebar-expanded'
         }`}
       >
         <SidebarContent />
@@ -713,14 +717,12 @@ export function AppLayout() {
 
       <div
         className={`min-h-screen transition-[padding] duration-300 ${
-          collapsed
-            ? 'lg:pl-[72px]'
-            : 'lg:pl-[260px]'
+          collapsed ? 'main-offset-collapsed' : 'main-offset-expanded'
         }`}
       >
         {/* Header */}
         <header className="sticky top-0 z-30 border-b border-white/[0.05] bg-[#070a13]/90 backdrop-blur-xl">
-          <div className="flex h-[68px] items-center gap-3 px-4 sm:px-6 lg:px-8">
+          <div className="flex h-[72px] items-center gap-6 px-6 lg:px-10">
             {/* Mobile menu button */}
             <button
               type="button"
@@ -1021,7 +1023,7 @@ export function AppLayout() {
         <LocationBanner />
 
         {/* Page content */}
-        <main className="min-h-[calc(100vh-68px)] px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-7">
+        <main className="min-h-[calc(100vh-68px)]">
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}

@@ -37,7 +37,9 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 
 type CustomTooltipProps = {
   active?: boolean;
-  payload?: readonly { value?: number | string | readonly (number | string)[] }[];
+  payload?: ReadonlyArray<{
+    value?: number | string | readonly (number | string)[];
+  }>;
   label?: string | number;
 };
 

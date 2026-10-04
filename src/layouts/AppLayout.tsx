@@ -26,8 +26,8 @@ import {
 import type { ForwardRefExoticComponent, RefAttributes } from 'react';
 import { LocationBanner } from '@/features/carbon/components/LocationBanner';
 import { Logo } from '@/components/ui/Logo';
+import { useAuth } from '@/features/auth/AuthProvider';
 import { useZone } from '@/app/ZoneProvider';
-import { AUTH_STORAGE_KEY } from '@/components/auth/AuthGuard';
 
 interface NavItemDef {
   label: string;
@@ -165,6 +165,7 @@ function NavItem({
 export function AppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const { selectedZone } = useZone();
 
   // Collapsible Sidebar State
@@ -245,9 +246,14 @@ export function AppLayout() {
     year: 'numeric',
   });
 
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
   return (
     <div className="flex h-screen bg-[#070c13] text-slate-100 overflow-hidden font-sans">
-      
+
       {/* ── Desktop Sidebar ──────────────────────────────────────────────────── */}
       <aside
         className={`hidden md:flex flex-col bg-[#080e1a] border-r border-white/[0.06] relative z-20 transition-all duration-300 ${
@@ -331,10 +337,10 @@ export function AppLayout() {
 
       {/* ── Main Content Area ─────────────────────────────────────────────────── */}
       <main className="flex-1 flex flex-col overflow-hidden min-w-0 bg-[#070c13]">
-        
+
         {/* Top Header Bar */}
         <header className="flex-shrink-0 h-16 flex items-center justify-between px-4 sm:px-6 lg:px-8 border-b border-white/[0.06] bg-[#080e1a]/95 backdrop-blur-md z-30 gap-4 relative">
-          
+
           {/* Mobile Drawer Hamburger Button */}
           <div className="flex items-center gap-3 md:hidden">
             <button
@@ -365,13 +371,26 @@ export function AppLayout() {
 
           {/* Right Header Controls */}
           <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">
-            
+
             {/* Live Telemetry Date/Location */}
             <div className="hidden lg:flex items-center gap-3 text-xs text-slate-400 border-r border-white/[0.06] pr-4">
               <span className="font-semibold text-slate-200">{todayFormatted}</span>
               <span className="text-slate-600">•</span>
               <span className="text-slate-400">Karnataka, India ({selectedZone})</span>
             </div>
+            <div className="hidden xl:flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[11px] text-slate-300">
+              <span className="font-semibold text-white">{user?.firstName ?? 'Member'}</span>
+              <span className="text-slate-500">•</span>
+              <span>{user?.organization?.name ?? 'Organization'}</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-medium text-slate-200 transition hover:border-white/20 hover:bg-white/10"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              Sign out
+            </button>
 
             {/* Live Monitoring Badge */}
             <div className="hidden sm:flex items-center gap-2 h-9 px-3.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px] font-bold shadow-sm">
@@ -456,11 +475,13 @@ export function AppLayout() {
                 className="flex items-center gap-2.5 p-1 sm:pr-3 rounded-xl hover:bg-white/[0.06] border border-white/[0.08] transition-all focus-visible:outline-none cursor-pointer"
               >
                 <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-400 flex items-center justify-center font-black text-xs text-slate-950 shadow-md">
-                  S
+                  {(user?.firstName?.[0] ?? user?.email?.[0] ?? 'M').toUpperCase()}
                 </div>
                 <div className="hidden sm:flex flex-col text-left leading-tight">
-                  <span className="text-xs font-bold text-slate-200">Sakshi H.C</span>
-                  <span className="text-[10px] text-slate-400">Student</span>
+                  <span className="text-xs font-bold text-slate-200">
+                    {[user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Member'}
+                  </span>
+                  <span className="text-[10px] text-slate-400">{user?.role?.name ?? user?.email}</span>
                 </div>
               </button>
 
@@ -475,8 +496,10 @@ export function AppLayout() {
                     className="absolute right-0 top-full mt-3 w-60 rounded-2xl bg-[#0c1322] border border-white/[0.12] shadow-2xl z-50 overflow-hidden p-2 space-y-1"
                   >
                     <div className="px-3.5 py-3 border-b border-white/[0.06] mb-1">
-                      <p className="text-xs font-bold text-white">Sakshi H.C</p>
-                      <p className="text-[10px] text-slate-400">sakshi@ecotime.dev</p>
+                      <p className="text-xs font-bold text-white">
+                        {[user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Member'}
+                      </p>
+                      <p className="text-[10px] text-slate-400">{user?.email}</p>
                     </div>
                     <button
                       onClick={() => {
@@ -511,7 +534,7 @@ export function AppLayout() {
                     <div className="border-t border-white/[0.06] my-1" />
                     <button
                       onClick={() => {
-                        localStorage.removeItem(AUTH_STORAGE_KEY);
+                        logout();
                         setProfileOpen(false);
                         navigate('/login');
                       }}

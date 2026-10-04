@@ -13,8 +13,10 @@ import logging
 import os
 from datetime import datetime, timezone
 from flask import Blueprint, request, jsonify
+from auth_utils import require_auth, require_organization_admin
 
 from extensions import db
+from models.activity import Activity
 from models.simulation_config import SimulationConfig
 from models.analytics_recommendation import AnalyticsRecommendation
 from services.optimizer_service import compute_eco_score, run_scheduler, compute_savings_summary
@@ -50,6 +52,7 @@ def _get_simulation_config() -> SimulationConfig:
 # ---------------------------------------------------------------------------
 
 @optimizer_bp.route("/scheduler", methods=["POST"])
+@require_auth
 def schedule():
     """
     Run optimization algorithm to assign tasks to a green window.
@@ -107,6 +110,18 @@ def schedule():
             "timestamp": _now_iso(),
         }), 400
 
+    task_ids = {task.get("id") for task in tasks if isinstance(task, dict) and task.get("id")}
+    owned_count = Activity.query.filter(
+        Activity.organization_id == request.user.organization_id,
+        Activity.id.in_(task_ids or {""}),
+    ).count()
+    if owned_count != len(task_ids):
+        return jsonify({
+            "success": False,
+            "error": "Scheduler tasks must belong to your organization",
+            "timestamp": _now_iso(),
+        }), 403
+
     logger.info(
         "POST /api/scheduler method=%s tasks=%d window=%s",
         method, len(tasks), window.get("id", "?")
@@ -140,6 +155,7 @@ def schedule():
             expected_carbon_saving=savings["totalSavedCo2"],
             expected_energy_saving=round(total_energy_kwh, 4),
             status="accepted",
+            organization_id=request.user.organization_id,
         )
     except Exception:
         logger.exception("Failed to log scheduling recommendation")
@@ -153,13 +169,12 @@ def schedule():
         },
         "timestamp": _now_iso(),
     }), 200
-
-
 # ---------------------------------------------------------------------------
 # EcoScore
 # ---------------------------------------------------------------------------
 
 @optimizer_bp.route("/eco-score", methods=["GET"])
+@require_auth
 def eco_score():
     """
     Calculate EcoScore for a task given current grid conditions.
@@ -193,7 +208,13 @@ def eco_score():
     peak = request.args.get("peakIntensity", 800.0, type=float)
 
     # Try to fetch task from store; if not found, use a generic flexible task
-    persisted_task = get_activity(task_id)
+    persisted_task = get_activity(task_id, request.user.organization_id)
+    if Activity.query.filter_by(id=task_id).first() is not None and persisted_task is None:
+        return jsonify({
+            "success": False,
+            "error": "Activity does not belong to your organization",
+            "timestamp": _now_iso(),
+        }), 403
     task = persisted_task or {
         "id": task_id,
         "type": "flexible",
@@ -232,6 +253,7 @@ def eco_score():
             expected_carbon_saving=expected_carbon,
             expected_energy_saving=expected_energy,
             status="pending",
+            organization_id=request.user.organization_id,
         )
     except Exception:
         logger.exception("Failed to log eco-score recommendation")
@@ -248,6 +270,7 @@ def eco_score():
 # ---------------------------------------------------------------------------
 
 @optimizer_bp.route("/config/simulation", methods=["POST"])
+@require_organization_admin
 def set_config():
     """
     Update simulation configuration parameters.
@@ -288,6 +311,7 @@ def set_config():
 
 
 @optimizer_bp.route("/config/simulation", methods=["GET"])
+@require_auth
 def get_config():
     """
     Retrieve current simulation configuration.
@@ -306,6 +330,7 @@ def get_config():
 # ---------------------------------------------------------------------------
 
 @optimizer_bp.route("/analytics/recommendations", methods=["GET"])
+@require_auth
 def get_recommendations():
     """
     Retrieve stored analytics recommendations.
@@ -318,11 +343,14 @@ def get_recommendations():
     limit = min(request.args.get("limit", 50, type=int), 200)
     try:
         recs = (
-            AnalyticsRecommendation.query.order_by(AnalyticsRecommendation.created_at.desc())
+            AnalyticsRecommendation.query.filter_by(
+                organization_id=request.user.organization_id
+            )
+            .order_by(AnalyticsRecommendation.created_at.desc())
             .limit(limit)
             .all()
         )
-        data = [r.to_dict() for r in recs]
+        data = [recommendation.to_dict() for recommendation in recs]
     except Exception as exc:
         logger.warning("Could not fetch analytics recommendations: %s", exc)
         data = []

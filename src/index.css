@@ -121,17 +121,17 @@
   --shadow-purple: 0 0 25px -5px rgba(168, 85, 247, 0.4);
 
   /* Design system tokens */
-  --container-app: 80rem;
+  --container-app: 90rem;
   --container-readable: 56rem;
   --container-narrow: 48rem;
   --container-page-gutter: clamp(1rem, 2.5vw, 2rem);
   --grid-gap: var(--space-5);
   --section-gap: var(--space-6);
-  --card-padding-sm: 18px;
+  --card-padding-sm: 20px;
   --card-padding-md: 28px;
-  --card-padding-lg: var(--space-8);
-  --radius-card: var(--radius-md);
-  --radius-control: var(--radius-sm);
+  --card-padding-lg: 32px;
+  --radius-card: var(--radius-xl);
+  --radius-control: var(--radius-md);
   --radius-pill: 999px;
   --icon-xs: 0.75rem;
   --icon-sm: 0.875rem;
@@ -141,7 +141,25 @@
   --duration-fast: 150ms;
   --duration-normal: 220ms;
   --duration-slow: 360ms;
+
+  /* Sidebar width tokens — single source of truth for sidebar + main-content offset */
+  --sidebar-w-collapsed: 72px;
+  --sidebar-w-expanded: 240px;
 }
+
+/* ─── Sidebar width + main-content offset ─────────────────────────────────── */
+/* Both sets of classes consume the SAME variables so they can never drift.    */
+
+.sidebar-collapsed  { width: var(--sidebar-w-collapsed); }
+.sidebar-expanded   { width: var(--sidebar-w-expanded); }
+
+/* Main-content left padding is only applied at the lg breakpoint (≥1024px),  */
+/* because below that the desktop sidebar is hidden (lg:block on the aside).   */
+@media (min-width: 1024px) {
+  .main-offset-collapsed { padding-left: var(--sidebar-w-collapsed); }
+  .main-offset-expanded  { padding-left: var(--sidebar-w-expanded); }
+}
+
 
 * {
   box-sizing: border-box;
@@ -1159,16 +1177,27 @@ select option {
 /* ─── Design System Utilities ─────────────────────────────────────────────── */
 
 .page-shell {
-  width: min(100% - (var(--container-page-gutter) * 2), var(--container-app));
-  padding-top: var(--space-10);
+  width: 100%;
+  max-width: var(--container-app);
+  padding-top: var(--space-8);
   padding-bottom: var(--space-10);
+  padding-left: var(--container-page-gutter);
+  padding-right: var(--container-page-gutter);
   margin-left: auto;
   margin-right: auto;
 }
 
+@media (min-width: 1024px) {
+  .page-shell {
+    padding-left: clamp(1.5rem, 3vw, 3rem);
+    padding-right: clamp(1.5rem, 3vw, 3rem);
+    padding-top: var(--space-10);
+  }
+}
+
 @media (max-width: 768px) {
   .page-shell {
-    padding-top: var(--space-8);
+    padding-top: var(--space-6);
     padding-bottom: var(--space-8);
   }
 }
@@ -1184,7 +1213,7 @@ select option {
 .page-stack {
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
+  gap: var(--space-8);
 }
 
 .section-stack {

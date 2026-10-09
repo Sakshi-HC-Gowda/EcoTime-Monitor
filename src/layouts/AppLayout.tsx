@@ -36,7 +36,7 @@ interface NavItemDef {
   color: string;
 }
 
-// ─── Nav Structure matching inspiration image ──────────────────────────────
+// ─── Nav Structure ──────────────────────────────────────────────────────
 const NAV_SECTIONS: { label: string; items: NavItemDef[] }[] = [
   {
     label: 'MONITOR',
@@ -131,29 +131,46 @@ function NavItem({
       onClick={onClick}
       title={collapsed ? label : undefined}
       className={({ isActive }) => `
-        group relative flex items-center gap-3.5
-        ${collapsed ? 'justify-center px-2 py-3 mx-auto w-11 h-11' : 'px-4 py-3'}
+        group relative flex items-center mx-auto
+        ${collapsed ? 'w-11' : 'w-[calc(100%-28px)]'}
+        h-11
         rounded-2xl text-[13px] font-medium
-        transition-all duration-200
+        transition-[width,background-color,border-color,color,box-shadow] duration-300
         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40
         ${
           isActive
             ? 'active bg-[#064e3b]/80 text-emerald-400 border border-emerald-500/40 shadow-[0_0_20px_rgba(16,185,129,0.25)] font-semibold'
-            : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.05]'
+            : 'text-slate-400 border border-transparent hover:text-slate-200 hover:bg-white/[0.05]'
         }
       `}
     >
       {({ isActive }) => (
         <>
-          <Icon
-            size={19}
-            className={`flex-shrink-0 transition-colors ${
-              isActive ? 'text-emerald-400' : 'text-slate-400 group-hover:text-slate-200'
-            }`}
-          />
-          {!collapsed && <span className="flex-1 truncate leading-none">{label}</span>}
-          {!collapsed && isActive && (
-            <ChevronRight size={14} className="text-emerald-400 opacity-80 flex-shrink-0" />
+          <div className="flex w-11 h-11 flex-shrink-0 items-center justify-center">
+            <Icon
+              size={19}
+              className={`transition-colors ${
+                isActive ? 'text-emerald-400' : 'text-slate-400 group-hover:text-slate-200'
+              }`}
+            />
+          </div>
+
+          <div className={`flex flex-1 items-center overflow-hidden transition-all duration-300 ${collapsed ? 'w-0 opacity-0' : 'opacity-100'}`}>
+            <span className="flex-1 truncate leading-none">{label}</span>
+            <ChevronRight
+              size={14}
+              className={`flex-shrink-0 mx-3 transition-all ${
+                isActive
+                  ? 'translate-x-0 text-emerald-400 opacity-80'
+                  : '-translate-x-1 text-slate-500 opacity-0 group-hover:translate-x-0 group-hover:opacity-100'
+              }`}
+            />
+          </div>
+
+          {collapsed && (
+            <span className="pointer-events-none absolute left-[calc(100%+12px)] z-50 hidden whitespace-nowrap rounded-lg border border-white/[0.08] bg-[#0c1322] px-3 py-2 text-xs font-semibold text-white shadow-xl group-hover:block">
+              {label}
+            </span>
           )}
         </>
       )}
@@ -161,7 +178,7 @@ function NavItem({
   );
 }
 
-// ─── AppLayout Component ──────────────────────────────────────────────────────
+// â”€â”€â”€ AppLayout Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export function AppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -238,7 +255,7 @@ export function AppLayout() {
     setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
   };
 
-  // Formatted date string (matches inspiration screenshot)
+  // Formatted date string
   const todayFormatted = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
     day: 'numeric',
@@ -254,14 +271,14 @@ export function AppLayout() {
   return (
     <div className="flex h-screen bg-[#070c13] text-slate-100 overflow-hidden font-sans">
 
-      {/* ── Desktop Sidebar ──────────────────────────────────────────────────── */}
+      {/* â”€â”€ Desktop Sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <aside
-        className={`hidden md:flex flex-col bg-[#080e1a] border-r border-white/[0.06] relative z-20 transition-all duration-300 ${
-          collapsed ? 'w-[72px]' : 'w-[260px]'
+        className={`hidden md:flex flex-col flex-shrink-0 bg-[#080e1a] border-r border-white/[0.06] relative z-20 transition-[width] duration-300 ${
+          collapsed ? 'sidebar-collapsed' : 'sidebar-expanded'
         }`}
       >
         {/* Logo Header */}
-        <div className={`py-5 flex items-center border-b border-white/[0.06] ${collapsed ? 'justify-center px-2' : 'justify-between px-5'}`}>
+        <div className={`py-5 flex items-center border-b border-white/[0.06] transition-all duration-300 ${collapsed ? 'justify-center px-2 flex-col gap-4' : 'justify-between px-5'}`}>
           <Logo size="md" to="/dashboard" collapsed={collapsed} showSubtitle={!collapsed} />
           <button
             onClick={toggleSidebar}
@@ -274,16 +291,15 @@ export function AppLayout() {
         </div>
 
         {/* Scrollable Nav Sections */}
-        <nav className="flex-1 px-4 py-6 overflow-y-auto space-y-6 custom-scrollbar">
+        <nav className="flex-1 py-6 overflow-y-auto space-y-6 custom-scrollbar overflow-x-hidden">
           {NAV_SECTIONS.map((section) => (
             <div key={section.label} className="space-y-1.5">
-              {!collapsed ? (
-                <p className="px-3 text-[10px] font-extrabold text-slate-500 tracking-wider uppercase mb-2">
+              <div className={`overflow-hidden transition-all duration-300 ${collapsed ? 'h-0 opacity-0' : 'opacity-100'}`}>
+                <p className="px-5 text-[10px] font-extrabold text-slate-500 tracking-wider uppercase mb-2 truncate">
                   {section.label}
                 </p>
-              ) : (
-                <div className="h-px bg-white/[0.05] my-3" />
-              )}
+              </div>
+              {collapsed && <div className="h-px bg-white/[0.05] my-3 mx-4" />}
               <div className="space-y-1">
                 {section.items.map((item) => (
                   <NavItem key={item.href} {...item} collapsed={collapsed} />
@@ -294,7 +310,7 @@ export function AppLayout() {
         </nav>
 
         {/* Bottom Nav: Profile, Settings, Help & Motivational Card */}
-        <div className="px-4 py-4 border-t border-white/[0.06] space-y-1 flex-shrink-0 bg-[#070d18]">
+        <div className="py-4 border-t border-white/[0.06] space-y-1 flex-shrink-0 bg-[#070d18] overflow-hidden">
           {BOTTOM_NAV.map((item) => (
             <NavItem key={item.href} {...item} collapsed={collapsed} />
           ))}
@@ -304,34 +320,48 @@ export function AppLayout() {
             onClick={() => setHelpOpen(true)}
             title={collapsed ? 'Help & Feedback' : undefined}
             className={`
-              w-full group flex items-center gap-3.5
-              ${collapsed ? 'justify-center px-2 py-3 mx-auto w-11 h-11' : 'px-4 py-3'}
+              group relative flex items-center mx-auto
+              ${collapsed ? 'w-11' : 'w-[calc(100%-28px)]'}
+              h-11
               rounded-2xl text-[13px] font-medium text-slate-400 hover:text-slate-200 hover:bg-white/[0.05]
-              transition-all duration-150 focus-visible:outline-none
+              transition-[width,background-color,border-color,color,box-shadow] duration-300
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40
+              border border-transparent
             `}
           >
-            <HelpCircle size={19} className="text-slate-400 group-hover:text-slate-200 flex-shrink-0" />
-            {!collapsed && <span className="flex-1 truncate text-left">Help & Feedback</span>}
+            <div className="flex w-11 h-11 flex-shrink-0 items-center justify-center">
+              <HelpCircle size={19} className="text-slate-400 group-hover:text-slate-200 transition-colors" />
+            </div>
+
+            <div className={`flex flex-1 items-center overflow-hidden transition-all duration-300 ${collapsed ? 'w-0 opacity-0' : 'opacity-100'}`}>
+              <span className="flex-1 truncate text-left leading-none">Help & Feedback</span>
+            </div>
+
+            {collapsed && (
+              <span className="pointer-events-none absolute left-[calc(100%+12px)] z-50 hidden whitespace-nowrap rounded-lg border border-white/[0.08] bg-[#0c1322] px-3 py-2 text-xs font-semibold text-white shadow-xl group-hover:block">
+                Help & Feedback
+              </span>
+            )}
           </button>
 
           {/* Motivational Card at Bottom (Expanded Sidebar) */}
-          {!collapsed && (
-            <div className="mt-4 p-4 rounded-2xl bg-gradient-to-br from-emerald-950/70 via-[#071610] to-[#0a1e16] border border-emerald-500/25 relative overflow-hidden group shadow-lg">
+          <div className={`px-[14px] overflow-hidden transition-all duration-300 ${collapsed ? 'max-h-0 opacity-0 pointer-events-none' : 'max-h-40 opacity-100 mt-4'}`}>
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-950/70 via-[#071610] to-[#0a1e16] border border-emerald-500/25 relative group shadow-lg">
               <div className="absolute top-0 right-0 -mt-2 -mr-2 w-20 h-20 bg-emerald-500/10 rounded-full blur-2xl group-hover:bg-emerald-500/20 transition-all duration-300" />
               <div className="relative z-10">
                 <div className="flex items-center gap-2 mb-1.5">
                   <div className="w-5 h-5 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-400 shadow-sm">
                     <Leaf size={12} />
                   </div>
-                  <h5 className="text-[12px] font-bold text-emerald-300 leading-none">Small steps</h5>
+                  <h5 className="text-[12px] font-bold text-emerald-300 leading-none truncate">Small steps</h5>
                 </div>
-                <p className="text-[13px] font-black text-white mb-1 leading-tight">Big impact 🌱</p>
+                <p className="text-[13px] font-black text-white mb-1 leading-tight truncate">Big impact 🌱</p>
                 <p className="text-[11px] text-slate-400 leading-snug">
                   Schedule smart.<br />Emit less.
                 </p>
               </div>
             </div>
-          )}
+          </div>
         </div>
       </aside>
 
@@ -375,12 +405,12 @@ export function AppLayout() {
             {/* Live Telemetry Date/Location */}
             <div className="hidden lg:flex items-center gap-3 text-xs text-slate-400 border-r border-white/[0.06] pr-4">
               <span className="font-semibold text-slate-200">{todayFormatted}</span>
-              <span className="text-slate-600">•</span>
+              <span className="text-slate-600">â€¢</span>
               <span className="text-slate-400">Karnataka, India ({selectedZone})</span>
             </div>
             <div className="hidden xl:flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[11px] text-slate-300">
               <span className="font-semibold text-white">{user?.firstName ?? 'Member'}</span>
-              <span className="text-slate-500">•</span>
+              <span className="text-slate-500">â€¢</span>
               <span>{user?.organization?.name ?? 'Organization'}</span>
             </div>
             <button

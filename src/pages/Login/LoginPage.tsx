@@ -63,123 +63,150 @@ export function LoginPage() {
     }
   };
 
+  // Shared input styling from ui-update branch
+  const inputClassName =
+    'h-12 w-full rounded-xl border border-white/[0.08] bg-black/20 px-4 text-white outline-none transition-colors focus:border-green-500/50 focus:bg-black/40';
+
   return (
-    <div className="min-h-screen bg-[#070a13] flex items-center justify-center px-6">
-      <div className="w-full max-w-md rounded-3xl border border-white/10 bg-[#0f172a] p-8 shadow-2xl">
-        <div className="flex flex-col items-center mb-8 text-center">
+    <div className="flex min-h-screen items-center justify-center bg-[#070a13] px-6">
+      <div className="w-full max-w-[440px] rounded-[24px] border border-white/[0.05] bg-[#0f172a]/90 backdrop-blur-xl p-8 sm:p-10 shadow-2xl">
+        {/* Logo */}
+        <div className="mb-10 flex flex-col items-center text-center">
           <Logo size="lg" to="/" />
-          <h1 className="mt-6 text-2xl font-bold text-white">
+
+          <h1 className="mt-8 text-2xl font-extrabold text-white sm:text-3xl tracking-tight">
             {mode === 'login' ? 'Welcome Back' : 'Create Your Organization'}
           </h1>
-          <p className="mt-1.5 text-xs text-slate-400">
+
+          <p className="mt-2 text-sm text-slate-400">
             {mode === 'login'
               ? 'Sign in to access your EcoTime dashboard'
               : 'Set up your tenant and admin account'}
           </p>
         </div>
 
-        <div className="mb-5 flex rounded-xl border border-white/10 bg-[#111827] p-1">
+        {/* Login / Register Toggle */}
+        <div className="mb-6 flex rounded-xl border border-white/[0.08] bg-black/20 p-1">
           <button
             type="button"
-            onClick={() => setMode('login')}
-            className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium ${mode === 'login' ? 'bg-green-500 text-white' : 'text-slate-300'}`}
+            onClick={() => { setMode('login'); setError(''); }}
+            className={`flex-1 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors ${
+              mode === 'login'
+                ? 'bg-green-500 text-white shadow-md'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
           >
             Login
           </button>
           <button
             type="button"
-            onClick={() => setMode('register')}
-            className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium ${mode === 'register' ? 'bg-green-500 text-white' : 'text-slate-300'}`}
+            onClick={() => { setMode('register'); setError(''); }}
+            className={`flex-1 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors ${
+              mode === 'register'
+                ? 'bg-green-500 text-white shadow-md'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
           >
             Register
           </button>
         </div>
 
+        {/* Error Display */}
+        {error && (
+          <div className="mb-5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+            {error}
+          </div>
+        )}
+
         {mode === 'login' ? (
-          <form onSubmit={handleLogin} className="space-y-5">
-            <div>
-              <label className="mb-2 block text-sm text-slate-300">Email</label>
+          <form onSubmit={handleLogin} className="flex flex-col gap-5">
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-semibold text-slate-300">Email</label>
               <input
                 type="email"
                 placeholder="you@example.com"
                 value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-[#111827] px-4 py-3 text-white outline-none focus:border-green-500"
+                onChange={(e) => setEmail(e.target.value)}
+                className={inputClassName}
               />
             </div>
 
-            <div>
-              <label className="mb-2 block text-sm text-slate-300">Password</label>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-semibold text-slate-300">Password</label>
               <input
                 type="password"
                 placeholder="••••••••"
                 value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-[#111827] px-4 py-3 text-white outline-none focus:border-green-500"
+                onChange={(e) => setPassword(e.target.value)}
+                className={inputClassName}
               />
             </div>
 
-            {error ? <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">{error}</div> : null}
-
-            <Button type="submit" className="w-full" disabled={isSubmitting}>
+            <Button
+              type="submit"
+              className="mt-2 h-[52px] w-full text-base font-bold"
+              disabled={isSubmitting}
+            >
               {isSubmitting ? 'Signing In...' : 'Sign In'}
             </Button>
           </form>
         ) : (
-          <form onSubmit={handleRegister} className="space-y-4">
+          <form onSubmit={handleRegister} className="flex flex-col gap-4">
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="mb-2 block text-sm text-slate-300">First name</label>
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-semibold text-slate-300">First name</label>
                 <input
                   value={firstName}
-                  onChange={(event) => setFirstName(event.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-[#111827] px-4 py-3 text-white outline-none focus:border-green-500"
+                  onChange={(e) => setFirstName(e.target.value)}
+                  className={inputClassName}
                 />
               </div>
-              <div>
-                <label className="mb-2 block text-sm text-slate-300">Last name</label>
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-semibold text-slate-300">Last name</label>
                 <input
                   value={lastName}
-                  onChange={(event) => setLastName(event.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-[#111827] px-4 py-3 text-white outline-none focus:border-green-500"
+                  onChange={(e) => setLastName(e.target.value)}
+                  className={inputClassName}
                 />
               </div>
             </div>
 
-            <div>
-              <label className="mb-2 block text-sm text-slate-300">Organization name</label>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-semibold text-slate-300">Organization name</label>
               <input
                 value={organizationName}
-                onChange={(event) => setOrganizationName(event.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-[#111827] px-4 py-3 text-white outline-none focus:border-green-500"
+                onChange={(e) => setOrganizationName(e.target.value)}
+                className={inputClassName}
               />
             </div>
 
-            <div>
-              <label className="mb-2 block text-sm text-slate-300">Email</label>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-semibold text-slate-300">Email</label>
               <input
                 type="email"
                 placeholder="you@example.com"
                 value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-[#111827] px-4 py-3 text-white outline-none focus:border-green-500"
+                onChange={(e) => setEmail(e.target.value)}
+                className={inputClassName}
               />
             </div>
 
-            <div>
-              <label className="mb-2 block text-sm text-slate-300">Password</label>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-semibold text-slate-300">Password</label>
               <input
                 type="password"
                 placeholder="••••••••"
                 value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-[#111827] px-4 py-3 text-white outline-none focus:border-green-500"
+                onChange={(e) => setPassword(e.target.value)}
+                className={inputClassName}
               />
             </div>
 
-            {error ? <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">{error}</div> : null}
-
-            <Button type="submit" className="w-full" disabled={isSubmitting}>
+            <Button
+              type="submit"
+              className="mt-2 h-[52px] w-full text-base font-bold"
+              disabled={isSubmitting}
+            >
               {isSubmitting ? 'Creating organization...' : 'Create organization'}
             </Button>
           </form>

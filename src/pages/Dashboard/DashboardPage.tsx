@@ -131,26 +131,45 @@ export function DashboardPage() {
   });
 
   return (
-    <div className="page-shell p-4 sm:p-6 lg:p-8 space-y-6 max-w-[1680px] mx-auto">
+    <div className="page-shell page-stack" style={{ maxWidth: '1440px' }}>
+      {/* ------------------------------------------------------------------ */}
+      {/* Header                                                             */}
+      {/* ------------------------------------------------------------------ */}
 
-      {/* ── Top Header Greeting Banner ───────────────────────────────────────── */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 p-6 sm:p-7 rounded-2xl bg-gradient-to-r from-[#0b1424] via-[#09111e] to-[#070c14] border border-white/[0.07] shadow-xl backdrop-blur-md">
+      <div className="flex flex-col gap-6 rounded-2xl border border-white/[0.07] bg-gradient-to-r from-[#0b1424] via-[#09111e] to-[#070c14] p-8 shadow-xl backdrop-blur-md sm:p-10 lg:flex-row lg:items-center lg:justify-between mb-8">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2">
-            Good Evening, Sakshi! <span className="inline-block animate-pulse">👋</span>
+          <h1 className="flex items-center gap-3 text-3xl font-extrabold tracking-tight text-white sm:text-4xl mb-2">
+            Good Evening, Sakshi!{' '}
+            <span className="inline-block animate-pulse">
+              👋
+            </span>
           </h1>
-          <p className="text-xs sm:text-sm text-slate-400 mt-1 font-medium">
+
+          <p className="mt-2 text-sm font-medium text-slate-400 sm:text-base">
             Let's make your digital work greener today.
           </p>
         </div>
 
-        <div className="flex items-center gap-3 flex-wrap">
-          {/* Date Indicator Pill */}
-          <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/[0.04] border border-white/[0.07] text-xs font-semibold text-slate-300">
-            <Calendar size={14} className="text-slate-400" />
-            <span>{todayDateString}</span>
-            <span className="text-slate-600">|</span>
-            <span className="text-slate-400">Karnataka, India ({selectedZone})</span>
+        <div className="flex flex-wrap items-center gap-4">
+          {/* Date */}
+          <div className="flex items-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.04] px-3.5 py-2 text-xs font-semibold text-slate-300">
+            <Calendar
+              size={14}
+              className="text-slate-400"
+            />
+
+            <span>
+              {todayDateString}
+            </span>
+
+            <span className="text-slate-600">
+              |
+            </span>
+
+            <span className="text-slate-400">
+              Karnataka, India (
+              {selectedZone})
+            </span>
           </div>
 
           {/* Live Monitoring Badge Pill */}
@@ -210,10 +229,9 @@ export function DashboardPage() {
       </div>
 
       {/* ── Main Content Grid ──────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-
-        {/* Left Column (8 cols) */}
-        <div className="lg:col-span-8 space-y-6">
+      <div className="grid grid-cols-1 gap-8 xl:grid-cols-12">
+        {/* Left Column — ~67% */}
+        <div className="space-y-8 xl:col-span-8">
 
           {/* Live Carbon Forecast Chart */}
           <GlassCard hoverEffect onClick={() => navigate('/forecast')} className="cursor-pointer group p-6">
@@ -232,9 +250,20 @@ export function DashboardPage() {
               </span>
             </div>
 
-            <div className="h-[280px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={forecastData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <div className="h-[340px] w-full">
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+              >
+                <AreaChart
+                  data={forecastData}
+                  margin={{
+                    top: 10,
+                    right: 10,
+                    left: -20,
+                    bottom: 0,
+                  }}
+                >
                   <defs>
                     <linearGradient id="purpleGrad" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#a855f7" stopOpacity={0.35} />
@@ -319,26 +348,37 @@ export function DashboardPage() {
 
         </div>
 
-        {/* Right Column (4 cols) */}
-        <div className="lg:col-span-4 space-y-6">
+        {/* Right Column — ~33% */}
+        <div className="space-y-8 xl:col-span-4">
 
-          {/* Activity Lifecycle Card */}
-          <GlassCard hoverEffect onClick={() => navigate('/activities')} className="cursor-pointer p-6">
+          {/* Activity Lifecycle */}
+          <GlassCard
+            hoverEffect
+            onClick={() =>
+              navigate('/activities')
+            }
+            className="cursor-pointer p-6"
+          >
             <div className="mb-4 flex items-center justify-between">
-              <h4 className="text-sm font-bold text-white">Activity Lifecycle</h4>
+              <h4 className="text-base font-bold text-white">
+                Activity Lifecycle
+              </h4>
+
               <ArrowRight className="h-4 w-4 text-slate-500" />
             </div>
 
-            {/* Donut Chart representation */}
-            <div className="relative h-44 flex items-center justify-center">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="relative flex h-56 items-center justify-center my-4">
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+              >
                 <PieChart>
                   <Pie
                     data={pieData}
                     cx="50%"
                     cy="50%"
-                    innerRadius={55}
-                    outerRadius={75}
+                    innerRadius={70}
+                    outerRadius={95}
                     paddingAngle={4}
                     dataKey="value"
                   >
@@ -348,33 +388,65 @@ export function DashboardPage() {
                   </Pie>
                 </PieChart>
               </ResponsiveContainer>
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
-                <span className="text-2xl font-black text-white">{totalTasksCount}</span>
-                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Total Activities</span>
+
+              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+                <span className="text-3xl font-black text-white">
+                  {totalTasksCount}
+                </span>
+
+                <span className="text-xs mt-1 font-semibold uppercase tracking-wider text-slate-400">
+                  Total Activities
+                </span>
               </div>
             </div>
 
-            {/* Legend Counts */}
-            <div className="grid grid-cols-2 gap-2.5 mt-2 text-xs">
-              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20">
-                <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
-                <span className="text-slate-300 font-medium">Pending:</span>
-                <span className="font-bold text-white ml-auto">{pendingCount}</span>
+            <div className="mt-6 grid grid-cols-2 gap-4 text-xs">
+              <div className="flex items-center gap-3 rounded-xl border border-blue-500/20 bg-blue-500/10 p-3">
+                <span className="h-3 w-3 rounded-full bg-blue-500" />
+
+                <span className="font-medium text-slate-300">
+                  Pending
+                </span>
+
+                <span className="ml-auto font-bold text-white text-sm">
+                  {pendingCount}
+                </span>
               </div>
-              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                <span className="text-slate-300 font-medium">Scheduled:</span>
-                <span className="font-bold text-white ml-auto">{scheduledCount}</span>
+
+              <div className="flex items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3">
+                <span className="h-3 w-3 rounded-full bg-amber-500" />
+
+                <span className="font-medium text-slate-300">
+                  Scheduled
+                </span>
+
+                <span className="ml-auto font-bold text-white text-sm">
+                  {scheduledCount}
+                </span>
               </div>
-              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                <span className="text-slate-300 font-medium">Running:</span>
-                <span className="font-bold text-white ml-auto">{runningCount}</span>
+
+              <div className="flex items-center gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
+                <span className="h-3 w-3 rounded-full bg-emerald-500" />
+
+                <span className="font-medium text-slate-300">
+                  Running
+                </span>
+
+                <span className="ml-auto font-bold text-white text-sm">
+                  {runningCount}
+                </span>
               </div>
-              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-500/10 border border-slate-500/20">
-                <span className="w-2.5 h-2.5 rounded-full bg-slate-500" />
-                <span className="text-slate-300 font-medium">Completed:</span>
-                <span className="font-bold text-white ml-auto">{completedCount}</span>
+
+              <div className="flex items-center gap-3 rounded-xl border border-slate-500/20 bg-slate-500/10 p-3">
+                <span className="h-3 w-3 rounded-full bg-slate-500" />
+
+                <span className="font-medium text-slate-300">
+                  Completed
+                </span>
+
+                <span className="ml-auto font-bold text-white text-sm">
+                  {completedCount}
+                </span>
               </div>
             </div>
           </GlassCard>

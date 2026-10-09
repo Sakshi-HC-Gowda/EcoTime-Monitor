@@ -443,7 +443,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               const nowTime = new Date(carbonData.current.datetime).getTime();
               const winStartTime = new Date(win.startTime).getTime();
               
-              let timingLabel = '';
+              let timingLabel: string;
               if (winStartTime <= nowTime) {
                 timingLabel = 'Active Now';
               } else {

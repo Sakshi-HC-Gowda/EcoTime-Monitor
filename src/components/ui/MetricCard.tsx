@@ -1,5 +1,4 @@
 import React from 'react';
-
 import { GlassCard } from './GlassCard';
 
 interface MetricCardProps {
@@ -63,13 +62,11 @@ export function MetricCard({
               </span>
             )}
           </div>
-
           {subtitle && (
             <p className="text-xs text-slate-500 mt-2 leading-relaxed">
               {subtitle}
             </p>
           )}
-
           {trend && (
             <div className="mt-3">
               <span

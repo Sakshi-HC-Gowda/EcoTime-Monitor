@@ -27,7 +27,7 @@ export function WindowCard({ window, onSchedule }: Props) {
         </div>
 
         <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-teal-500/10 text-teal-400 border border-teal-500/20">
-          -{Math.round(window.carbonSavingPercent)}% Carbon
+          {Math.round(window.carbonSavingPercent)}% forecast-peak comparison
         </span>
       </div>
 
@@ -47,7 +47,7 @@ export function WindowCard({ window, onSchedule }: Props) {
         <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.04]">
           <span className="text-slate-400 block">Avg / Min Carbon</span>
           <span className="text-xs font-bold text-teal-300 mt-1 block">
-            {Math.round(window.avgCarbonIntensity)} / {minCarbon} <span className="text-[10px] font-normal text-slate-400">gCO2/kWh</span>
+            {Math.round(window.avgCarbonIntensity)} / {minCarbon} <span className="text-[10px] font-normal text-slate-400">gCO2e/kWh</span>
           </span>
         </div>
 

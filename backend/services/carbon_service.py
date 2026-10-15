@@ -159,6 +159,19 @@ _DEFAULT_ZONE_ID = "US-CA"
 # forecast's carbon-intensity range".
 GREEN_WINDOW_THRESHOLD_RATIO = 0.35
 
+
+def _validate_zone_id(zone_id: str) -> str:
+    """Validate and normalise a zone identifier; reject unsupported zones."""
+    if not isinstance(zone_id, str):
+        raise ValueError("Grid zone must be a non-empty string.")
+    cleaned = zone_id.strip()
+    if not cleaned:
+        raise ValueError("Grid zone must be a non-empty string.")
+    if cleaned not in GRID_ZONES:
+        supported = ", ".join(sorted(GRID_ZONES))
+        raise ValueError(f"Unsupported grid zone '{cleaned}'. Supported zones: {supported}")
+    return cleaned
+
 # ---------------------------------------------------------------------------
 # Simulation Engine
 # ---------------------------------------------------------------------------
@@ -241,6 +254,10 @@ def generate_simulated_data(zone_id: str, offset_hours: float = 0.0) -> dict:
         "history": history,
         "forecast": forecast,
         "isSimulated": True,
+        "source": "simulation",
+        "historySource": "simulation",
+        "forecastSource": "simulation",
+        "observedAt": now.isoformat(),
     }
 
 
@@ -282,14 +299,29 @@ def _fetch_live_data(zone_id: str, api_key: str) -> dict | None:
             return None
 
         latest_data = latest_res.json()
+        observed_at = datetime.fromisoformat(
+            str(latest_data["datetime"]).replace("Z", "+00:00")
+        )
+        intensity = latest_data["carbonIntensity"]
+        if (
+            observed_at.tzinfo is None
+            or isinstance(intensity, bool)
+            or not isinstance(intensity, (int, float))
+            or not math.isfinite(intensity)
+            or intensity < 0
+        ):
+            raise ValueError("Electricity Maps latest reading is invalid")
+        observed_at = observed_at.astimezone(timezone.utc)
 
         current = {
-            "datetime": latest_data["datetime"],
-            "carbonIntensity": latest_data["carbonIntensity"],
+            "datetime": observed_at.isoformat(),
+            "carbonIntensity": intensity,
         }
 
-        # Attempt forecast
+        # A failed provider forecast is unavailable; do not synthesize a forecast
+        # and present it as if it were API-derived.
         forecast_points = []
+        forecast_source = "unavailable"
         try:
             forecast_res = requests.get(
                 f"{_EMAPS_BASE}/carbon-intensity/forecast",
@@ -299,10 +331,28 @@ def _fetch_live_data(zone_id: str, api_key: str) -> dict | None:
             )
             if forecast_res.ok:
                 fc_data = forecast_res.json()
-                forecast_points = [
-                    {"datetime": f["datetime"], "carbonIntensity": f["carbonIntensity"]}
-                    for f in fc_data.get("forecast", [])
-                ]
+                raw_forecast = fc_data.get("forecast", [])
+                if not isinstance(raw_forecast, list):
+                    raise ValueError("Electricity Maps forecast is not an array")
+                for point in raw_forecast:
+                    point_time = datetime.fromisoformat(
+                        str(point["datetime"]).replace("Z", "+00:00")
+                    )
+                    point_intensity = point["carbonIntensity"]
+                    if (
+                        point_time.tzinfo is None
+                        or isinstance(point_intensity, bool)
+                        or not isinstance(point_intensity, (int, float))
+                        or not math.isfinite(point_intensity)
+                        or point_intensity < 0
+                    ):
+                        raise ValueError("Electricity Maps forecast point is invalid")
+                    forecast_points.append({
+                        "datetime": point_time.astimezone(timezone.utc).isoformat(),
+                        "carbonIntensity": point_intensity,
+                    })
+                if forecast_points:
+                    forecast_source = "electricity_maps_api"
             else:
                 logger.warning(
                     "Electricity Maps forecast API failed for zone %s: HTTP %s — %s",
@@ -311,27 +361,15 @@ def _fetch_live_data(zone_id: str, api_key: str) -> dict | None:
                     forecast_res.text[:300],
                 )
         except Exception as e:
-            logger.warning("Forecast API failed for zone %s: %s — using simulated forecast", zone_id, e)
-
-        # Fill missing forecast with simulation scaled to live baseline
-        if not forecast_points:
-            zone = GRID_ZONES.get(zone_id, GRID_ZONES[_DEFAULT_ZONE_ID])
-            live_intensity = latest_data["carbonIntensity"]
-            base_ratio = live_intensity / zone["baseIntensity"] if zone["baseIntensity"] > 0 else 1.0
-            now_dt = datetime.fromisoformat(latest_data["datetime"].replace("Z", "+00:00"))
-            for i in range(24):
-                fore_time = now_dt + timedelta(hours=i)
-                sim_val = _get_simulated_intensity(zone, fore_time)
-                forecast_points.append({
-                    "datetime": fore_time.isoformat(),
-                    "carbonIntensity": max(5, round(sim_val * base_ratio)),
-                })
+            logger.warning("Forecast API failed for zone %s: %s", zone_id, e)
+            forecast_points = []
+            forecast_source = "unavailable"
 
         # History — simulate relative to live reading
         zone = GRID_ZONES.get(zone_id, GRID_ZONES[_DEFAULT_ZONE_ID])
         live_intensity = latest_data["carbonIntensity"]
         base_ratio = live_intensity / zone["baseIntensity"] if zone["baseIntensity"] > 0 else 1.0
-        now_dt = datetime.fromisoformat(latest_data["datetime"].replace("Z", "+00:00"))
+        now_dt = observed_at
         history = []
         for i in range(12, 0, -1):
             hist_time = now_dt - timedelta(hours=i)
@@ -347,6 +385,10 @@ def _fetch_live_data(zone_id: str, api_key: str) -> dict | None:
             "history": history,
             "forecast": forecast_points,
             "isSimulated": False,
+            "source": "electricity_maps_api",
+            "historySource": "simulation_scaled_from_api",
+            "forecastSource": forecast_source,
+            "observedAt": observed_at.isoformat(),
         }
 
     except requests.RequestException as e:
@@ -435,6 +477,11 @@ def detect_green_windows(
     # genuinely clean windows while high-carbon grids still surface their
     # cleanest available periods for carbon-aware scheduling.
     forecast_range = forecast_actual_peak - forecast_min
+    if forecast_range <= 0:
+        logger.debug(
+            "Green Window detection skipped: forecast range has no lower-carbon band"
+        )
+        return windows
     dynamic_threshold = forecast_min + (
         forecast_range * GREEN_WINDOW_THRESHOLD_RATIO
     )
@@ -482,7 +529,10 @@ def _build_window(
     # This percentage is relative to the forecast peak and is used only for
     # Green Window ranking. Potential activity savings must be calculated from
     # baseline/current carbon intensity versus this window's average intensity.
-    savings_pct = max(5.0, ((forecast_peak - avg_intensity) / forecast_peak) * 100.0)
+    savings_pct = max(
+        0.0,
+        min(100.0, ((forecast_peak - avg_intensity) / forecast_peak) * 100.0),
+    )
 
     start_dt = datetime.fromisoformat(points[0]["datetime"].replace("Z", "+00:00"))
     start_hour = start_dt.hour
@@ -518,35 +568,36 @@ def get_carbon_data(
     """
     Main entry point for obtaining carbon data.
 
-    Tries live API first if api_key is provided; falls back to simulation.
-    Never raises — always returns a valid CarbonResponse dict.
+    Tries live API first if a key is configured; explicitly labels simulated
+    fallback data so callers can distinguish it from provider observations.
     """
+    zone = _validate_zone_id(zone_id)
     resolved_key = api_key if api_key is not None else get_electricity_maps_api_key()
 
     try:
         if resolved_key:
-            live_data = _fetch_live_data(zone_id, resolved_key)
+            live_data = _fetch_live_data(zone, resolved_key)
             if live_data:
-                logger.info("Using live Electricity Maps data for zone %s", zone_id)
+                logger.info("Using live Electricity Maps data for zone %s", zone)
                 return live_data
 
             logger.warning(
                 "Electricity Maps unavailable for zone %s — switching to simulation",
-                zone_id,
+                zone,
             )
             return _simulation_fallback(
-                zone_id,
+                zone,
                 offset_hours,
-                "Live Electricity Maps data unavailable. Using simulated fallback.",
+                "Live Electricity Maps data unavailable; returned explicitly simulated data.",
             )
 
-        logger.info("No ELECTRICITY_MAPS_API_KEY configured — using simulation for zone %s", zone_id)
-        return generate_simulated_data(zone_id, offset_hours)
+        logger.info("No ELECTRICITY_MAPS_API_KEY configured — using simulation for zone %s", zone)
+        return generate_simulated_data(zone, offset_hours)
 
     except Exception as e:
-        logger.exception("Unexpected error fetching carbon data for zone %s", zone_id)
+        logger.exception("Unexpected error fetching carbon data for zone %s", zone)
         return _simulation_fallback(
-            zone_id,
+            zone,
             offset_hours,
             f"Carbon data service error: {e}. Using simulated fallback.",
         )

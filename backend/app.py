@@ -24,6 +24,7 @@ from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
+from werkzeug.exceptions import RequestEntityTooLarge
 from extensions import db
 
 # Load backend/.env regardless of the directory used to start Flask.
@@ -92,6 +93,7 @@ def create_app(config_name: str | None = None) -> Flask:
         TESTING=config_name == "testing",
         SQLALCHEMY_DATABASE_URI=database_url,
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        MAX_CONTENT_LENGTH=101 * 1024 * 1024,
         SQLALCHEMY_ENGINE_OPTIONS={
             "pool_pre_ping": True,
             "pool_recycle": 1800,
@@ -99,7 +101,31 @@ def create_app(config_name: str | None = None) -> Flask:
         DATABASE_AVAILABLE=False,
     )
 
-    JWTManager(app)
+    jwt = JWTManager(app)
+
+    @jwt.expired_token_loader
+    def expired_token(_jwt_header, _jwt_payload):
+        return jsonify({
+            "success": False,
+            "error": "Authentication token has expired",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }), 401
+
+    @jwt.invalid_token_loader
+    def invalid_token(_reason):
+        return jsonify({
+            "success": False,
+            "error": "Authentication token is invalid",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }), 401
+
+    @jwt.unauthorized_loader
+    def missing_token(_reason):
+        return jsonify({
+            "success": False,
+            "error": "Authentication required",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }), 401
     app.config["JWT_TOKEN_LOCATION"] = ["headers"]
     app.config["JWT_HEADER_NAME"] = "Authorization"
     app.config["JWT_HEADER_TYPE"] = "Bearer"
@@ -121,6 +147,7 @@ def create_app(config_name: str | None = None) -> Flask:
             Role,
             SimulationConfig,
             User,
+            UploadRegistration,
         )
         try:
             # Flask-SQLAlchemy delegates to SQLAlchemy's safe table check:
@@ -147,7 +174,7 @@ def create_app(config_name: str | None = None) -> Flask:
                 "http://127.0.0.1:5173",
             ],
             "methods": ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization"],
+            "allow_headers": ["Content-Type", "Authorization", "Idempotency-Key"],
         }
     })
 
@@ -208,6 +235,8 @@ def create_app(config_name: str | None = None) -> Flask:
                 "activities": "/api/activities",
                 "scheduler": "/api/scheduler",
                 "upload": "/api/upload",
+                "upload_status": "/api/uploads/<id>",
+                "upload_history": "/api/activities/<id>/uploads",
                 "eco_score": "/api/eco-score",
                 "forecast": "/api/forecast",
                 "forecast_info": "/api/forecast/info",
@@ -229,6 +258,14 @@ def create_app(config_name: str | None = None) -> Flask:
             "detail": str(error),
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }), 400
+
+    @app.errorhandler(RequestEntityTooLarge)
+    def request_too_large(_error):
+        return jsonify({
+            "success": False,
+            "error": "Upload request exceeds the 100 MiB limit",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }), 413
 
     @app.errorhandler(404)
     def not_found(error):
@@ -259,12 +296,38 @@ def create_app(config_name: str | None = None) -> Flask:
 
 
 def _ensure_organization_ownership_schema() -> None:
-    """Add tenant ownership columns without guessing ownership for legacy rows."""
+    """Add tenant and scheduling-bound columns without guessing legacy ownership."""
     if db.engine.dialect.name != "postgresql":
         return
 
     db.session.execute(text(
         "ALTER TABLE activities ADD COLUMN IF NOT EXISTS organization_id INTEGER"
+    ))
+    db.session.execute(text(
+        "ALTER TABLE activities ADD COLUMN IF NOT EXISTS earliest_start TIMESTAMP WITH TIME ZONE"
+    ))
+    db.session.execute(text(
+        "ALTER TABLE activities ADD COLUMN IF NOT EXISTS deadline TIMESTAMP WITH TIME ZONE"
+    ))
+    db.session.execute(text(
+        "ALTER TABLE activities ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(128)"
+    ))
+    db.session.execute(text(
+        "ALTER TABLE activities ADD COLUMN IF NOT EXISTS request_fingerprint VARCHAR(64)"
+    ))
+    db.session.execute(text(
+        "ALTER TABLE upload_registrations ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(128)"
+    ))
+    db.session.execute(text(
+        "ALTER TABLE upload_registrations ADD COLUMN IF NOT EXISTS request_fingerprint VARCHAR(64)"
+    ))
+    db.session.execute(text(
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_activities_org_idempotency_key "
+        "ON activities (organization_id, idempotency_key)"
+    ))
+    db.session.execute(text(
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_uploads_org_idempotency_key "
+        "ON upload_registrations (organization_id, idempotency_key)"
     ))
     db.session.execute(text(
         "ALTER TABLE analytics_recommendations "

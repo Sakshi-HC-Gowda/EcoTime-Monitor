@@ -44,8 +44,8 @@ function detectGreenWindows(
     const avgIntensity =
       block.reduce((acc, p) => acc + p.carbonIntensity, 0) / block.length;
     const savingsPercent = Math.max(
-      5,
-      ((forecastPeak - avgIntensity) / forecastPeak) * 100
+      0,
+      Math.min(100, ((forecastPeak - avgIntensity) / forecastPeak) * 100),
     );
     const startDate = new Date(block[0].datetime);
     const startHour = startDate.getHours();
@@ -109,6 +109,8 @@ export function useCarbonData({
       } catch (err) {
         if (cancelled) return;
         const msg = err instanceof Error ? err.message : 'Unknown error';
+        setCarbonData(null);
+        setGreenWindows([]);
         setError(msg);
         console.error('[useCarbonData] fetch failed:', err);
       } finally {

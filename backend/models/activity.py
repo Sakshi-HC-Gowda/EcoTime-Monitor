@@ -12,6 +12,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from extensions import db
+from optimization.carbon_calculator import calculate_energy_kwh
 
 
 class Activity(db.Model):
@@ -38,6 +39,16 @@ class Activity(db.Model):
         db.ForeignKey("organizations.id"),
         nullable=False,
         index=True,
+    )
+    idempotency_key = db.Column(db.String(128), nullable=True)
+    request_fingerprint = db.Column(db.String(64), nullable=True)
+    __table_args__ = (
+        db.Index(
+            "uq_activities_org_idempotency_key",
+            "organization_id",
+            "idempotency_key",
+            unique=True,
+        ),
     )
 
     # -----------------------------------------------------------------------
@@ -85,6 +96,8 @@ class Activity(db.Model):
     )
     progress = db.Column(db.Float, default=0.0)              # 0-100
     assigned_window_id = db.Column(db.String(64), nullable=True)
+    earliest_start = db.Column(db.DateTime(timezone=True), nullable=True)
+    deadline = db.Column(db.DateTime(timezone=True), nullable=True)
 
     # -----------------------------------------------------------------------
     # Timestamps
@@ -113,6 +126,24 @@ class Activity(db.Model):
     # Serialisation
     # -----------------------------------------------------------------------
 
+    @staticmethod
+    def _iso_utc(value: datetime | None) -> str | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.isoformat()
+
+    @staticmethod
+    def _parse_datetime(value: str | datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        parsed = (
+            value if isinstance(value, datetime)
+            else datetime.fromisoformat(value.replace("Z", "+00:00"))
+        )
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
     def to_dict(self) -> dict:
         """
         Convert model instance to a JSON-serialisable dict.
@@ -125,12 +156,27 @@ class Activity(db.Model):
             "type": self.type,
             "activityType": self.activity_type,
             "duration": self.duration,
+            "durationUnit": "minutes",
             "powerDraw": self.power_draw,
+            "powerDrawUnit": "W",
+            "durationBasis": "estimated_not_measured",
+            "powerDrawBasis": "estimated_not_metered",
+            "estimatedEnergyConsumption": calculate_energy_kwh(
+                self.power_draw, self.duration
+            ),
+            "estimatedEnergyUnit": "kWh",
+            "estimatedEnergyBasis": (
+                "estimated_power_watts_times_estimated_duration_minutes"
+            ),
+            "carbonImpactUnit": "gCO2e",
+            "carbonIntensityUnit": "gCO2e/kWh",
             "priorityScore": self.priority_score,
             "flexibilityScore": self.flexibility_score,
             "status": self.status,
             "progress": self.progress,
             "assignedWindowId": self.assigned_window_id,
+            "earliestStart": self._iso_utc(self.earliest_start),
+            "deadline": self._iso_utc(self.deadline),
             "createdAt": self.created_at.isoformat() if self.created_at else None,
             "updatedAt": self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -152,6 +198,8 @@ class Activity(db.Model):
             status=data.get("status", "pending"),
             progress=float(data.get("progress", 0)),
             assigned_window_id=data.get("assignedWindowId"),
+            earliest_start=cls._parse_datetime(data.get("earliestStart")),
+            deadline=cls._parse_datetime(data.get("deadline")),
         )
 
     def __repr__(self) -> str:

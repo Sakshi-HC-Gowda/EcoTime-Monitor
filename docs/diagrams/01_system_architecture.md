@@ -1,77 +1,70 @@
 # Diagram 1 — Overall System Architecture
 
-**Description:** High-level view of the two-tier EcoTime system: React/TypeScript frontend
-communicating with the Flask/Python backend over a REST API. Shows external integration
-with Electricity Maps API, SQLite persistence, and the ML subsystem.
+**Description:** High-level view of the React/TypeScript frontend and Flask API,
+the PostgreSQL application database (SQLite is used by tests), carbon-data
+providers/fallback, forecast code, and organization-scoped local upload storage.
 
 **Recommended placement:** BE Report — Section 1 (Introduction/Overview); IEEE Paper — Figure 1.
 
 ```mermaid
 graph TB
     subgraph "Frontend — React + TypeScript (Vite)"
-        UI["Dashboard / AgentSimulator / Settings"]
-        Hooks["Hooks: useCarbonData · useTasks · useSimulation"]
-        Algos["Client Algorithms: Greedy · Knapsack · EcoScore"]
+        UI["Dashboard / Activities / Optimization / Analytics"]
+        Hooks["Feature hooks and API clients"]
         UI --> Hooks
-        UI --> Algos
     end
 
     subgraph "Backend — Flask + Python"
-        APP["app.py — Application Factory"]
+        APP["app.py — application factory, JWT, CORS, SQLAlchemy"]
 
-        subgraph "Routes (Blueprints)"
-            R_CARBON["carbon_bp\n/api/carbon\n/api/windows\n/api/zones"]
-            R_ACT["activities_bp\n/api/activities"]
-            R_OPT["optimizer_bp\n/api/scheduler\n/api/eco-score\n/api/config/simulation"]
-            R_FORE["forecast_bp\n/api/forecast\n/api/forecast/info\n/api/ml/train"]
+        subgraph "Authenticated API routes"
+            R_AUTH["auth.py\nregistration, login, identity"]
+            R_CARBON["carbon.py\n/api/carbon · /api/windows · /api/zones"]
+            R_ACT["activities.py\nactivity CRUD and bulk update"]
+            R_OPT["optimizer.py\n/api/recommendations · /api/scheduler · /api/eco-score"]
+            R_FORE["forecast.py\n/api/forecast · /api/forecast/info · /api/ml/train"]
+            R_UPLOAD["upload.py\nregistration, schedule, execute, download"]
         end
 
-        subgraph "Services Layer"
-            SVC_C["carbon_service"]
-            SVC_A["activity_service"]
-            SVC_O["optimizer_service"]
+        subgraph "Services and domain logic"
+            SVC_C["carbon_service.py\nprovider and labeled simulation"]
+            SVC_A["activity_service.py\nvalidated, tenant-scoped activity CRUD"]
+            SVC_O["optimizer_service.py\nforecast and scheduling feasibility"]
+            SVC_U["upload_service.py\nvalidated local upload lifecycle"]
+            OPT["carbon_calculator.py · eco_score.py\nwindow_ranking.py · greedy_scheduler.py"]
+            FORE["ForecastPredictor · training · feature engineering"]
         end
 
-        subgraph "Optimization Engine"
-            OPT_ECO["eco_score.py"]
-            OPT_WIN["window_ranking.py"]
-            OPT_SCH["greedy_scheduler.py\n(Greedy + Knapsack DP)"]
-            OPT_CALC["carbon_calculator.py"]
+        subgraph "Persistence"
+            DB[("PostgreSQL\nactivities · history · users · organizations\nrecommendations · upload registrations")]
+            FILES[("Local files\nbackend/uploads/org-<id>/")]
+            MODEL[("Optional generated artifacts\nbackend/data/best_model.pkl\ntraining_report.json")]
         end
 
-        subgraph "ML Forecast Pipeline"
-            F_TRAIN["train.py\n(LR · RF · XGBoost)"]
-            F_PRE["preprocessing.py"]
-            F_FEAT["feature_engineering.py"]
-            F_PRED["predict.py (ForecastPredictor singleton)"]
-        end
-
-        subgraph "Data Layer"
-            DB["SQLite — activities table\n(SQLAlchemy / models/activity.py)"]
-            PKL["best_model.pkl\ntraining_report.json"]
-        end
-
-        APP --> R_CARBON & R_ACT & R_OPT & R_FORE
+        APP --> R_AUTH & R_CARBON & R_ACT & R_OPT & R_FORE & R_UPLOAD
         R_CARBON --> SVC_C
         R_ACT --> SVC_A
         R_OPT --> SVC_O
-        R_FORE --> F_PRED
-        R_FORE --> SVC_C
-        SVC_O --> OPT_ECO & OPT_WIN & OPT_SCH & OPT_CALC
+        R_FORE --> FORE & SVC_C
+        R_UPLOAD --> SVC_U
         SVC_A --> DB
-        F_TRAIN --> F_PRE --> F_FEAT
-        F_PRED --> PKL
-        F_TRAIN --> PKL
-        R_CARBON --> OPT_WIN
+        SVC_O --> DB & OPT & SVC_C & FORE
+        SVC_U --> DB & FILES & SVC_O
+        FORE --> MODEL
     end
 
-    subgraph "External"
-        EMAPS["Electricity Maps API\n(optional — live gCO₂e/kWh)"]
-        EMAPS_SIM["Zone Simulation Engine\n(mathematical fallback)"]
+    subgraph "External / optional"
+        EMAPS["Electricity Maps API\noptional backend credential"]
+        SIM["Zone simulation\nexplicitly labeled data"]
     end
 
-    Hooks -- "REST /api/*" --> APP
+    Hooks -- "Bearer JWT · REST /api/*" --> APP
     SVC_C --> EMAPS
-    SVC_C --> EMAPS_SIM
-    F_PRED --> EMAPS_SIM
+    SVC_C --> SIM
+    DB -. "SQLite in-memory test configuration" .-> TESTDB[("Automated tests")]
 ```
+
+Only the file-upload lifecycle has a supported executor: after explicit user
+action, the backend finalizes validated content in local organization-scoped
+storage. Other activity categories produce estimates and recommendations; no
+general workload runner or automatic scheduling worker is present.

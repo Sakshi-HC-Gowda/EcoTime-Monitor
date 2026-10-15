@@ -41,8 +41,8 @@ export function CarbonTrendChart({ history, forecast }: Props) {
             contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px' }}
             labelStyle={{ color: '#94a3b8' }}
           />
-          <Area type="monotone" dataKey="historical" name="Historical (gCO2/kWh)" stroke="#3b82f6" strokeWidth={2} fill="url(#histGrad)" />
-          <Area type="monotone" dataKey="forecast" name="Forecast (gCO2/kWh)" stroke="#10b981" strokeWidth={2} strokeDasharray="4 4" fill="url(#foreGrad)" />
+          <Area type="monotone" dataKey="historical" name="Historical (gCO2e/kWh)" stroke="#3b82f6" strokeWidth={2} fill="url(#histGrad)" />
+          <Area type="monotone" dataKey="forecast" name="Forecast (gCO2e/kWh)" stroke="#10b981" strokeWidth={2} strokeDasharray="4 4" fill="url(#foreGrad)" />
         </AreaChart>
       </ResponsiveContainer>
     </div>

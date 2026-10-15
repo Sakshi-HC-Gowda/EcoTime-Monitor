@@ -53,7 +53,7 @@ export function DashboardCarbonSummary({ currentCarbon, isSimulated }: Dashboard
               </p>
               <p className="text-[15px] font-bold text-white mt-0.5">
                 {currentCarbon}{' '}
-                <span className="text-[12px] font-medium text-slate-400">gCO₂/kWh</span>
+                <span className="text-[12px] font-medium text-slate-400">gCO₂e/kWh</span>
               </p>
             </div>
           </div>

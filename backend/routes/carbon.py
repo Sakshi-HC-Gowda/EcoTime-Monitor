@@ -12,12 +12,12 @@ import os
 import logging
 from datetime import datetime, timezone
 from flask import Blueprint, request, jsonify
+from auth_utils import require_auth
 
 from services.carbon_service import (
     get_carbon_data,
     detect_green_windows,
     get_available_zones,
-    generate_simulated_data,
 )
 from optimization.window_ranking import rank_windows
 
@@ -41,6 +41,7 @@ def _now_iso() -> str:
 # ---------------------------------------------------------------------------
 
 @carbon_bp.route("/carbon", methods=["GET"])
+@require_auth
 def get_carbon():
     """
     Fetch carbon intensity data for a zone.
@@ -58,17 +59,23 @@ def get_carbon():
             }
         }
     """
-    zone = request.args.get("zone", _DEFAULT_ZONE).strip()
+    raw_zone = request.args.get("zone", _DEFAULT_ZONE)
+    zone = raw_zone.strip() if isinstance(raw_zone, str) else ""
     offset = request.args.get("offset", 0, type=float)
 
     logger.info("GET /api/carbon zone=%s offset=%s", zone, offset)
 
     try:
+        if not zone:
+            raise ValueError("A non-empty grid zone is required")
         data = get_carbon_data(zone_id=zone, offset_hours=offset)
     except Exception as exc:
         logger.exception("GET /api/carbon failed for zone %s", zone)
-        data = generate_simulated_data(zone, offset)
-        data["error"] = f"Carbon endpoint error: {exc}. Using simulated fallback."
+        return jsonify({
+            "success": False,
+            "error": f"Carbon data unavailable: {exc}",
+            "timestamp": _now_iso(),
+        }), 503
 
     return jsonify({
         "success": True,
@@ -78,6 +85,7 @@ def get_carbon():
 
 
 @carbon_bp.route("/windows", methods=["GET"])
+@require_auth
 def get_windows():
     """
     Detect and rank green windows for a zone.
@@ -93,40 +101,46 @@ def get_windows():
             data: GreenWindow[]  (ranked best-first)
         }
     """
-    zone = request.args.get("zone", _DEFAULT_ZONE).strip()
+    raw_zone = request.args.get("zone", _DEFAULT_ZONE)
+    zone = raw_zone.strip() if isinstance(raw_zone, str) else ""
     threshold = request.args.get("threshold", _DEFAULT_THRESHOLD, type=float)
     offset = request.args.get("offset", 0, type=float)
 
     logger.info("GET /api/windows zone=%s threshold=%s", zone, threshold)
 
     try:
+        if not zone:
+            raise ValueError("A non-empty grid zone is required")
         carbon = get_carbon_data(zone_id=zone, offset_hours=offset)
+        if carbon.get("error"):
+            raise RuntimeError(carbon["error"])
         raw_windows = detect_green_windows(
-            forecast=carbon["forecast"],
+            forecast=carbon.get("forecast", []),
             current_datetime=carbon["current"]["datetime"],
             threshold=threshold,
         )
         ranked = rank_windows(raw_windows)
     except Exception as exc:
         logger.exception("GET /api/windows failed for zone %s", zone)
-        carbon = generate_simulated_data(zone, offset)
-        carbon["error"] = f"Windows endpoint error: {exc}. Using simulated fallback."
-        raw_windows = detect_green_windows(
-            forecast=carbon["forecast"],
-            current_datetime=carbon["current"]["datetime"],
-            threshold=threshold,
-        )
-        ranked = rank_windows(raw_windows)
+        return jsonify({
+            "success": False,
+            "error": f"Green Windows unavailable: {exc}",
+            "timestamp": _now_iso(),
+        }), 503
 
     return jsonify({
         "success": True,
         "data": ranked,
         "count": len(ranked),
+        "source": carbon.get("source"),
+        "observedAt": carbon.get("observedAt"),
+        "forecastSource": carbon.get("forecastSource"),
         "timestamp": _now_iso(),
     }), 200
 
 
 @carbon_bp.route("/zones", methods=["GET"])
+@require_auth
 def list_zones():
     """
     List all supported grid zones.

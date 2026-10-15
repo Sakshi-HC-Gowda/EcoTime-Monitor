@@ -49,7 +49,7 @@ export function CarbonAnalyticsPage() {
           <h1 className="page-header-title heading-row">
             Carbon Analytics
             <span className="ds-badge bg-blue-500/10 text-blue-400 border-blue-500/20">
-              Live Grid Telemetry
+              {carbon.isSimulated ? 'Simulated carbon data' : 'Provider carbon data'}
             </span>
           </h1>
           <p className="page-header-subtitle">
@@ -79,8 +79,8 @@ export function CarbonAnalyticsPage() {
         <MetricCard
           title="Current Carbon"
           value={current}
-          unit="gCO₂/kWh"
-          subtitle={isOptimal ? 'Optimal grid range' : 'Above threshold'}
+          unit="gCO₂e/kWh"
+          subtitle={`${carbon.isSimulated ? 'Simulated data · ' : 'Provider-reported data · '}${isOptimal ? 'Optimal grid range' : 'Above threshold'}`}
           icon={Activity}
           iconColor={isOptimal ? 'text-green-400' : 'text-amber-400'}
           iconBg={isOptimal ? 'bg-green-500/10 border-green-500/20' : 'bg-amber-500/10 border-amber-500/20'}
@@ -102,7 +102,7 @@ export function CarbonAnalyticsPage() {
         <MetricCard
           title="24h Peak Carbon"
           value="340"
-          unit="gCO₂/kWh"
+          unit="gCO₂e/kWh"
           subtitle="Thermal peak at 19:00"
           icon={Zap}
           iconColor="text-rose-400"
@@ -113,7 +113,7 @@ export function CarbonAnalyticsPage() {
         <MetricCard
           title="24h Lowest Carbon"
           value="112"
-          unit="gCO₂/kWh"
+          unit="gCO₂e/kWh"
           subtitle="Solar trough at 13:00"
           icon={TrendingDown}
           iconColor="text-teal-400"

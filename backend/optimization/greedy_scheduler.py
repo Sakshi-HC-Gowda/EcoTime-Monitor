@@ -18,6 +18,7 @@ Provides two scheduling algorithms:
 
 from __future__ import annotations
 
+import math
 from datetime import datetime
 
 from .carbon_calculator import calculate_savings_grams
@@ -31,6 +32,23 @@ def _score_factor(task: dict, field: str, default: float) -> float:
     except (TypeError, ValueError):
         score = default
     return max(1.0, min(100.0, score))
+
+
+def _is_schedulable(task: dict) -> bool:
+    """Only flexible, non-urgent, inactive work may be moved to a later window."""
+    try:
+        duration = float(task.get("duration", 0))
+        priority = float(task.get("priorityScore", 50))
+    except (TypeError, ValueError):
+        return False
+    return (
+        task.get("type") == "flexible"
+        and task.get("status") in {"idle", "pending", "paused", "delayed"}
+        and math.isfinite(duration)
+        and duration > 0
+        and math.isfinite(priority)
+        and priority < 80
+    )
 
 
 def _knapsack_task_value(
@@ -57,6 +75,7 @@ def schedule_greedy(
     tasks: list[dict],
     windows: list[dict],
     baseline_intensity: float = 380.0,
+    allowed_window_ids_by_task: dict[str, set[str]] | None = None,
 ) -> dict:
     """
     Greedy allocation of flexible tasks into ranked green windows.
@@ -78,7 +97,7 @@ def schedule_greedy(
     flexible = [
         {**t}
         for t in tasks
-        if t.get("type") == "flexible" and t.get("status") != "completed"
+        if _is_schedulable(t)
     ]
 
     # Sort by carbon-saving potential: larger power × duration = higher priority
@@ -100,6 +119,13 @@ def schedule_greedy(
         task_duration = task.get("duration", 0)
         for w in ranked_windows:
             wid = w["id"]
+            allowed_ids = (
+                allowed_window_ids_by_task.get(str(task.get("id")), set())
+                if allowed_window_ids_by_task is not None
+                else None
+            )
+            if allowed_ids is not None and wid not in allowed_ids:
+                continue
             if remaining_capacity.get(wid, 0) >= task_duration:
                 remaining_capacity[wid] -= task_duration
                 allocations[wid].append(task["id"])
@@ -167,15 +193,18 @@ def optimize_knapsack(
             method: 'knapsack'
             created_at: ISO timestamp
     """
-    window_duration = int(window.get("duration", 0))
+    try:
+        raw_window_duration = float(window.get("duration", 0))
+    except (TypeError, ValueError):
+        raw_window_duration = 0
+    window_duration = math.floor(raw_window_duration) if math.isfinite(raw_window_duration) else 0
     window_intensity = window.get("avgCarbonIntensity", baseline_intensity)
 
     # Eligible candidates
     candidates = [
         t for t in tasks
-        if t.get("type") == "flexible"
-        and t.get("status") != "completed"
-        and int(t.get("duration", 0)) <= window_duration
+        if _is_schedulable(t)
+        and float(t.get("duration", 0)) <= raw_window_duration
     ]
 
     n = len(candidates)
@@ -193,7 +222,7 @@ def optimize_knapsack(
         }
 
     # Pre-compute integer values (scaled ×100 for precision) and weights
-    weights = [max(1, int(round(t.get("duration", 1)))) for t in candidates]
+    weights = [max(1, int(math.ceil(float(t.get("duration", 1))))) for t in candidates]
     values = [
         int(round(_knapsack_task_value(t, baseline_intensity, window_intensity) * 100))
         for t in candidates

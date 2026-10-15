@@ -11,15 +11,15 @@ export function SustainabilityPage() {
             Impact Tracker
           </span>
         </h1>
-        <p className="page-header-subtitle">Track cumulative carbon savings and environmental impact metrics.</p>
+        <p className="page-header-subtitle">Estimated emissions metrics are not available until supported activity measurements and baselines are recorded.</p>
       </div>
 
       {/* Placeholder metric cards */}
       <div className="card-grid card-grid-sm-3">
         {[
-          { icon: Leaf, label: 'Total Carbon Avoided', value: '4.82 kg', color: 'text-green-400', bg: 'bg-green-500/10 border-green-500/20' },
-          { icon: TreePine, label: 'Trees Equivalent', value: '0.44', color: 'text-teal-400', bg: 'bg-teal-500/10 border-teal-500/20' },
-          { icon: Wind, label: 'Clean kWh Scheduled', value: '26.8', color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20' },
+          { icon: Leaf, label: 'Estimated net emissions savings', value: 'Not available', color: 'text-green-400', bg: 'bg-green-500/10 border-green-500/20' },
+          { icon: TreePine, label: 'Physical equivalents', value: 'Not calculated', color: 'text-teal-400', bg: 'bg-teal-500/10 border-teal-500/20' },
+          { icon: Wind, label: 'Estimated energy', value: 'Not available', color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20' },
         ].map(({ icon: Icon, label, value, color, bg }) => (
           <GlassCard key={label} variant="elevated">
             <div className={`ds-icon-box mb-4 ${bg} ${color}`}>

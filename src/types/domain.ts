@@ -18,6 +18,10 @@ export interface CarbonResponse {
   history: CarbonDataPoint[];
   forecast: CarbonDataPoint[];
   isSimulated: boolean;
+  source?: 'electricity_maps_api' | 'simulation';
+  historySource?: string;
+  forecastSource?: string;
+  observedAt?: string;
   error?: string;
 }
 
@@ -64,19 +68,33 @@ export interface Task {
   flexibilityScore: number; // 0-100
   priorityScore: number; // 0-100
   duration: number; // minutes
+  durationUnit?: 'minutes';
   powerDraw: number; // Watts
+  powerDrawUnit?: 'W';
+  durationBasis?: 'estimated_not_measured';
+  powerDrawBasis?: 'estimated_not_metered';
   estimatedEnergyConsumption?: number; // kWh
-  estimatedCarbonImpact?: number; // grams CO2
+  estimatedEnergyBasis?: string;
+  estimatedEnergyUnit?: 'kWh';
+  estimatedCarbonImpact?: number; // gCO2e
+  carbonImpactUnit?: 'gCO2e';
+  carbonImpactBasis?: string;
   baselineCarbonIntensity?: number; // gCO2e/kWh
   optimizedCarbonIntensity?: number; // gCO2e/kWh
-  baselineCarbonImpact?: number; // grams CO2
-  optimizedCarbonImpact?: number; // grams CO2
-  carbonSavings?: number; // grams CO2
-  carbonSavingsPercent?: number; // potential savings vs baseline
+  recommendedCarbonIntensity?: number; // gCO2e/kWh
+  baselineCarbonImpact?: number; // gCO2e
+  optimizedCarbonImpact?: number; // gCO2e
+  recommendedCarbonImpact?: number; // estimated gCO2e at recommended intensity
+  carbonSavings?: number; // estimated gCO2e; may be negative
+  carbonSavingsPercent?: number; // signed potential emissions reduction percentage
   ecoScore?: number; // 0-100
   recommendation?: string;
   recommendedStartTime?: string;
   scheduledStartTime?: string;
+  earliestStart?: string;
+  deadline?: string;
+  recommendationReason?: string;
+  scheduledEndTime?: string;
   status: TaskStatus;
   progress: number; // 0-100
   assignedWindowId?: string;
@@ -90,10 +108,12 @@ export interface CreateTaskRequest {
   type: TaskFlexibility;
   activityType: ActivityType;
   duration: number;
-  powerDraw: number;
+  powerDraw?: number;
   priorityScore?: number;
   flexibilityScore?: number;
   zone?: string;
+  earliestStart?: string;
+  deadline?: string;
 }
 
 export interface UpdateTaskRequest {
@@ -101,6 +121,8 @@ export interface UpdateTaskRequest {
   progress?: number;
   assignedWindowId?: string;
   scheduledStartTime?: string;
+  earliestStart?: string | null;
+  deadline?: string | null;
 }
 
 // ============================================================================
@@ -114,7 +136,7 @@ export interface GreenWindow {
   duration: number; // minutes
   avgCarbonIntensity: number;
   minCarbonIntensity?: number;
-  carbonSavingPercent: number;
+  carbonSavingPercent: number; // Relative intensity below the forecast peak, not workload emissions savings
   userConvenience: number; // 0-100
   ecoScore?: number;
   rank?: number;
@@ -131,6 +153,9 @@ export interface ForecastPoint extends CarbonDataPoint {
 export interface ForecastResponse {
   zone: string;
   forecast: ForecastPoint[];
+  source?: string;
+  forecastSource?: string;
+  observedAt?: string;
   model: {
     model_name: string;
     is_trained: boolean;
@@ -176,7 +201,9 @@ export interface OptimizationResult {
   method: 'greedy' | 'knapsack';
   windowId: string;
   selectedTasks: Task[];
-  totalSavedCo2: number; // grams
+  totalSavedCo2: number; // estimated gCO2e; may be negative
+  carbonUnit?: 'gCO2e';
+  carbonBasis?: string;
   totalDuration: number; // minutes
   windowCapacity: number; // minutes
   utilizationPercent: number;
@@ -185,21 +212,49 @@ export interface OptimizationResult {
 
 export interface SchedulingRequest {
   tasks: Task[];
-  window: GreenWindow;
+  window?: GreenWindow;
   method: 'greedy' | 'knapsack';
   baselineIntensity?: number;
+  zone?: string;
+}
+
+export interface SchedulingRecommendation {
+  activityId: string;
+  recommendation: string;
+  reason: string;
+  status: 'scheduled' | 'not_scheduled';
+  windowId: string | null;
+  startTime: string | null;
+  carbonSavings?: number; // estimated gCO2e; may be negative
+  carbonSavingsUnit?: 'gCO2e';
+}
+
+export interface SchedulingCarbonSource {
+  zone: string;
+  source: string;
+  isSimulated: boolean;
+  observedAt: string;
+  forecastSource: string;
+  classification: string;
+  relativeThreshold: number;
 }
 
 export interface SchedulingSavings {
-  totalSavedCo2: number;
-  baselineCo2: number;
+  totalSavedCo2: number; // estimated gCO2e; may be negative
+  baselineCo2: number; // estimated gCO2e
+  recommendedCo2: number; // estimated gCO2e
   reductionPercent: number;
+  unit?: 'gCO2e';
+  basis?: string;
 }
 
 export interface SchedulingResponse {
   result: OptimizationResult;
   tasks: Task[]; // Updated task list with assignments
   savings: SchedulingSavings;
+  recommendations: SchedulingRecommendation[];
+  windows: GreenWindow[];
+  carbonData: SchedulingCarbonSource;
 }
 
 // ============================================================================

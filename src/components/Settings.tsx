@@ -128,11 +128,11 @@ export const Settings: React.FC<SettingsProps> = ({
             </div>
             <div>
               <span style={{ color: 'var(--text-muted)' }}>Jitter / Noise Factor:</span><br />
-              <strong>±{currentZone.noise} g/kWh</strong>
+              <strong>±{currentZone.noise} gCO₂e/kWh</strong>
             </div>
             <div>
               <span style={{ color: 'var(--text-muted)' }}>Daily Variance Amplitude:</span><br />
-              <strong>{currentZone.amplitude} g/kWh</strong>
+              <strong>{currentZone.amplitude} gCO₂e/kWh</strong>
             </div>
           </div>
         </div>
@@ -164,7 +164,7 @@ export const Settings: React.FC<SettingsProps> = ({
           <div className="input-group">
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <label>Baseline Grid Intensity: <strong>{baselineIntensity} gCO₂e/kWh</strong></label>
-              <span style={{ fontSize: '11px', color: 'var(--rose)', fontWeight: 'bold' }}>Dirty Peak reference</span>
+              <span style={{ fontSize: '11px', color: 'var(--rose)', fontWeight: 'bold' }}>Comparison assumption</span>
             </div>
             <input
               type="range"
@@ -175,7 +175,7 @@ export const Settings: React.FC<SettingsProps> = ({
               onChange={(e) => onBaselineChange(Number(e.target.value))}
             />
             <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-              Used to calculate relative carbon savings. Represents the average carbon intensity of standard computing peak grid (e.g. running jobs immediately with no carbon awareness).
+              This prefilled reference is used for comparison, not a live grid measurement. Keep the provided default unless you have a documented baseline.
             </p>
           </div>
 

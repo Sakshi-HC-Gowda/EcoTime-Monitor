@@ -36,6 +36,10 @@ export interface CarbonResponse {
   history: CarbonDataPoint[];
   forecast: CarbonDataPoint[];
   isSimulated: boolean;
+  source?: 'electricity_maps_api' | 'simulation';
+  historySource?: string;
+  forecastSource?: string;
+  observedAt?: string;
   error?: string;
 }
 
@@ -141,9 +145,8 @@ export function generateMockCarbonData(zoneId: string, currentOffsetHours: numbe
 }
 
 /**
- * Fetches carbon data via the EcoTime backend API.
- * The backend calls Electricity Maps using ELECTRICITY_MAPS_API_KEY from .env
- * and falls back to simulation automatically if the live API is unavailable.
+ * Fetches carbon data via the EcoTime backend. A transport/API failure is an
+ * error; only explicit backend simulation responses are returned as data.
  */
 export async function fetchCarbonData(
   zoneId: string,
@@ -151,27 +154,9 @@ export async function fetchCarbonData(
   currentOffsetHours: number = 0
 ): Promise<CarbonResponse> {
   const { carbonService } = await import('./carbonService');
-
-  try {
-    const res = await carbonService.getCarbonData(zoneId, currentOffsetHours);
-
-    if (res.success && res.data) {
-      return res.data;
-    }
-
-    console.warn('[fetchCarbonData] Backend returned error, using local simulation:', res.error);
-    const mockData = generateMockCarbonData(zoneId, currentOffsetHours);
-    return {
-      ...mockData,
-      error: res.error || 'Backend carbon API unavailable. Using local simulated fallback.',
-    };
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    console.error('[fetchCarbonData] Backend request failed, using local simulation:', err);
-    const mockData = generateMockCarbonData(zoneId, currentOffsetHours);
-    return {
-      ...mockData,
-      error: `Backend connection failed (${message}). Using local simulated fallback.`,
-    };
+  const res = await carbonService.getCarbonData(zoneId, currentOffsetHours);
+  if (!res.success || !res.data) {
+    throw new Error(res.error || 'Backend carbon data is unavailable');
   }
+  return res.data;
 }

@@ -17,7 +17,7 @@ const benefits = [
 ];
 
 const previewMetrics = [
-  { label: 'Current Carbon', value: '124', unit: 'gCO2/kWh', icon: Activity, color: 'text-green-400' },
+  { label: 'Current Carbon', value: '124', unit: 'gCO2e/kWh', icon: Activity, color: 'text-green-400' },
   { label: 'Next Window', value: '14:00', unit: 'Today', icon: Wind, color: 'text-teal-400' },
   { label: 'Saved', value: '4.82', unit: 'kg CO2', icon: Leaf, color: 'text-emerald-400' },
 ];

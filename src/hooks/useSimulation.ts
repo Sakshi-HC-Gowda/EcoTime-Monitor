@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchCarbonData } from '../services/electricityMaps';
 import type { CarbonResponse } from '../services/electricityMaps';
 import type { Task } from '../types/domain';
+import { calculateSavingsGrams } from '../utils/carbonMetrics';
 
 interface UseSimulationOptions {
   carbonData: CarbonResponse | null;
@@ -85,10 +86,13 @@ export function useSimulation({
                 addLog(`DeviceAgent: Task "${task.name}" completed.`);
               } else {
                 // Accumulate carbon savings
-                const hoursFraction = minutesElapsed / 60;
-                const kW = task.powerDraw / 1000;
-                const saved = hoursFraction * kW * Math.max(0, baselineIntensity - currentIntensity);
-                if (saved > 0) onSavings(saved);
+                const saved = calculateSavingsGrams(
+                  minutesElapsed,
+                  task.powerDraw,
+                  baselineIntensity,
+                  currentIntensity,
+                );
+                onSavings(saved);
               }
             }
 

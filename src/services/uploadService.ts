@@ -1,37 +1,57 @@
 import type { ApiResponse } from '@/types/domain';
+import { apiClient } from '@/services/apiClient';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5000/api';
 
-export interface UploadedFile {
+export type UploadStatus = 'pending' | 'scheduled' | 'running' | 'completed' | 'failed';
+
+export interface UploadRegistration {
+  id: string;
+  activityId: string;
   filename: string;
   size: number;
-  sizeFormatted: string;
-  uploadedAt: string;
-  storagePath: string;
-  status: string;
-  uploadTime?: string;
+  contentType: string;
+  status: UploadStatus;
+  scheduledStartTime: string | null;
+  recommendationReason: string | null;
+  windowId: string | null;
+  uploadedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  error: string | null;
+  downloadUrl: string | null;
 }
 
-export interface UploadResponse {
-  filename: string;
-  size: number;
-  sizeFormatted: string;
-  uploadedAt: string;
-  storagePath: string;
-  files: UploadedFile[];
-  status: string;
+export interface UploadScheduleResponse {
+  upload: UploadRegistration;
+  recommendation: {
+    activityId: string;
+    recommendation: string;
+    reason: string;
+    status: 'scheduled' | 'not_scheduled';
+    windowId: string | null;
+    startTime: string | null;
+  };
 }
 
-export function uploadFiles(
-  files: File[],
+export function registerUpload(
+  activityId: string,
+  file: File,
   onProgress?: (progress: number) => void,
-): Promise<ApiResponse<UploadResponse>> {
+  idempotencyKey?: string,
+): Promise<ApiResponse<UploadRegistration>> {
   return new Promise((resolve) => {
     const formData = new FormData();
-    files.forEach((file) => formData.append('files', file));
+    formData.append('activityId', activityId);
+    formData.append('file', file);
 
     const xhr = new XMLHttpRequest();
     xhr.open('POST', `${API_BASE}/upload`);
+    const token = typeof window === 'undefined'
+      ? null
+      : window.localStorage.getItem('ecotime_token');
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    if (idempotencyKey) xhr.setRequestHeader('Idempotency-Key', idempotencyKey);
 
     xhr.upload.onprogress = (event) => {
       if (!event.lengthComputable || !onProgress) return;
@@ -45,7 +65,7 @@ export function uploadFiles(
           onProgress?.(100);
           resolve({
             success: true,
-            data: json.data,
+            data: json.data as UploadRegistration,
             timestamp: json.timestamp || new Date().toISOString(),
           });
           return;
@@ -65,14 +85,59 @@ export function uploadFiles(
       }
     };
 
-    xhr.onerror = () => {
+    const fail = (message: string) => {
       resolve({
         success: false,
-        error: 'Upload failed',
+        error: message,
         timestamp: new Date().toISOString(),
       });
     };
 
+    xhr.onerror = () => fail('Upload network request failed');
+    xhr.onabort = () => fail('Upload request was cancelled');
+    xhr.ontimeout = () => fail('Upload request timed out');
     xhr.send(formData);
   });
 }
+
+export const uploadService = {
+  getActivityUploads(activityId: string): Promise<ApiResponse<UploadRegistration[]>> {
+    return apiClient.request(`/activities/${encodeURIComponent(activityId)}/uploads`);
+  },
+
+  getStatus(uploadId: string): Promise<ApiResponse<UploadRegistration>> {
+    return apiClient.request(`/uploads/${encodeURIComponent(uploadId)}`);
+  },
+
+  schedule(uploadId: string): Promise<ApiResponse<UploadScheduleResponse>> {
+    return apiClient.request(`/uploads/${encodeURIComponent(uploadId)}/schedule`, {
+      method: 'POST',
+    });
+  },
+
+  execute(uploadId: string, runNow: boolean): Promise<ApiResponse<UploadRegistration>> {
+    return apiClient.request(`/uploads/${encodeURIComponent(uploadId)}/execute`, {
+      method: 'POST',
+      body: JSON.stringify({ runNow }),
+    });
+  },
+
+  async download(upload: UploadRegistration): Promise<void> {
+    const token = typeof window === 'undefined'
+      ? null
+      : window.localStorage.getItem('ecotime_token');
+    const response = await fetch(`${API_BASE}/uploads/${encodeURIComponent(upload.id)}/download`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!response.ok) {
+      throw new Error(`File download failed (HTTP ${response.status})`);
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = upload.filename;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  },
+};

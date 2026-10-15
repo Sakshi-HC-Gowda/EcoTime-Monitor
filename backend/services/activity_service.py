@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import os
 import logging
+import math
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -21,8 +22,16 @@ from extensions import db
 from models.activity import Activity
 from models.activity_history import ActivityHistory
 from models.user import User
+from optimization.carbon_calculator import (
+    calculate_emissions_comparison,
+    calculate_emissions_grams,
+    calculate_energy_kwh,
+    calculate_reduction_percent,
+)
+from optimization.eco_score import calculate_carbon_score, calculate_eco_score
 from optimization.window_ranking import rank_windows
 from services.carbon_service import detect_green_windows, get_carbon_data
+from services.optimizer_service import _valid_forecast
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +57,16 @@ VALID_ACTIVITY_TYPES = {
 DEFAULT_ZONE = os.getenv("DEFAULT_ZONE", "US-CA")
 DEFAULT_GREEN_THRESHOLD = float(os.getenv("LOW_CARBON_THRESHOLD", "180"))
 
+# Workload-class assumptions are estimates, not metered device power.
+DEFAULT_POWER_WATTS_BY_ACTIVITY_TYPE = {
+    "file-upload": 120.0,
+    "cloud-backup": 120.0,
+    "software-update": 80.0,
+    "dataset-download": 200.0,
+    "ci-cd-pipeline": 450.0,
+    "batch-processing": 350.0,
+}
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -59,27 +78,29 @@ def _now_iso() -> str:
 
 def _calculate_energy_kwh(power_watts: float, duration_minutes: float) -> float:
     """Calculate energy consumption in kWh from power draw (W) and duration (minutes)."""
-    return round((power_watts * duration_minutes) / 60000.0, 4)
+    return calculate_energy_kwh(power_watts, duration_minutes)
 
 
 def _calculate_carbon_grams(energy_kwh: float, intensity_g_per_kwh: float) -> float:
     """Calculate carbon emissions in grams CO2e from energy (kWh) and grid intensity (g/kWh)."""
-    return round(energy_kwh * intensity_g_per_kwh, 4)
+    return calculate_emissions_grams(energy_kwh, intensity_g_per_kwh)
 
 
 def _calculate_savings(
     energy_kwh: float, baseline_intensity: float, optimized_intensity: float
 ) -> dict[str, float]:
     """Calculate carbon baseline, optimized impact, and carbon savings."""
-    baseline = round(energy_kwh * baseline_intensity, 4)
-    optimized = round(energy_kwh * optimized_intensity, 4)
-    savings = round(baseline - optimized, 4)
-    pct = (savings / baseline * 100.0) if baseline > 0 else 0.0
+    comparison = calculate_emissions_comparison(
+        energy_kwh, baseline_intensity, optimized_intensity
+    )
+    baseline = comparison["baselineEmissionsGrams"]
+    optimized = comparison["recommendedEmissionsGrams"]
+    savings = comparison["savingsGrams"]
     return {
         "baselineCarbonImpact": baseline,
         "optimizedCarbonImpact": optimized,
         "carbonSavings": savings,
-        "carbonSavingsPercent": pct,
+        "carbonSavingsPercent": calculate_reduction_percent(savings, baseline),
     }
 
 
@@ -92,7 +113,7 @@ WORKLOAD_PROFILES = {
 }
 
 def _parse_iso(value: str | None) -> datetime | None:
-    if not value:
+    if not isinstance(value, str) or not value:
         return None
     normalized = value.strip()
     if normalized.endswith("Z"):
@@ -114,42 +135,77 @@ def _compute_derived_fields(data: dict[str, Any], created_at: str) -> dict[str, 
     priority = min(100, max(0, int(data.get("priorityScore", 50))))
     flexibility = min(100, max(0, int(data.get("flexibilityScore", 70))))
 
-    estimated_energy = round((power_draw * duration) / 60000.0, 3)
-    estimated_carbon_impact = round(estimated_energy * 180.0, 1)
-
-    energy_penalty = min(100.0, (power_draw * duration) / 900.0)
-    eco_score = round(max(0.0, min(100.0, 100.0 - (energy_penalty * 0.5) + (flexibility * 0.3) + ((100 - priority) * 0.2))), 1)
+    estimated_energy = calculate_energy_kwh(power_draw, duration)
+    current_intensity = data.get("currentCarbonIntensity")
+    eco_score = None
+    estimated_carbon_impact = None
+    recommendation = "Use optimizer for a recommendation"
+    recommendation_carbon_source = None
+    if current_intensity is not None:
+        carbon_score = calculate_carbon_score(
+            current_intensity,
+            data.get("baselineCarbonIntensity", 380.0),
+            data.get("peakCarbonIntensity", 800.0),
+        )
+        eco_score = calculate_eco_score(carbon_score, flexibility, priority)
+        estimated_carbon_impact = calculate_emissions_grams(
+            estimated_energy, current_intensity
+        )
 
     created_dt = _parse_iso(created_at) or datetime.now(timezone.utc)
-    recommended_start_dt = created_dt
+    recommended_start_dt: datetime | None = created_dt
 
     if priority >= 80:
         recommendation = "Run now"
     elif flexibility >= 60:
         recommendation = "Schedule for green window"
-        recommended_start_iso = _find_recommended_start_time(duration)
-        if recommended_start_iso:
-            recommended_start_dt = _parse_iso(recommended_start_iso) or created_dt
-        else:
-            recommended_start_dt = created_dt.replace(microsecond=0) + timedelta(minutes=30)
+        window_recommendation = _find_recommended_start_time(duration)
+        if window_recommendation:
+            recommended_start_dt = _parse_iso(window_recommendation["startTime"])
+            recommendation_carbon_source = window_recommendation["source"]
+            if window_recommendation["isSimulated"]:
+                recommendation = "Schedule in a simulated Green Window"
+        if recommended_start_dt is None:
+            recommendation = "No feasible Green Window is available"
     else:
         recommendation = "Run now"
 
-    return {
+    derived = {
         "estimatedEnergyConsumption": estimated_energy,
-        "estimatedCarbonImpact": estimated_carbon_impact,
-        "ecoScore": eco_score,
+        "estimatedEnergyUnit": "kWh",
+        "estimatedEnergyBasis": "estimated_power_watts_times_estimated_duration_minutes",
         "recommendation": recommendation,
-        "recommendedStartTime": recommended_start_dt.isoformat(),
+        "recommendedStartTime": (
+            recommended_start_dt.isoformat() if recommended_start_dt else None
+        ),
     }
+    if estimated_carbon_impact is not None:
+        derived["estimatedCarbonImpact"] = estimated_carbon_impact
+        derived["carbonImpactUnit"] = "gCO2e"
+        derived["carbonImpactBasis"] = (
+            "estimated_from_assumed_power_and_estimated_duration"
+        )
+        derived["carbonIntensityUsed"] = float(current_intensity)
+        derived["carbonIntensityUnit"] = "gCO2e/kWh"
+        derived["carbonIntensitySource"] = data.get("carbonDataSource", "provided")
+    if eco_score is not None:
+        derived["ecoScore"] = eco_score
+    if recommendation_carbon_source:
+        derived["recommendationCarbonDataSource"] = recommendation_carbon_source
+    return derived
 
 
-def _find_recommended_start_time(duration_minutes: float) -> str | None:
+def _find_recommended_start_time(duration_minutes: float) -> dict[str, Any] | None:
     """Pick the best future green-window start time for the task duration."""
     try:
         carbon = get_carbon_data(zone_id=DEFAULT_ZONE, offset_hours=0)
+        if carbon.get("error"):
+            return None
+        forecast = _valid_forecast(carbon.get("forecast"))
+        if not forecast or carbon.get("forecastSource") == "unavailable":
+            return None
         raw_windows = detect_green_windows(
-            forecast=carbon.get("forecast", []),
+            forecast=forecast,
             current_datetime=carbon["current"]["datetime"],
             threshold=DEFAULT_GREEN_THRESHOLD,
         )
@@ -157,12 +213,18 @@ def _find_recommended_start_time(duration_minutes: float) -> str | None:
 
         fitting_window = next(
             (window for window in ranked_windows if float(window.get("duration", 0)) >= duration_minutes),
-            ranked_windows[0] if ranked_windows else None,
+            None,
         )
         if fitting_window:
-            return fitting_window.get("startTime")
+            start_time = fitting_window.get("startTime")
+            if isinstance(start_time, str) and _parse_iso(start_time):
+                return {
+                    "startTime": start_time,
+                    "source": str(carbon.get("source", "unavailable")),
+                    "isSimulated": bool(carbon.get("isSimulated")),
+                }
     except Exception as exc:
-        logger.warning("Falling back to simple recommendation because green-window lookup failed: %s", exc)
+        logger.warning("Green-window lookup failed: %s", exc)
 
     return None
 
@@ -208,7 +270,12 @@ def _aware(dt: datetime | None) -> datetime | None:
 # ---------------------------------------------------------------------------
 
 
-def create_activity(data: dict, authenticated_user: User) -> tuple[dict | None, str | None]:
+def create_activity(
+    data: dict,
+    authenticated_user: User,
+    idempotency_key: str | None = None,
+    request_fingerprint: str | None = None,
+) -> tuple[dict | None, str | None, bool]:
     """
     Create and persist a new activity.
 
@@ -219,34 +286,54 @@ def create_activity(data: dict, authenticated_user: User) -> tuple[dict | None, 
         Priority and flexibility can be supplied by the caller. If they are
         omitted, workload profiles provide sensible defaults.
     Returns:
-        (task_dict, error_message) — one of them will be None
+        (task_dict, error_message, replayed)
     """
-    required = ["name", "type", "duration", "powerDraw"]
+    if not isinstance(data, dict):
+        return None, "Request body must be a JSON object", False
+    required = ["name", "type", "duration"]
     missing = [f for f in required if f not in data or data[f] is None]
     if missing:
-        return None, f"Missing required fields: {', '.join(missing)}"
+        return None, f"Missing required fields: {', '.join(missing)}", False
 
     task_type = data["type"]
-    if task_type not in VALID_TYPES:
-        return None, f"Invalid type '{task_type}'. Must be one of: {sorted(VALID_TYPES)}"
+    if not isinstance(task_type, str) or task_type not in VALID_TYPES:
+        return None, f"Invalid type '{task_type}'. Must be one of: {sorted(VALID_TYPES)}", False
 
     activity_type = data.get("activityType", "batch-processing")
-    if activity_type not in VALID_ACTIVITY_TYPES:
-        activity_type = "batch-processing"  # safe default
+    if not isinstance(activity_type, str) or activity_type not in VALID_ACTIVITY_TYPES:
+        return None, f"Invalid activityType '{activity_type}'. Must be one of: {sorted(VALID_ACTIVITY_TYPES)}", False
 
+    if isinstance(data["duration"], bool):
+        return None, "Field duration must be a finite number greater than 0 minutes", False
     try:
         duration = float(data["duration"])
-        power_draw = float(data["powerDraw"])
     except (ValueError, TypeError):
-        return None, "Fields duration and powerDraw must be numeric"
-    
+        return None, "Field duration must be a finite number greater than 0 minutes", False
+    raw_power_draw = data.get("powerDraw")
+    if raw_power_draw is None:
+        power_draw = DEFAULT_POWER_WATTS_BY_ACTIVITY_TYPE[activity_type]
+    elif isinstance(raw_power_draw, bool):
+        return None, "Field powerDraw must be a non-negative finite number of watts", False
+    else:
+        try:
+            power_draw = float(raw_power_draw)
+        except (ValueError, TypeError):
+            return None, "Field powerDraw must be a non-negative finite number of watts", False
 
-    if duration <= 0:
-        return None, "Field duration must be greater than 0"
-    if power_draw <= 0:
-        return None, "Field powerDraw must be greater than 0"
+    if not math.isfinite(duration) or duration <= 0:
+        return None, "Field duration must be a finite number greater than 0 minutes", False
+    if not math.isfinite(power_draw) or power_draw < 0:
+        return None, "Field powerDraw must be a non-negative finite number of watts", False
+    try:
+        calculate_energy_kwh(power_draw, duration)
+    except ValueError as exc:
+        return None, str(exc), False
 
+    if not isinstance(data["name"], str) or not data["name"].strip():
+        return None, "Field name must be a non-empty string", False
     activity_name = data["name"].strip()
+    if len(activity_name) > 255:
+        return None, "Field name must be 255 characters or fewer", False
 
     profile = WORKLOAD_PROFILES.get(activity_name)
 
@@ -257,29 +344,70 @@ def create_activity(data: dict, authenticated_user: User) -> tuple[dict | None, 
         priority_default = 30
         flexibility_default = 80
 
-    try:
-        priority_score = min(100, max(0, int(data.get("priorityScore", priority_default))))
-        flexibility_score = min(100, max(0, int(data.get("flexibilityScore", flexibility_default))))
-    except (ValueError, TypeError):
-        return None, "Fields priorityScore and flexibilityScore must be numeric"
+    def parse_score(field: str, default: int) -> tuple[int | None, str | None]:
+        value = data.get(field, default)
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+            or not 0 <= value <= 100
+            or not float(value).is_integer()
+        ):
+            return None, f"Field {field} must be a finite integer from 0 to 100"
+        return int(value), None
+
+    priority_score, score_error = parse_score("priorityScore", priority_default)
+    if score_error:
+        return None, score_error, False
+    flexibility_score, score_error = parse_score("flexibilityScore", flexibility_default)
+    if score_error:
+        return None, score_error, False
+
+    earliest_start_value = data.get("earliestStart")
+    deadline_value = data.get("deadline")
+    earliest_start = _parse_iso(earliest_start_value) if earliest_start_value else None
+    deadline = _parse_iso(deadline_value) if deadline_value else None
+    if earliest_start_value not in (None, "") and earliest_start is None:
+        return None, "Field earliestStart must be a valid ISO timestamp", False
+    if deadline_value not in (None, "") and deadline is None:
+        return None, "Field deadline must be a valid ISO timestamp", False
+    if earliest_start and deadline and earliest_start >= deadline:
+        return None, "Field deadline must be later than earliestStart", False
+
+    if idempotency_key:
+        try:
+            existing = Activity.query.filter_by(
+                organization_id=authenticated_user.organization_id,
+                idempotency_key=idempotency_key,
+            ).first()
+        except Exception:
+            db.session.rollback()
+            logger.exception("Could not verify activity idempotency key")
+            return None, "Could not verify the activity request; retry safely", False
+        if existing:
+            if existing.request_fingerprint != request_fingerprint:
+                return None, "Idempotency-Key was already used for a different activity request", False
+            return existing.to_dict(), None, True
 
     task_id = f"task-{datetime.now(timezone.utc).timestamp():.6f}"
-
-    
 
     activity = Activity(
         id=task_id,
         organization_id=authenticated_user.organization_id,
-        name=str(data["name"]).strip(),
+        idempotency_key=idempotency_key,
+        request_fingerprint=request_fingerprint,
+        name=activity_name,
         type=task_type,
         activity_type=activity_type,
         duration=duration,
         power_draw=power_draw,
-        priority_score=min(100, max(0, int(data.get("priorityScore", 50)))),
-        flexibility_score=min(100, max(0, int(flexibility_score))),
+        priority_score=priority_score,
+        flexibility_score=flexibility_score,
         status="idle",
         progress=0.0,
         assigned_window_id=None,
+        earliest_start=earliest_start,
+        deadline=deadline,
     )
 
     try:
@@ -292,13 +420,26 @@ def create_activity(data: dict, authenticated_user: User) -> tuple[dict | None, 
             execution_time=None,
         ))
         db.session.commit()
-    except Exception:
+    except Exception as exc:
         db.session.rollback()
+        if idempotency_key:
+            try:
+                existing = Activity.query.filter_by(
+                    organization_id=authenticated_user.organization_id,
+                    idempotency_key=idempotency_key,
+                ).first()
+            except Exception:
+                logger.exception("Could not resolve activity idempotency race")
+                existing = None
+            if existing and existing.request_fingerprint == request_fingerprint:
+                return existing.to_dict(), None, True
+            if existing:
+                return None, "Idempotency-Key was already used for a different activity request", False
         logger.exception("Failed to create activity")
-        return None, "Failed to save activity to database"
+        return None, "Could not persist the activity", False
 
     logger.info("Created activity %s: '%s'", task_id, activity.name)
-    return activity.to_dict(), None
+    return activity.to_dict(), None, False
 
 
 def list_activities(
@@ -351,11 +492,18 @@ def get_activity(task_id: str, organization_id: int) -> dict | None:
     return activity.to_dict() if activity else None
 
 
-def update_activity(task_id: str, updates: dict, organization_id: int) -> tuple[dict | None, str | None]:
+def update_activity(
+    task_id: str,
+    updates: dict,
+    organization_id: int,
+    *,
+    commit: bool = True,
+) -> tuple[dict | None, str | None]:
     """
     Update allowed fields on an existing activity.
 
-    Allowed update fields: status, progress, assignedWindowId, scheduledStartTime
+    Allowed update fields: status, progress, assignedWindowId, earliestStart, deadline.
+    Scheduling and execution state changes are controlled by their owning workflows.
 
     Every status change is logged to ActivityHistory with the time spent
     in the previous status, so Analytics can compute execution times.
@@ -363,12 +511,61 @@ def update_activity(task_id: str, updates: dict, organization_id: int) -> tuple[
     Returns:
         (updated_task, error_message)
     """
+    if not isinstance(updates, dict):
+        return None, "Request body must be a JSON object"
     activity = Activity.query.filter_by(
         id=task_id,
         organization_id=organization_id,
     ).first()
     if not activity:
         return None, f"Activity '{task_id}' not found"
+
+    earliest_start = _aware(activity.earliest_start)
+    deadline = _aware(activity.deadline)
+    if "earliestStart" in updates:
+        earliest_start = _parse_iso(updates["earliestStart"])
+        if updates["earliestStart"] not in (None, "") and earliest_start is None:
+            return None, "Field earliestStart must be a valid ISO timestamp"
+    if "deadline" in updates:
+        deadline = _parse_iso(updates["deadline"])
+        if updates["deadline"] not in (None, "") and deadline is None:
+            return None, "Field deadline must be a valid ISO timestamp"
+    if earliest_start and deadline and earliest_start >= deadline:
+        return None, "Field deadline must be later than earliestStart"
+    if activity.status == "scheduled" and (
+        "earliestStart" in updates or "deadline" in updates
+    ):
+        return None, "Scheduling bounds cannot change while an activity is scheduled"
+
+    new_status = updates.get("status", activity.status)
+    if not isinstance(new_status, str) or new_status not in VALID_STATUSES:
+        return None, f"Invalid status '{new_status}'. Valid: {sorted(VALID_STATUSES)}"
+    if new_status in {"scheduled", "delayed"}:
+        return None, "Activities can be scheduled or delayed only by a feasible optimizer recommendation"
+    if new_status in {"running", "failed"}:
+        return None, "Execution statuses are updated only by a supported workload executor"
+    if activity.activity_type == "file-upload" and "status" in updates:
+        return None, (
+            "File upload status is changed only through the upload workflow; "
+            "completion must use the upload executor"
+        )
+
+    progress = None
+    if "progress" in updates:
+        value = updates["progress"]
+        if isinstance(value, bool):
+            return None, "Field 'progress' must be a finite number from 0 to 100"
+        try:
+            progress = float(value)
+        except (ValueError, TypeError):
+            return None, "Field 'progress' must be a finite number from 0 to 100"
+        if not math.isfinite(progress) or not 0 <= progress <= 100:
+            return None, "Field 'progress' must be a finite number from 0 to 100"
+
+    if "assignedWindowId" in updates and updates["assignedWindowId"] is not None:
+        return None, "Window assignments can be set only by a feasible optimizer recommendation"
+    if "scheduledStartTime" in updates:
+        return None, "Scheduled start times can be set only by a feasible optimizer recommendation"
 
     previous_status = activity.status
     previous_updated_at = _aware(activity.updated_at)
@@ -378,14 +575,6 @@ def update_activity(task_id: str, updates: dict, organization_id: int) -> tuple[
     # Status
     # ---------------------------------------------------------------
     if "status" in updates:
-        new_status = updates["status"]
-
-        if new_status not in VALID_STATUSES:
-            return None, (
-                f"Invalid status '{new_status}'. "
-                f"Valid: {sorted(VALID_STATUSES)}"
-            )
-
         status_changed = new_status != previous_status
         activity.status = new_status
 
@@ -402,12 +591,8 @@ def update_activity(task_id: str, updates: dict, organization_id: int) -> tuple[
     # ---------------------------------------------------------------
     # Progress
     # ---------------------------------------------------------------
-    if "progress" in updates:
-        try:
-            progress = float(updates["progress"])
-            activity.progress = max(0.0, min(100.0, progress))
-        except (ValueError, TypeError):
-            return None, "Field 'progress' must be numeric"
+    if progress is not None:
+        activity.progress = progress
 
     # ---------------------------------------------------------------
     # Assigned green window
@@ -415,15 +600,8 @@ def update_activity(task_id: str, updates: dict, organization_id: int) -> tuple[
     if "assignedWindowId" in updates:
         activity.assigned_window_id = updates["assignedWindowId"]
 
-    # ---------------------------------------------------------------
-    # Scheduled start time
-    # ---------------------------------------------------------------
-    if "scheduledStartTime" in updates:
-        scheduled_start_time = updates["scheduledStartTime"]
-
-        # Use the database field if the Activity model provides it.
-        if hasattr(activity, "scheduled_start_time"):
-            activity.scheduled_start_time = scheduled_start_time
+    activity.earliest_start = earliest_start
+    activity.deadline = deadline
 
     # ---------------------------------------------------------------
     # Updated timestamp
@@ -451,7 +629,8 @@ def update_activity(task_id: str, updates: dict, organization_id: int) -> tuple[
                 )
             )
 
-        db.session.commit()
+        if commit:
+            db.session.commit()
 
     except Exception:
         db.session.rollback()
@@ -490,7 +669,10 @@ def delete_activity(task_id: str, organization_id: int) -> tuple[bool, str | Non
     return True, None
 
 
-def bulk_update_activities(updates: list[dict], organization_id: int) -> list[dict]:
+def bulk_update_activities(
+    updates: list[dict],
+    organization_id: int,
+) -> tuple[list[dict] | None, str | None]:
     """
     Apply status/progress updates to multiple activities at once.
     Used by the orchestrator to batch-update after scheduling.
@@ -503,11 +685,25 @@ def bulk_update_activities(updates: list[dict], organization_id: int) -> list[di
     """
     updated: list[dict[str, Any]] = []
     for upd in updates:
-        task_id = upd.get("id")
-        if not task_id:
-            continue
+        task_id = upd["id"]
         fields = {k: v for k, v in upd.items() if k != "id"}
-        task, _ = update_activity(task_id, fields, organization_id)
-        if task:
-            updated.append(task)
-    return updated
+        task, error = update_activity(
+            task_id,
+            fields,
+            organization_id,
+            commit=False,
+        )
+        if error:
+            db.session.rollback()
+            return None, error
+        if task is None:
+            db.session.rollback()
+            return None, f"Activity '{task_id}' not found"
+        updated.append(task)
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        logger.exception("Failed to persist bulk activity update")
+        return None, "Could not persist the bulk activity update"
+    return updated, None

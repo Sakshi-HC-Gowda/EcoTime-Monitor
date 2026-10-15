@@ -214,6 +214,13 @@ export default function App() {
   const totalTasks = tasks.length;
   const runningTasks = tasks.filter(t => t.status === 'running').length;
   const activeIntensity = carbonData.current.carbonIntensity;
+  const savingsMagnitude = Math.abs(totalSavingsGrams);
+  const formattedSavings = savingsMagnitude >= 1000
+    ? `${(savingsMagnitude / 1000).toFixed(2)} kg`
+    : `${savingsMagnitude.toFixed(1)} g`;
+  const savingsLabel = totalSavingsGrams < 0
+    ? `${formattedSavings} estimated emissions increase`
+    : `${formattedSavings} estimated net savings`;
 
   // ============================================================================
   // Render
@@ -341,7 +348,7 @@ export default function App() {
             <div className="stat-info">
               <span className="stat-value">
                 {activeIntensity}{' '}
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>g/kWh</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>gCO2e/kWh</span>
               </span>
               <span className="stat-label">Grid Carbon Intensity</span>
             </div>
@@ -371,11 +378,9 @@ export default function App() {
             </div>
             <div className="stat-info">
               <span className="stat-value">
-                {totalSavingsGrams >= 1000
-                  ? `${(totalSavingsGrams / 1000).toFixed(2)} kg`
-                  : `${totalSavingsGrams.toFixed(1)} g`}
+                {savingsLabel}
               </span>
-              <span className="stat-label">Total Carbon Avoided</span>
+              <span className="stat-label">Estimated net carbon savings</span>
             </div>
           </div>
 
@@ -402,7 +407,10 @@ export default function App() {
                 greenWindows={greenWindows}
                 lowCarbonThreshold={lowCarbonThreshold}
               />
-              <SavingsCard totalSavingsGrams={totalSavingsGrams} />
+              <SavingsCard
+                totalSavingsGrams={totalSavingsGrams}
+                isSimulated={carbonData?.isSimulated ?? true}
+              />
             </>
           )}
 

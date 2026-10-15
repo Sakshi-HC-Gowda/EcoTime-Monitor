@@ -34,6 +34,8 @@ import { MetricCard } from '@/components/ui/MetricCard';
 import { LoadingSkeleton } from '@/components/ui/LoadingSkeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { getEstimatedEcoScore } from '@/features/activities/utils/activityMetrics';
+import { useSimulationConfig } from '@/features/optimization/hooks/useOptimization';
 
 type CustomTooltipProps = {
   active?: boolean;
@@ -52,7 +54,7 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
   return (
     <div className="bg-[#0c1322] border border-white/[0.12] rounded-xl px-3.5 py-2.5 shadow-2xl text-xs">
       <p className="text-slate-400 mb-1 font-medium">{label}</p>
-      <p className="text-purple-400 font-bold">{display} <span className="text-slate-500 font-normal">gCO₂/kWh</span></p>
+      <p className="text-purple-400 font-bold">{display} <span className="text-slate-500 font-normal">gCO₂e/kWh</span></p>
     </div>
   );
 }
@@ -64,6 +66,7 @@ export function DashboardPage() {
   const { data: carbon, isLoading: carbonLoading, isError: carbonError, refetch: refetchCarbon } = useCarbon(selectedZone);
   const { data: windows, isLoading: windowsLoading } = useGreenWindows(selectedZone, 180);
   const { data: activitiesData, isLoading: activitiesLoading } = useActivitiesQuery(1, 10);
+  const { data: simulationConfig } = useSimulationConfig();
 
   if (carbonLoading || windowsLoading) {
     return (
@@ -112,8 +115,17 @@ export function DashboardPage() {
     intensity: pt.carbonIntensity,
   }));
 
-  // EcoScore calculation
-  const ecoScore = Math.max(10, Math.min(99, Math.round(100 - (currentIntensity / 400) * 100)));
+  // Match the recommendation formula and average over the activities currently shown.
+  const ecoScores = activities
+    .map((task) => getEstimatedEcoScore(
+      task,
+      currentIntensity,
+      simulationConfig?.baselineIntensity ?? 380,
+    ))
+    .filter((score): score is number => score !== null);
+  const ecoScore = ecoScores.length
+    ? Math.round((ecoScores.reduce((sum, score) => sum + score, 0) / ecoScores.length) * 10) / 10
+    : null;
 
   // Donut chart data for Activity Lifecycle
   const pieData = [
@@ -170,18 +182,17 @@ export function DashboardPage() {
         <MetricCard
           title="Current Carbon"
           value={currentIntensity}
-          unit="gCO₂/kWh"
-          subtitle={isLow ? 'Below threshold — optimal' : 'Above threshold — moderate'}
+          unit="gCO₂e/kWh"
+          subtitle={`${carbon.isSimulated ? 'Simulated' : 'Provider-reported'} · ${isLow ? 'Below threshold' : 'Above threshold'}`}
           icon={Zap}
           iconColor="text-amber-400"
           iconBg="bg-amber-500/15 border-amber-500/30"
-          trend={{ value: '12% vs yesterday', positive: false }}
           onClick={() => navigate('/carbon')}
         />
         <MetricCard
           title="EcoScore"
-          value={`${ecoScore} / 100`}
-          subtitle="Optimization rating"
+          value={ecoScore === null ? '—' : `${ecoScore.toFixed(1)} / 100`}
+          subtitle={ecoScore === null ? 'No activities available' : `Average of ${ecoScores.length} listed activities`}
           icon={Leaf}
           iconColor="text-emerald-400"
           iconBg="bg-emerald-500/15 border-emerald-500/30"
@@ -189,9 +200,8 @@ export function DashboardPage() {
         />
         <MetricCard
           title="Carbon Saved"
-          value="4.82"
-          unit="kg CO₂"
-          subtitle="Cumulative via scheduling"
+          value="—"
+          subtitle="Savings are calculated in Optimization"
           icon={Leaf}
           iconColor="text-emerald-400"
           iconBg="bg-emerald-500/15 border-emerald-500/30"
@@ -413,8 +423,9 @@ export function DashboardPage() {
             </div>
             <div className="p-4 rounded-xl bg-purple-500/[0.08] border border-purple-500/25">
               <p className="text-xs text-slate-200 leading-relaxed">
-                Delay batch training by <span className="text-white font-semibold">2 hours</span> to utilize Green Window GW-104.
-                Estimated saving: <span className="text-emerald-400 font-bold">42% carbon</span>.
+                Current grid intensity is <span className="text-white font-semibold">{currentIntensity.toFixed(1)} gCO2e/kWh</span>
+                {' '}({carbon.isSimulated ? 'simulated carbon data' : 'provider-reported data'}).
+                {' '}Estimated savings are reported by the optimizer only when a baseline and recommended window can be compared.
               </p>
             </div>
           </GlassCard>
@@ -439,7 +450,7 @@ export function DashboardPage() {
                     >
                       <div className="min-w-0 pr-2">
                         <p className="font-semibold text-white truncate">{act.name}</p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">{act.duration} min · {act.powerDraw}W</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">{act.duration} min estimated · {act.powerDraw} W assumed</p>
                       </div>
                       <StatusBadge status={act.status} />
                     </div>

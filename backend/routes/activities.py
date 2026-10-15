@@ -12,6 +12,9 @@ POST   /api/activities/bulk      — Bulk update multiple tasks
 from __future__ import annotations
 
 import logging
+import hashlib
+import json
+import re
 from datetime import datetime, timezone
 from flask import Blueprint, request, jsonify
 from auth_utils import require_auth
@@ -49,36 +52,68 @@ def create():
         name (str, required)
         type (str, required): 'flexible' | 'non-flexible'
         duration (float, required): minutes
-        powerDraw (float, required): Watts
+        powerDraw (float, optional): Estimated Watts; defaults by activity type
         activityType (str): one of the known activity types
         priorityScore (int): 0-100, default 50
         flexibilityScore (int): 0-100, auto-set if missing
+    Idempotency-Key (header, optional): Replays an identical registration retry.
 
     Returns 201: { success: true, data: Task }
+    Returns 200: Replayed idempotent registration
     Returns 400: { success: false, error: str }
     """
     data = request.get_json(silent=True)
-    if not data:
+    if not isinstance(data, dict):
         return jsonify({
             "success": False,
-            "error": "Request body must be valid JSON",
+            "error": "Request body must be a JSON object",
             "timestamp": _now_iso(),
         }), 400
 
-    task, error = create_activity(data, request.user)
+    idempotency_key = request.headers.get("Idempotency-Key")
+    if idempotency_key is not None and not re.fullmatch(r"[\x21-\x7e]{1,128}", idempotency_key):
+        return jsonify({
+            "success": False,
+            "error": "Idempotency-Key must contain 1 to 128 visible ASCII characters",
+            "timestamp": _now_iso(),
+        }), 400
+    try:
+        fingerprint = hashlib.sha256(json.dumps(
+            data,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")).hexdigest()
+    except (TypeError, ValueError):
+        return jsonify({
+            "success": False,
+            "error": "Request body contains invalid JSON values",
+            "timestamp": _now_iso(),
+        }), 400
+
+    task, error, replayed = create_activity(
+        data,
+        request.user,
+        idempotency_key=idempotency_key,
+        request_fingerprint=fingerprint if idempotency_key else None,
+    )
 
     if error:
         return jsonify({
             "success": False,
             "error": error,
             "timestamp": _now_iso(),
-        }), 400
+        }), (
+            500 if error.startswith("Could not ")
+            else 409 if error.startswith("Idempotency-Key was already used")
+            else 400
+        )
 
     return jsonify({
         "success": True,
         "data": task,
         "timestamp": _now_iso(),
-    }), 201
+    }), 200 if replayed else 201
 
 
 # ---------------------------------------------------------------------------
@@ -164,7 +199,7 @@ def update(task_id: str):
     Returns 400/404: { success: false, error: str }
     """
     data = request.get_json(silent=True)
-    if data is None:
+    if not isinstance(data, dict):
         return jsonify({
             "success": False,
             "error": "Request body must be valid JSON",
@@ -174,7 +209,11 @@ def update(task_id: str):
     task, error = update_activity(task_id, data, request.user.organization_id)
 
     if error:
-        status_code = 404 if "not found" in error.lower() else 400
+        status_code = (
+            500 if error.startswith("Failed to save")
+            else 404 if "not found" in error.lower()
+            else 400
+        )
         return jsonify({
             "success": False,
             "error": error,
@@ -208,7 +247,7 @@ def delete(task_id: str):
             "success": False,
             "error": error,
             "timestamp": _now_iso(),
-        }), 404
+        }), 500 if error == "Failed to delete activity" else 404
 
     return jsonify({
         "success": True,
@@ -231,9 +270,18 @@ def bulk_update():
     Request Body (JSON):
         { updates: [{ id: str, status?: str, progress?: float, ... }] }
 
+    Updates are validated and committed atomically; schedule state is optimizer-owned.
     Returns 200: { success: true, data: Task[] }
     """
-    data = request.get_json(silent=True) or {}
+    data = request.get_json(silent=True)
+    if data is None:
+        data = {}
+    if not isinstance(data, dict):
+        return jsonify({
+            "success": False,
+            "error": "Request body must be a JSON object",
+            "timestamp": _now_iso(),
+        }), 400
     updates = data.get("updates", [])
 
     if not isinstance(updates, list):
@@ -243,10 +291,28 @@ def bulk_update():
             "timestamp": _now_iso(),
         }), 400
 
-    task_ids = {item.get("id") for item in updates if isinstance(item, dict) and item.get("id")}
+    if any(
+        not isinstance(item, dict)
+        or not isinstance(item.get("id"), str)
+        or not item["id"]
+        for item in updates
+    ):
+        return jsonify({
+            "success": False,
+            "error": "Each update must be an object with a non-empty string id",
+            "timestamp": _now_iso(),
+        }), 400
+
+    task_ids = [item["id"] for item in updates]
+    if len(set(task_ids)) != len(task_ids):
+        return jsonify({
+            "success": False,
+            "error": "An activity may appear only once in a bulk update",
+            "timestamp": _now_iso(),
+        }), 400
     owned_count = Activity.query.filter(
         Activity.organization_id == request.user.organization_id,
-        Activity.id.in_(task_ids or {""}),
+        Activity.id.in_(task_ids or [""]),
     ).count()
     if owned_count != len(task_ids):
         return jsonify({
@@ -255,7 +321,13 @@ def bulk_update():
             "timestamp": _now_iso(),
         }), 403
 
-    updated_tasks = bulk_update_activities(updates, request.user.organization_id)
+    updated_tasks, error = bulk_update_activities(updates, request.user.organization_id)
+    if error:
+        return jsonify({
+            "success": False,
+            "error": error,
+            "timestamp": _now_iso(),
+        }), 500 if error.startswith("Could not ") else 400
 
     return jsonify({
         "success": True,

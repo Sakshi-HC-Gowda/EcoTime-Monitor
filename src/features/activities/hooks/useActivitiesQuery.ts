@@ -18,7 +18,8 @@ export function useActivityMutations() {
   const queryClient = useQueryClient();
 
   const createMutation = useMutation({
-    mutationFn: (task: CreateTaskRequest) => activitiesService.createTask(task),
+    mutationFn: ({ task, idempotencyKey }: { task: CreateTaskRequest; idempotencyKey: string }) =>
+      activitiesService.createTask(task, idempotencyKey),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['activities'] }),
   });
 

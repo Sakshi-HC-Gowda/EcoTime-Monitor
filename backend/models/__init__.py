@@ -13,6 +13,7 @@ from .organization_member import OrganizationMember
 from .role import Role
 from .simulation_config import SimulationConfig
 from .user import User
+from .upload_registration import UploadRegistration
 
 __all__ = [
     "Activity",
@@ -23,4 +24,5 @@ __all__ = [
     "Role",
     "SimulationConfig",
     "User",
+    "UploadRegistration",
 ]

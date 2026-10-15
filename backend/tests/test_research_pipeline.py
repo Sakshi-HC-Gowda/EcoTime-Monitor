@@ -90,7 +90,7 @@ class ResearchPipelineTests(unittest.TestCase):
         self.assertEqual(savings["baselineCarbonImpact"], 300)
         self.assertEqual(savings["optimizedCarbonImpact"], 200)
         self.assertEqual(savings["carbonSavings"], 100)
-        self.assertAlmostEqual(savings["carbonSavingsPercent"], 33.3333333333)
+        self.assertEqual(savings["carbonSavingsPercent"], 33.33)
 
     def test_green_window_detection_groups_contiguous_points(self) -> None:
         start = datetime(2026, 1, 1, tzinfo=timezone.utc)

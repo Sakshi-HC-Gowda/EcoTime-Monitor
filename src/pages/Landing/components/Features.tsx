@@ -15,7 +15,7 @@ const features = [
       <div className="flex h-full flex-col items-center justify-center text-center">
         <Activity className="mb-6 h-14 w-14 text-green-400 opacity-80" />
         <div className="text-3xl font-black text-white md:text-4xl">
-          124 <span className="text-base font-semibold text-slate-400 md:text-lg">gCO2/kWh</span>
+          124 <span className="text-base font-semibold text-slate-400 md:text-lg">gCO2e/kWh</span>
         </div>
         <p className="mt-3 font-mono text-sm font-semibold tracking-wide text-green-400">LIVE GRID</p>
       </div>

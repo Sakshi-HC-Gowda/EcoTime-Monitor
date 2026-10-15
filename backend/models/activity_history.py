@@ -21,7 +21,7 @@ class ActivityHistory(db.Model):
     )
     previous_status = db.Column(db.String(32), nullable=True)
     new_status = db.Column(db.String(32), nullable=False)
-    # Seconds spent in ``previous_status``; absent for the initial record.
+    # Elapsed status duration is stored and returned in seconds.
     execution_time = db.Column(db.Float, nullable=True)
     created_at = db.Column(
         db.DateTime(timezone=True),
@@ -38,6 +38,8 @@ class ActivityHistory(db.Model):
             "previousStatus": self.previous_status,
             "newStatus": self.new_status,
             "executionTime": self.execution_time,
+            "executionTimeSeconds": self.execution_time,
+            "executionTimeUnit": "seconds",
             "createdAt": self.created_at.isoformat() if self.created_at else None,
         }
 

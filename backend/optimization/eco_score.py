@@ -17,6 +17,7 @@ Recommendation thresholds:
 
 from __future__ import annotations
 
+import math
 from typing import Literal
 
 Recommendation = Literal[
@@ -26,6 +27,14 @@ Recommendation = Literal[
     "Pause Activity",
     "Resume Activity",
 ]
+
+
+def _finite_non_negative(value: float, name: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{name} must be a non-negative finite number.")
+    if not math.isfinite(value) or value < 0:
+        raise ValueError(f"{name} must be a non-negative finite number.")
+    return float(value)
 
 
 def calculate_carbon_score(
@@ -47,12 +56,15 @@ def calculate_carbon_score(
     Returns:
         Carbon score in range [0, 100]
     """
+    current_intensity = _finite_non_negative(current_intensity, "Current intensity")
+    baseline_intensity = _finite_non_negative(baseline_intensity, "Baseline intensity")
+    peak_intensity = _finite_non_negative(peak_intensity, "Peak intensity")
     # Use a range anchored from 50% of baseline to peak so moderate grids
     # still yield a meaningful spread.
     range_val = max(50.0, peak_intensity - baseline_intensity * 0.5)
     carbon_diff = peak_intensity - current_intensity
     score = max(0.0, min(100.0, (carbon_diff / range_val) * 100.0))
-    return round(score, 1)
+    return math.floor(score * 10.0 + 0.5) / 10.0
 
 
 def calculate_eco_score(
@@ -71,12 +83,17 @@ def calculate_eco_score(
     Returns:
         EcoScore in range [0, 100], rounded to 1 decimal place
     """
-    score = (
-        0.5 * carbon_score
-        + 0.3 * flexibility_score
-        + 0.2 * priority_score
-    )
-    return round(score, 1)
+    scores = (carbon_score, flexibility_score, priority_score)
+    labels = ("Carbon score", "Flexibility score", "Priority score")
+    normalized: list[float] = []
+    for value, label in zip(scores, labels):
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"{label} must be a finite number from 0 to 100.")
+        if not math.isfinite(value) or value < 0 or value > 100:
+            raise ValueError(f"{label} must be a finite number from 0 to 100.")
+        normalized.append(float(value))
+    score = 0.5 * normalized[0] + 0.3 * normalized[1] + 0.2 * normalized[2]
+    return math.floor(score * 10.0 + 0.5) / 10.0
 
 
 def get_recommendation(

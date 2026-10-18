@@ -51,7 +51,6 @@ const NAV_SECTIONS: { label: string; items: NavItemDef[] }[] = [
     items: [
       { label: 'Activities', href: '/activities', icon: Zap, color: 'text-amber-400' },
       { label: 'Green Windows', href: '/windows', icon: Wind, color: 'text-teal-400' },
-      { label: 'Scheduler', href: '/scheduler', icon: CalendarClock, color: 'text-blue-400' },
     ],
   },
   {
@@ -137,10 +136,9 @@ function NavItem({
         rounded-2xl text-[13px] font-medium
         transition-[width,background-color,border-color,color,box-shadow] duration-300
         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40
-        ${
-          isActive
-            ? 'active bg-[#064e3b]/80 text-emerald-400 border border-emerald-500/40 shadow-[0_0_20px_rgba(16,185,129,0.25)] font-semibold'
-            : 'text-slate-400 border border-transparent hover:text-slate-200 hover:bg-white/[0.05]'
+        ${isActive
+          ? 'active bg-[#064e3b]/80 text-emerald-400 border border-emerald-500/40 shadow-[0_0_20px_rgba(16,185,129,0.25)] font-semibold'
+          : 'text-slate-400 border border-transparent hover:text-slate-200 hover:bg-white/[0.05]'
         }
       `}
     >
@@ -149,9 +147,8 @@ function NavItem({
           <div className="flex w-11 h-11 flex-shrink-0 items-center justify-center">
             <Icon
               size={19}
-              className={`transition-colors ${
-                isActive ? 'text-emerald-400' : 'text-slate-400 group-hover:text-slate-200'
-              }`}
+              className={`transition-colors ${isActive ? 'text-emerald-400' : 'text-slate-400 group-hover:text-slate-200'
+                }`}
             />
           </div>
 
@@ -159,11 +156,10 @@ function NavItem({
             <span className="flex-1 truncate leading-none">{label}</span>
             <ChevronRight
               size={14}
-              className={`flex-shrink-0 mx-3 transition-all ${
-                isActive
-                  ? 'translate-x-0 text-emerald-400 opacity-80'
-                  : '-translate-x-1 text-slate-500 opacity-0 group-hover:translate-x-0 group-hover:opacity-100'
-              }`}
+              className={`flex-shrink-0 mx-3 transition-all ${isActive
+                ? 'translate-x-0 text-emerald-400 opacity-80'
+                : '-translate-x-1 text-slate-500 opacity-0 group-hover:translate-x-0 group-hover:opacity-100'
+                }`}
             />
           </div>
 
@@ -273,9 +269,8 @@ export function AppLayout() {
 
       {/* â”€â”€ Desktop Sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <aside
-        className={`hidden md:flex flex-col flex-shrink-0 bg-[#080e1a] border-r border-white/[0.06] relative z-20 transition-[width] duration-300 ${
-          collapsed ? 'sidebar-collapsed' : 'sidebar-expanded'
-        }`}
+        className={`hidden md:flex flex-col flex-shrink-0 bg-[#080e1a] border-r border-white/[0.06] relative z-20 transition-[width] duration-300 ${collapsed ? 'sidebar-collapsed' : 'sidebar-expanded'
+          }`}
       >
         {/* Logo Header */}
         <div className={`py-5 flex items-center border-b border-white/[0.06] transition-all duration-300 ${collapsed ? 'justify-center px-2 flex-col gap-4' : 'justify-between px-5'}`}>
@@ -405,22 +400,22 @@ export function AppLayout() {
             {/* Live Telemetry Date/Location */}
             <div className="hidden lg:flex items-center gap-3 text-xs text-slate-400 border-r border-white/[0.06] pr-4">
               <span className="font-semibold text-slate-200">{todayFormatted}</span>
-              <span className="text-slate-600">â€¢</span>
+              <span className="text-slate-600"></span>
               <span className="text-slate-400">Karnataka, India ({selectedZone})</span>
             </div>
             <div className="hidden xl:flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[11px] text-slate-300">
               <span className="font-semibold text-white">{user?.firstName ?? 'Member'}</span>
-              <span className="text-slate-500">â€¢</span>
+              <span className="text-slate-500"></span>
               <span>{user?.organization?.name ?? 'Organization'}</span>
             </div>
-            <button
+            {/*<button
               type="button"
               onClick={handleLogout}
               className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-medium text-slate-200 transition hover:border-white/20 hover:bg-white/10"
             >
               <LogOut className="h-3.5 w-3.5" />
               Sign out
-            </button>
+            </button>*/}
 
             {/* Live Monitoring Badge */}
             <div className="hidden sm:flex items-center gap-2 h-9 px-3.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px] font-bold shadow-sm">
@@ -481,9 +476,8 @@ export function AppLayout() {
                       {notifications.map((item) => (
                         <div
                           key={item.id}
-                          className={`p-4 text-xs transition-colors hover:bg-white/[0.03] ${
-                            item.unread ? 'bg-emerald-500/[0.04]' : ''
-                          }`}
+                          className={`p-4 text-xs transition-colors hover:bg-white/[0.03] ${item.unread ? 'bg-emerald-500/[0.04]' : ''
+                            }`}
                         >
                           <div className="flex items-start justify-between gap-2 mb-1">
                             <span className="font-bold text-slate-200">{item.title}</span>

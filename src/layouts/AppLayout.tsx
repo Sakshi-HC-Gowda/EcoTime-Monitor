@@ -16,6 +16,7 @@ import {
   Search,
   Bell,
   User,
+  Building2,
   HelpCircle,
   Command,
   X,
@@ -63,7 +64,8 @@ const NAV_SECTIONS: { label: string; items: NavItemDef[] }[] = [
 ];
 
 const BOTTOM_NAV: NavItemDef[] = [
-  { label: 'Profile', href: '/settings', icon: User, color: 'text-slate-400' },
+  { label: 'Profile', href: '/profile', icon: User, color: 'text-slate-400' },
+  { label: 'Organization', href: '/organization', icon: Building2, color: 'text-slate-400' },
   { label: 'Settings', href: '/settings', icon: Settings, color: 'text-slate-400' },
 ];
 
@@ -527,13 +529,23 @@ export function AppLayout() {
                     </div>
                     <button
                       onClick={() => {
-                        navigate('/settings');
+                        navigate('/profile');
                         setProfileOpen(false);
                       }}
                       className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs text-slate-300 hover:bg-white/[0.06] hover:text-white transition-colors"
                     >
                       <User size={15} className="text-slate-400" />
                       <span>Account Profile</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        navigate('/organization');
+                        setProfileOpen(false);
+                      }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs text-slate-300 hover:bg-white/[0.06] hover:text-white transition-colors"
+                    >
+                      <Building2 size={15} className="text-slate-400" />
+                      <span>Organization</span>
                     </button>
                     <button
                       onClick={() => {

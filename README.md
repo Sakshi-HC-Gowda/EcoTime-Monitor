@@ -403,7 +403,9 @@ EcoTime successfully demonstrates:
 # 👥 Contributors
 
 - **Sakshi H C**
-- Project Team Members
+- **Nayana**
+- **Nikitha**
+- **Prathiksha**
 
 ---
 

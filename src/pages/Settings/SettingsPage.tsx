@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Users, ShieldCheck, Building2, AlertTriangle } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { Users, ShieldCheck, Building2, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { Settings } from '@/components/Settings';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -12,8 +12,8 @@ import type { AuthUser } from '@/features/auth/types';
 const DEFAULT_LOW_CARBON_THRESHOLD = 180;
 const DEFAULT_BASELINE_INTENSITY = 380;
 
-function readStoredNumber(key: string, fallback: number): number {
-  const storedValue = localStorage.getItem(key);
+function readStoredNumber(key: string, fallback: number, legacyKey?: string): number {
+  const storedValue = localStorage.getItem(key) ?? (legacyKey ? localStorage.getItem(legacyKey) : null);
   if (storedValue === null) return fallback;
   const value = Number(storedValue);
   return Number.isFinite(value) && value >= 0 ? value : fallback;
@@ -24,10 +24,10 @@ export function SettingsPage() {
   const { selectedZone, setSelectedZone } = useZone();
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('ecotime_api_key') ?? '');
   const [lowCarbonThreshold, setLowCarbonThreshold] = useState(() =>
-    readStoredNumber('ecotime_low_carbon_threshold', DEFAULT_LOW_CARBON_THRESHOLD),
+    readStoredNumber('ecotime_low_carbon_threshold', DEFAULT_LOW_CARBON_THRESHOLD, 'ecotime_threshold'),
   );
   const [baselineIntensity, setBaselineIntensity] = useState(() =>
-    readStoredNumber('ecotime_baseline_intensity', DEFAULT_BASELINE_INTENSITY),
+    readStoredNumber('ecotime_baseline_intensity', DEFAULT_BASELINE_INTENSITY, 'ecotime_baseline'),
   );
   const { tasks, totalSavingsGrams, resetAll } = useTasks();
   const zone = selectedZone ?? 'US-CA';
@@ -40,6 +40,12 @@ export function SettingsPage() {
   const [members, setMembers] = useState<AuthUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
+
+  const showFeedback = useCallback((message: string) => {
+    setFeedbackMessage(message);
+    window.setTimeout(() => setFeedbackMessage(null), 3500);
+  }, []);
 
   useEffect(() => {
     if (!user?.organizationId || user.role?.name !== 'Organization Admin') {
@@ -76,6 +82,12 @@ export function SettingsPage() {
   const handleApiKeyChange = (key: string) => {
     setApiKey(key);
     localStorage.setItem('ecotime_api_key', key);
+    showFeedback('Saved the local API-key preference. Backend provider credentials are configured server-side.');
+  };
+
+  const handleZoneChange = (zoneId: string) => {
+    setSelectedZone(zoneId);
+    showFeedback(`Grid zone changed to ${zoneId}.`);
   };
 
   const handleThresholdChange = (threshold: number) => {
@@ -88,17 +100,38 @@ export function SettingsPage() {
     localStorage.setItem('ecotime_baseline_intensity', String(baseline));
   };
 
+  const handleResetStatistics = () => {
+    resetAll();
+    setLowCarbonThreshold(180);
+    setBaselineIntensity(380);
+    localStorage.removeItem('ecotime_low_carbon_threshold');
+    localStorage.removeItem('ecotime_baseline_intensity');
+    localStorage.removeItem('ecotime_threshold');
+    localStorage.removeItem('ecotime_baseline');
+    showFeedback('Local demo tasks and simulation statistics reset to defaults.');
+  };
+
   return (
     <div className="page-shell-narrow page-stack">
+      {/* Page Header */}
       <div>
         <h1 className="page-header-title heading-row">
           Settings
           <span className="ds-badge bg-white/[0.06] text-slate-400">
-            Configuration
+            Preferences
           </span>
         </h1>
-        <p className="page-header-subtitle">Configure EcoTime preferences and organization access.</p>
+        <p className="page-header-subtitle">
+          Configure Electricity Maps preferences, regional grid parameters, optimization targets, and organization access.
+        </p>
       </div>
+
+      {feedbackMessage && (
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs font-medium">
+          <CheckCircle2 size={16} className="text-emerald-400 flex-shrink-0" />
+          <span>{feedbackMessage}</span>
+        </div>
+      )}
 
       <div className="section-stack">
         <Settings
@@ -107,10 +140,10 @@ export function SettingsPage() {
           lowCarbonThreshold={lowCarbonThreshold}
           baselineIntensity={baselineIntensity}
           onApiKeyChange={handleApiKeyChange}
-          onZoneChange={setSelectedZone}
+          onZoneChange={handleZoneChange}
           onThresholdChange={handleThresholdChange}
           onBaselineChange={handleBaselineChange}
-          onResetStatistics={resetAll}
+          onResetStatistics={handleResetStatistics}
           isSimulated={carbonData?.isSimulated ?? null}
         />
         <GlassCard variant="elevated" className="flex flex-wrap items-center justify-between gap-3 text-sm">
@@ -127,9 +160,6 @@ export function SettingsPage() {
           <span className="ds-badge bg-white/[0.06] text-slate-400">Members</span>
         </h2>
         <p className="page-header-subtitle">Current organization access and user membership for this tenant.</p>
-      </div>
-
-      <div className="section-stack">
         <GlassCard variant="elevated" className="flex items-center gap-4">
           <div className="ds-icon-box bg-green-500/10 border-green-500/20 text-green-400">
             <Building2 className="ds-icon-lg" />

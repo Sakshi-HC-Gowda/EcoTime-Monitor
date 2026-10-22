@@ -11,6 +11,8 @@ import { OptimizationPage } from '@/pages/Optimization/OptimizationPage';
 import { SchedulerPage } from '@/pages/Scheduler/SchedulerPage';
 import { SustainabilityPage } from '@/pages/Sustainability/SustainabilityPage';
 import { SettingsPage } from '@/pages/Settings/SettingsPage';
+import { ProfilePage } from '@/pages/Profile/ProfilePage';
+import { OrganizationPage } from '@/pages/Organization/OrganizationPage';
 import { LoginPage } from '@/pages/Login/LoginPage';
 import { ProtectedRoute } from '@/features/auth/ProtectedRoute';
 
@@ -41,6 +43,8 @@ export const router = createBrowserRouter([
           { path: '/optimization', element: <OptimizationPage /> },
           { path: '/scheduler', element: <SchedulerPage /> },
           { path: '/sustainability', element: <SustainabilityPage /> },
+          { path: '/profile', element: <ProfilePage /> },
+          { path: '/organization', element: <OrganizationPage /> },
           { path: '/settings', element: <SettingsPage /> },
           { path: '*', element: <Navigate to="/dashboard" replace /> },
         ],

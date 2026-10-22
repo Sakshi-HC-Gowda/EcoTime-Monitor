@@ -36,6 +36,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { getEstimatedEcoScore } from '@/features/activities/utils/activityMetrics';
 import { useSimulationConfig } from '@/features/optimization/hooks/useOptimization';
+import { useAuth } from '@/features/auth/AuthProvider';
 
 type CustomTooltipProps = {
   active?: boolean;
@@ -62,7 +63,7 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
 export function DashboardPage() {
   const navigate = useNavigate();
   const { selectedZone } = useZone();
-
+  const { user } = useAuth();
   const { data: carbon, isLoading: carbonLoading, isError: carbonError, refetch: refetchCarbon } = useCarbon(selectedZone);
   const { data: windows, isLoading: windowsLoading } = useGreenWindows(selectedZone, 180);
   const { data: activitiesData, isLoading: activitiesLoading } = useActivitiesQuery(1, 10);
@@ -151,7 +152,7 @@ export function DashboardPage() {
       <div className="flex flex-col gap-6 rounded-2xl border border-white/[0.07] bg-gradient-to-r from-[#0b1424] via-[#09111e] to-[#070c14] p-8 shadow-xl backdrop-blur-md sm:p-10 lg:flex-row lg:items-center lg:justify-between mb-8">
         <div>
           <h1 className="flex items-center gap-3 text-3xl font-extrabold tracking-tight text-white sm:text-4xl mb-2">
-            Good Evening, Sakshi!{' '}
+            Good Evening, {user?.firstName || 'User'}!{' '}
             <span className="inline-block animate-pulse">
               👋
             </span>
@@ -474,11 +475,10 @@ export function DashboardPage() {
                   {carbon.isSimulated ? 'Simulated Model' : 'Live Electricity Maps API'}
                 </p>
               </div>
-              <div className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 border ${
-                isLow
-                  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                  : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
-              }`}>
+              <div className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 border ${isLow
+                ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                }`}>
                 <ShieldCheck size={14} /> {isLow ? 'Optimal' : 'Moderate'}
               </div>
             </div>

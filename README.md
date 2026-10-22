@@ -263,6 +263,13 @@ not run by a background worker; local uploads require user-triggered execution;
 training data is simulated; carbon history can be simulated/scaled; and
 automated tests do not establish real-world energy or carbon savings.
 
+## Contributors
+
+- **Sakshi H C**
+- **Nayana**
+- **Nikitha**
+- **Prathiksha**
+
 ## Project layout
 
 ```text

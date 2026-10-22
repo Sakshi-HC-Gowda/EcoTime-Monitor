@@ -12,7 +12,6 @@ in-memory implementation, so routes and the frontend require no changes.
 
 from __future__ import annotations
 
-import os
 import logging
 import math
 from datetime import datetime, timedelta, timezone
@@ -29,9 +28,6 @@ from optimization.carbon_calculator import (
     calculate_reduction_percent,
 )
 from optimization.eco_score import calculate_carbon_score, calculate_eco_score
-from optimization.window_ranking import rank_windows
-from services.carbon_service import detect_green_windows, get_carbon_data
-from services.optimizer_service import _valid_forecast
 
 logger = logging.getLogger(__name__)
 
@@ -53,9 +49,6 @@ VALID_ACTIVITY_TYPES = {
     "file-upload", "cloud-backup", "software-update",
     "dataset-download", "ci-cd-pipeline", "batch-processing",
 }
-
-DEFAULT_ZONE = os.getenv("DEFAULT_ZONE", "US-CA")
-DEFAULT_GREEN_THRESHOLD = float(os.getenv("LOW_CARBON_THRESHOLD", "180"))
 
 # Workload-class assumptions are estimates, not metered device power.
 DEFAULT_POWER_WATTS_BY_ACTIVITY_TYPE = {
@@ -140,7 +133,6 @@ def _compute_derived_fields(data: dict[str, Any], created_at: str) -> dict[str, 
     eco_score = None
     estimated_carbon_impact = None
     recommendation = "Use optimizer for a recommendation"
-    recommendation_carbon_source = None
     if current_intensity is not None:
         carbon_score = calculate_carbon_score(
             current_intensity,
@@ -158,15 +150,8 @@ def _compute_derived_fields(data: dict[str, Any], created_at: str) -> dict[str, 
     if priority >= 80:
         recommendation = "Run now"
     elif flexibility >= 60:
-        recommendation = "Schedule for green window"
-        window_recommendation = _find_recommended_start_time(duration)
-        if window_recommendation:
-            recommended_start_dt = _parse_iso(window_recommendation["startTime"])
-            recommendation_carbon_source = window_recommendation["source"]
-            if window_recommendation["isSimulated"]:
-                recommendation = "Schedule in a simulated Green Window"
-        if recommended_start_dt is None:
-            recommendation = "No feasible Green Window is available"
+        recommendation = "Run optimizer to check for a feasible Green Window"
+        recommended_start_dt = None
     else:
         recommendation = "Run now"
 
@@ -190,43 +175,7 @@ def _compute_derived_fields(data: dict[str, Any], created_at: str) -> dict[str, 
         derived["carbonIntensitySource"] = data.get("carbonDataSource", "provided")
     if eco_score is not None:
         derived["ecoScore"] = eco_score
-    if recommendation_carbon_source:
-        derived["recommendationCarbonDataSource"] = recommendation_carbon_source
     return derived
-
-
-def _find_recommended_start_time(duration_minutes: float) -> dict[str, Any] | None:
-    """Pick the best future green-window start time for the task duration."""
-    try:
-        carbon = get_carbon_data(zone_id=DEFAULT_ZONE, offset_hours=0)
-        if carbon.get("error"):
-            return None
-        forecast = _valid_forecast(carbon.get("forecast"))
-        if not forecast or carbon.get("forecastSource") == "unavailable":
-            return None
-        raw_windows = detect_green_windows(
-            forecast=forecast,
-            current_datetime=carbon["current"]["datetime"],
-            threshold=DEFAULT_GREEN_THRESHOLD,
-        )
-        ranked_windows = rank_windows(raw_windows)
-
-        fitting_window = next(
-            (window for window in ranked_windows if float(window.get("duration", 0)) >= duration_minutes),
-            None,
-        )
-        if fitting_window:
-            start_time = fitting_window.get("startTime")
-            if isinstance(start_time, str) and _parse_iso(start_time):
-                return {
-                    "startTime": start_time,
-                    "source": str(carbon.get("source", "unavailable")),
-                    "isSimulated": bool(carbon.get("isSimulated")),
-                }
-    except Exception as exc:
-        logger.warning("Green-window lookup failed: %s", exc)
-
-    return None
 
 
 def _apply_time_transitions(task: dict[str, Any]) -> None:

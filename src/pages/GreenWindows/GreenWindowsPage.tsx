@@ -26,10 +26,10 @@ export function GreenWindowsPage() {
 
   if (isLoading) {
     return (
-      <div className="page-shell page-stack max-w-[1650px] mx-auto">
+      <div className="page-shell page-stack" style={{ maxWidth: '1440px' }}>
         <LoadingSkeleton count={1} height="h-14" variant="row" />
-        <div className="card-grid card-grid-sm-2 card-grid-lg-3">
-          <LoadingSkeleton count={3} height="h-48" />
+        <div className="card-grid card-grid-sm-1 card-grid-lg-2 mt-8">
+          <LoadingSkeleton count={4} height="h-[420px]" />
         </div>
       </div>
     );
@@ -48,24 +48,24 @@ export function GreenWindowsPage() {
   };
 
   return (
-    <div className="page-shell page-stack max-w-[1650px] mx-auto">
+    <div className="page-shell page-stack" style={{ maxWidth: '1440px' }}>
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="page-header">
-        <div>
-          <h1 className="page-header-title heading-row">
+      <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
+        <div className="max-w-2xl">
+          <h1 className="flex items-center gap-3 text-3xl font-extrabold tracking-tight text-white mb-2">
             Green Windows
-            <span className="ds-badge bg-teal-500/10 text-teal-400 border-teal-500/20">
+            <span className="ds-badge bg-teal-500/10 text-teal-400 border-teal-500/20 text-xs px-2.5 py-1">
               {windows.length} Detected
             </span>
           </h1>
-          <p className="page-header-subtitle">
+          <p className="text-sm text-slate-400 leading-relaxed">
             Automated detection and ranking of low-carbon grid windows weighted by intensity trough and capacity.
           </p>
         </div>
 
         {/* View mode segment control */}
-        <div className="segment-control flex-shrink-0">
+        <div className="segment-control flex-shrink-0 self-start">
           {VIEW_OPTIONS.map(({ value, label, icon: Icon }) => (
             <button
               key={value}
@@ -73,7 +73,7 @@ export function GreenWindowsPage() {
               className={`segment-tab ${viewMode === value ? 'active' : ''}`}
               aria-pressed={viewMode === value}
             >
-              <Icon className="w-3.5 h-3.5" />
+              <Icon className="w-4 h-4" />
               {label}
             </button>
           ))}
@@ -82,7 +82,7 @@ export function GreenWindowsPage() {
 
       {/* ── Content ─────────────────────────────────────────────────────────── */}
       {viewMode === 'cards' && (
-        <div className="card-grid card-grid-sm-2 card-grid-lg-3">
+        <div className="card-grid card-grid-sm-1 card-grid-lg-2 items-stretch gap-6 lg:gap-8">
           {windows.map((win) => (
             <WindowCard key={win.id} window={win} onSchedule={handleSchedule} />
           ))}

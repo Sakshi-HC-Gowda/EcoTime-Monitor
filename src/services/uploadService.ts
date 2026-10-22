@@ -34,6 +34,69 @@ export interface UploadScheduleResponse {
   };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isNullableString(value: unknown): value is string | null {
+  return value === null || typeof value === 'string';
+}
+
+function isUploadRegistration(value: unknown): value is UploadRegistration {
+  if (!isRecord(value)) return false;
+  return typeof value.id === 'string'
+    && typeof value.activityId === 'string'
+    && typeof value.filename === 'string'
+    && typeof value.size === 'number'
+    && Number.isFinite(value.size)
+    && typeof value.contentType === 'string'
+    && ['pending', 'scheduled', 'running', 'completed', 'failed'].includes(String(value.status))
+    && isNullableString(value.scheduledStartTime)
+    && isNullableString(value.recommendationReason)
+    && isNullableString(value.windowId)
+    && isNullableString(value.uploadedAt)
+    && typeof value.createdAt === 'string'
+    && typeof value.updatedAt === 'string'
+    && isNullableString(value.error)
+    && isNullableString(value.downloadUrl);
+}
+
+function isUploadScheduleResponse(value: unknown): value is UploadScheduleResponse {
+  if (!isRecord(value) || !isUploadRegistration(value.upload) || !isRecord(value.recommendation)) {
+    return false;
+  }
+  const recommendation = value.recommendation;
+  return typeof recommendation.activityId === 'string'
+    && typeof recommendation.recommendation === 'string'
+    && typeof recommendation.reason === 'string'
+    && ['scheduled', 'not_scheduled'].includes(String(recommendation.status))
+    && isNullableString(recommendation.windowId)
+    && isNullableString(recommendation.startTime);
+}
+
+async function requestValidated<T>(
+  endpoint: string,
+  isExpectedData: (value: unknown) => value is T,
+  options?: RequestInit,
+): Promise<ApiResponse<T>> {
+  const response = await apiClient.request<unknown>(endpoint, options);
+  if (!response.success) {
+    return {
+      success: false,
+      error: response.error || 'Upload request failed',
+      timestamp: response.timestamp,
+    };
+  }
+  if (!isExpectedData(response.data)) {
+    return {
+      success: false,
+      error: 'Invalid upload response',
+      timestamp: response.timestamp,
+    };
+  }
+  return { ...response, data: response.data };
+}
+
 export function registerUpload(
   activityId: string,
   file: File,
@@ -59,30 +122,34 @@ export function registerUpload(
     };
 
     xhr.onload = () => {
+      let json: unknown;
       try {
-        const json = JSON.parse(xhr.responseText);
-        if (xhr.status >= 200 && xhr.status < 300) {
-          onProgress?.(100);
-          resolve({
-            success: true,
-            data: json.data as UploadRegistration,
-            timestamp: json.timestamp || new Date().toISOString(),
-          });
+        json = JSON.parse(xhr.responseText);
+      } catch {
+        fail('Invalid upload response');
+        return;
+      }
+
+      const timestamp = isRecord(json) && typeof json.timestamp === 'string'
+        ? json.timestamp
+        : new Date().toISOString();
+      if (xhr.status >= 200 && xhr.status < 300) {
+        if (!isRecord(json) || !isUploadRegistration(json.data)) {
+          fail('Invalid upload response');
           return;
         }
-
-        resolve({
-          success: false,
-          error: json.error || `HTTP ${xhr.status}: ${xhr.statusText}`,
-          timestamp: json.timestamp || new Date().toISOString(),
-        });
-      } catch {
-        resolve({
-          success: false,
-          error: 'Invalid upload response',
-          timestamp: new Date().toISOString(),
-        });
+        onProgress?.(100);
+        resolve({ success: true, data: json.data, timestamp });
+        return;
       }
+
+      resolve({
+        success: false,
+        error: isRecord(json) && typeof json.error === 'string'
+          ? json.error
+          : `HTTP ${xhr.status}: ${xhr.statusText}`,
+        timestamp,
+      });
     };
 
     const fail = (message: string) => {
@@ -102,24 +169,37 @@ export function registerUpload(
 
 export const uploadService = {
   getActivityUploads(activityId: string): Promise<ApiResponse<UploadRegistration[]>> {
-    return apiClient.request(`/activities/${encodeURIComponent(activityId)}/uploads`);
+    return requestValidated(
+      `/activities/${encodeURIComponent(activityId)}/uploads`,
+      (value): value is UploadRegistration[] =>
+        Array.isArray(value) && value.every(isUploadRegistration),
+    );
   },
 
   getStatus(uploadId: string): Promise<ApiResponse<UploadRegistration>> {
-    return apiClient.request(`/uploads/${encodeURIComponent(uploadId)}`);
+    return requestValidated(
+      `/uploads/${encodeURIComponent(uploadId)}`,
+      isUploadRegistration,
+    );
   },
 
   schedule(uploadId: string): Promise<ApiResponse<UploadScheduleResponse>> {
-    return apiClient.request(`/uploads/${encodeURIComponent(uploadId)}/schedule`, {
-      method: 'POST',
-    });
+    return requestValidated(
+      `/uploads/${encodeURIComponent(uploadId)}/schedule`,
+      isUploadScheduleResponse,
+      { method: 'POST' },
+    );
   },
 
   execute(uploadId: string, runNow: boolean): Promise<ApiResponse<UploadRegistration>> {
-    return apiClient.request(`/uploads/${encodeURIComponent(uploadId)}/execute`, {
-      method: 'POST',
-      body: JSON.stringify({ runNow }),
-    });
+    return requestValidated(
+      `/uploads/${encodeURIComponent(uploadId)}/execute`,
+      isUploadRegistration,
+      {
+        method: 'POST',
+        body: JSON.stringify({ runNow }),
+      },
+    );
   },
 
   async download(upload: UploadRegistration): Promise<void> {

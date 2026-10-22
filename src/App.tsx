@@ -393,7 +393,7 @@ export default function App() {
             </div>
             <div className="stat-info">
               <span className="stat-value">{greenWindows.length}</span>
-              <span className="stat-label">Green Windows Available</span>
+              <span className="stat-label">Lower-carbon windows detected</span>
             </div>
           </div>
         </div>

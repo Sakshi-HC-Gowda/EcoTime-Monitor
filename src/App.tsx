@@ -74,10 +74,13 @@ export default function App() {
   // Log connection on first load
   useEffect(() => {
     if (fetchedCarbonData && loading === false) {
-      addLog(
-        `System: Connected to ${fetchedCarbonData.isSimulated ? 'Simulated Grid' : 'Electricity Maps API'}. ` +
-          `Loaded data for ${fetchedCarbonData.zone}.`
-      );
+      const timer = window.setTimeout(() => {
+        addLog(
+          `System: Connected to ${fetchedCarbonData.isSimulated ? 'Simulated Grid' : 'Electricity Maps API'}. ` +
+            `Loaded data for ${fetchedCarbonData.zone}.`
+        );
+      }, 0);
+      return () => window.clearTimeout(timer);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchedCarbonData?.zone]);
@@ -168,8 +171,11 @@ export default function App() {
   // Startup logs
   useEffect(() => {
     if (logs.length === 0) {
-      addLog('System: EcoTime core initialised.');
-      addLog('System: Scanning localised carbon emission offsets...');
+      const timer = window.setTimeout(() => {
+        addLog('System: EcoTime core initialised.');
+        addLog('System: Scanning localised carbon emission offsets...');
+      }, 0);
+      return () => window.clearTimeout(timer);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

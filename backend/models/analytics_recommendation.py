@@ -13,6 +13,12 @@ class AnalyticsRecommendation(db.Model):
     __tablename__ = "analytics_recommendations"
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    organization_id = db.Column(
+        db.Integer,
+        db.ForeignKey("organizations.id"),
+        nullable=True,
+        index=True,
+    )
     activity_id = db.Column(
         db.String(64),
         db.ForeignKey("activities.id", ondelete="SET NULL"),
@@ -33,6 +39,7 @@ class AnalyticsRecommendation(db.Model):
     def to_dict(self) -> dict:
         return {
             "id": self.id,
+            "organizationId": self.organization_id,
             "activityId": self.activity_id,
             "text": self.text,
             "reason": self.reason,

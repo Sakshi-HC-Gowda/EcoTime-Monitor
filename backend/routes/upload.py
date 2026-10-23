@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, request
 from werkzeug.utils import secure_filename
+from auth_utils import require_auth
 
 upload_bp = Blueprint("upload", __name__)
 
@@ -29,6 +30,7 @@ def _format_size(size_bytes: int) -> str:
 
 
 @upload_bp.route("/upload", methods=["POST"])
+@require_auth
 def upload_files():
     files = request.files.getlist("files")
     if not files:

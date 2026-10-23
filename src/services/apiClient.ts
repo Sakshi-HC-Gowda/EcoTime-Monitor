@@ -9,10 +9,16 @@ export class ApiClient {
     this.baseUrl = baseUrl;
   }
 
+  private getAuthHeader(): HeadersInit {
+    const token = typeof window !== 'undefined' ? window.localStorage.getItem('ecotime_token') : null;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  }
+
   async request<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
     const url = `${this.baseUrl}${endpoint}`;
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
+      ...this.getAuthHeader(),
       ...options.headers,
     };
 

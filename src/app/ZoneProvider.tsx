@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import {
   createContext,
   useContext,
@@ -38,7 +39,7 @@ export function ZoneProvider({ children }: { children: ReactNode }) {
       setSelectedZoneState(location.zone);
       try {
         localStorage.setItem(ZONE_STORAGE_KEY, location.zone);
-      } catch (e) {
+      } catch {
         // ignore storage errors
       }
     }

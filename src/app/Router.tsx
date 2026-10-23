@@ -8,8 +8,8 @@ import { ForecastPage } from '@/pages/Forecast/ForecastPage';
 import { GreenWindowsPage } from '@/pages/GreenWindows/GreenWindowsPage';
 import { ActivitiesPage } from '@/pages/Activities/ActivitiesPage';
 import { OptimizationPage } from '@/pages/Optimization/OptimizationPage';
-import { SchedulerPage } from '@/pages/Scheduler/SchedulerPage';
-import { SustainabilityPage } from '@/pages/Sustainability/SustainabilityPage';
+//import { SchedulerPage } from '@/pages/Scheduler/SchedulerPage';
+import {SustainabilityPage}  from '@/pages/Sustainability/SustainabilityPage';
 import { SettingsPage } from '@/pages/Settings/SettingsPage';
 import { ProfilePage } from '@/pages/Profile/ProfilePage';
 import { OrganizationPage } from '@/pages/Organization/OrganizationPage';
@@ -35,17 +35,18 @@ export const router = createBrowserRouter([
       {
         element: <AppLayout />,
         children: [
-          { path: '/dashboard', element: <DashboardPage /> },
-          { path: '/carbon', element: <CarbonAnalyticsPage /> },
-          { path: '/forecast', element: <ForecastPage /> },
-          { path: '/windows', element: <GreenWindowsPage /> },
-          { path: '/activities', element: <ActivitiesPage /> },
-          { path: '/optimization', element: <OptimizationPage /> },
-          { path: '/scheduler', element: <SchedulerPage /> },
+          { path: '/dashboard',     element: <DashboardPage /> },
+          { path: '/carbon',        element: <CarbonAnalyticsPage /> },
+          { path: '/forecast',      element: <ForecastPage /> },
+          { path: '/windows',       element: <GreenWindowsPage /> },
+          { path: '/activities',    element: <ActivitiesPage /> },
+          { path: '/optimization',  element: <OptimizationPage /> },
+          { path: '/impact',        element: <SustainabilityPage /> },
           { path: '/sustainability', element: <SustainabilityPage /> },
-          { path: '/profile', element: <ProfilePage /> },
-          { path: '/organization', element: <OrganizationPage /> },
-          { path: '/settings', element: <SettingsPage /> },
+          { path: '/profile',       element: <ProfilePage /> },
+          { path: '/organization',  element: <OrganizationPage /> },
+          { path: '/settings',      element: <SettingsPage /> },
+          // Redirect any unknown /app/** to dashboard
           { path: '*', element: <Navigate to="/dashboard" replace /> },
         ],
       },

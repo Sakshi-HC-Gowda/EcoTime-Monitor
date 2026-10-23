@@ -12,6 +12,9 @@ from .organization import Organization
 from .organization_member import OrganizationMember
 from .role import Role
 from .simulation_config import SimulationConfig
+from .eco_point_transaction import EcoPointTransaction
+from .sustainability_score import SustainabilityScore
+from .badge import Badge
 from .user import User
 from .upload_registration import UploadRegistration
 
@@ -23,6 +26,9 @@ __all__ = [
     "OrganizationMember",
     "Role",
     "SimulationConfig",
+    "EcoPointTransaction",
+    "SustainabilityScore",
+    "Badge",
     "User",
     "UploadRegistration",
 ]

@@ -96,6 +96,9 @@ class Activity(db.Model):
     )
     progress = db.Column(db.Float, default=0.0)              # 0-100
     assigned_window_id = db.Column(db.String(64), nullable=True)
+    scheduled_start_time = db.Column(db.DateTime(timezone=True), nullable=True)
+    expected_end_time = db.Column(db.DateTime(timezone=True), nullable=True)
+    execution_start_time = db.Column(db.DateTime(timezone=True), nullable=True)
     earliest_start = db.Column(db.DateTime(timezone=True), nullable=True)
     deadline = db.Column(db.DateTime(timezone=True), nullable=True)
 
@@ -175,6 +178,9 @@ class Activity(db.Model):
             "status": self.status,
             "progress": self.progress,
             "assignedWindowId": self.assigned_window_id,
+            "scheduledStartTime": self._iso_utc(self.scheduled_start_time),
+            "scheduledEndTime": self._iso_utc(self.expected_end_time),
+            "executionStartTime": self._iso_utc(self.execution_start_time),
             "earliestStart": self._iso_utc(self.earliest_start),
             "deadline": self._iso_utc(self.deadline),
             "createdAt": self.created_at.isoformat() if self.created_at else None,
@@ -198,6 +204,9 @@ class Activity(db.Model):
             status=data.get("status", "pending"),
             progress=float(data.get("progress", 0)),
             assigned_window_id=data.get("assignedWindowId"),
+            scheduled_start_time=cls._parse_datetime(data.get("scheduledStartTime")),
+            expected_end_time=cls._parse_datetime(data.get("scheduledEndTime")),
+            execution_start_time=cls._parse_datetime(data.get("executionStartTime")),
             earliest_start=cls._parse_datetime(data.get("earliestStart")),
             deadline=cls._parse_datetime(data.get("deadline")),
         )

@@ -15,7 +15,7 @@ import {
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (task: CreateTaskRequest, idempotencyKey: string) => void;
+  onSubmit: (task: CreateTaskRequest, idempotencyKey: string) => Promise<void>;
 }
 
 const ACTIVITY_TYPES: { value: ActivityType; label: string }[] = [
@@ -53,6 +53,8 @@ export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
   const [flexibilityScore, setFlexibilityScore] = useState(80);
   const [earliestStart, setEarliestStart] = useState('');
   const [deadline, setDeadline] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   const submittedRef = useRef(false);
 
   useEffect(() => {
@@ -77,7 +79,7 @@ export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
     if (
@@ -87,8 +89,10 @@ export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
     ) return;
     if (submittedRef.current) return;
     submittedRef.current = true;
-
-    onSubmit({
+    setSubmitting(true);
+    setSubmitError('');
+    try {
+      await onSubmit({
       name,
       type: 'flexible',
       activityType,
@@ -98,12 +102,18 @@ export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
       zone: selectedZone ?? undefined,
       ...(earliestStart ? { earliestStart: new Date(earliestStart).toISOString() } : {}),
       ...(deadline ? { deadline: new Date(deadline).toISOString() } : {}),
-    } satisfies CreateTaskRequest, crypto.randomUUID());
+      } satisfies CreateTaskRequest, crypto.randomUUID());
 
-    setName('');
-    setEarliestStart('');
-    setDeadline('');
-    onClose();
+      setName('');
+      setEarliestStart('');
+      setDeadline('');
+      onClose();
+    } catch (error) {
+      submittedRef.current = false;
+      setSubmitError(error instanceof Error ? error.message : 'Could not register the activity.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -259,13 +269,15 @@ export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
             </div>
           </div>
 
+          {submitError && <p role="alert" className="px-6 pb-3 text-xs font-medium text-rose-300">{submitError}</p>}
+
           {/* Footer */}
           <div className="flex justify-end gap-2.5 px-6 py-4 border-t border-white/[0.07] bg-white/[0.01]">
             <Button type="button" variant="ghost" size="sm" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" size="sm">
-              Register Activity
+            <Button type="submit" size="sm" disabled={submitting}>
+              {submitting ? 'Registering…' : 'Register Activity'}
             </Button>
           </div>
         </form>

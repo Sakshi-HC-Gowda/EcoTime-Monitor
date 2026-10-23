@@ -1,4 +1,4 @@
-import { Clock, Zap, Play, XCircle, Calendar, CalendarCheck2, Sparkles, UploadCloud } from 'lucide-react';
+import { Clock, Zap, Play, Trash2, Calendar, Sparkles, UploadCloud } from 'lucide-react';
 import type { Task } from '@/types/domain';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { StatusBadge } from '@/components/ui/StatusBadge';
@@ -17,8 +17,18 @@ interface Props {
   baselineIntensity?: number;
   onUpdateStatus: (id: string, status: Task['status'], scheduledStartTime?: string) => void;
   onRunNow?: (activity: Task) => void;
-  onExecuteScheduled?: (activity: Task) => void;
   onScheduleUpload?: (activity: Task) => void;
+  onChooseFile?: (activity: Task) => void;
+  onScheduleActivity?: (activity: Task) => void;
+  onRunActivity?: (activity: Task) => void;
+  executing?: boolean;
+  scheduling?: boolean;
+  deleting?: boolean;
+  schedulingReason?: string;
+  schedulingError?: string;
+  executionMessage?: string;
+  selectedFile?: File;
+  onUploadSelected?: () => void;
   onDelete: (id: string) => void;
   uploadState?: {
     progress: number;
@@ -48,8 +58,18 @@ export function ActivityCard({
   baselineIntensity = 380,
   onUpdateStatus,
   onRunNow,
-  onExecuteScheduled,
   onScheduleUpload,
+  onChooseFile,
+  onScheduleActivity,
+  onRunActivity,
+  executing = false,
+  scheduling = false,
+  deleting = false,
+  schedulingReason,
+  schedulingError,
+  executionMessage,
+  selectedFile,
+  onUploadSelected,
   onDelete,
   uploadState,
 }: Props) {
@@ -71,7 +91,7 @@ export function ActivityCard({
     : uploadStatus === 'scheduled'
       ? 'Scheduled'
       : uploadStatus === 'running'
-        ? 'Running upload'
+        ? 'Storing upload'
         : uploadStatus === 'completed'
           ? 'Upload completed'
           : uploadStatus === 'failed'
@@ -119,6 +139,26 @@ export function ActivityCard({
         </div>
         <StatusBadge status={activity.status} />
       </div>
+
+      {activity.status === 'scheduled' && activity.scheduledStartTime && (
+        <div className="mx-[var(--card-padding-md)] mb-4 rounded-xl border border-amber-500/20 bg-amber-500/[0.05] p-3 text-xs">
+          <p className="font-semibold text-amber-200">Scheduled for {formatUploadTime(activity.scheduledStartTime)}</p>
+          {activity.scheduledEndTime && <p className="mt-1 text-amber-100/80">Expected end {formatUploadTime(activity.scheduledEndTime)}</p>}
+          {activity.assignedWindowId && <p className="mt-1 text-slate-400">Green Window {activity.assignedWindowId}</p>}
+          {schedulingReason && <p className="mt-1 text-slate-300">{schedulingReason}</p>}
+          {!isFileUpload && <p className="mt-1 text-slate-400">Click Run Now to start a simulated workload run.</p>}
+        </div>
+      )}
+
+      {!isFileUpload && activity.status === 'running' && (
+        <div className="mx-[var(--card-padding-md)] mb-4 rounded-xl border border-green-500/20 bg-green-500/[0.05] p-3 text-xs">
+          <p className="font-semibold text-green-200">Simulated execution in progress</p>
+          <p className="mt-1 text-slate-300">{Math.round(activity.progress)}% complete</p>
+          <div className="mt-2 h-1.5 w-full rounded-full bg-white/[0.08]">
+            <div className="h-full rounded-full bg-green-400" style={{ width: `${Math.max(0, Math.min(100, activity.progress))}%` }} />
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3 px-[var(--card-padding-md)] pb-5">
         <div className="ds-card p-2.5">
@@ -202,6 +242,22 @@ export function ActivityCard({
               </p>
             )}
 
+            {selectedFile && (
+              <div className="mt-3 rounded-lg border border-green-500/20 bg-green-500/[0.05] p-3">
+                <p className="break-words text-xs font-semibold text-white">Selected: {selectedFile.name}</p>
+                <p className="mt-1 text-xs text-slate-400">{(selectedFile.size / (1024 * 1024)).toFixed(2)} MiB</p>
+                <p className="mt-1 text-xs text-slate-400">The file will be stored; its contents are not executed.</p>
+                <button
+                  type="button"
+                  onClick={onUploadSelected}
+                  disabled={uploadStatus === 'registering' || uploadStatus === 'running'}
+                  className="ds-control mt-3 w-full bg-green-500/80 text-xs font-bold text-white hover:bg-green-500 disabled:opacity-50"
+                >
+                  Upload file
+                </button>
+              </div>
+            )}
+
             {(upload || uploadState?.selectedFilename) && (
               <div className="mt-3 space-y-1.5 text-xs">
                 <p className="break-words font-semibold text-white">
@@ -220,13 +276,13 @@ export function ActivityCard({
 
             {uploadStatus === 'scheduled' && (
               <p className="mt-2 text-xs text-amber-200">
-                This is a recommendation, not an automatic execution. Execute it manually when due.
+                The backend worker stores this file when the scheduled time arrives. File contents are not executed.
               </p>
             )}
 
             {uploadStatus === 'completed' && upload && (
               <div className="mt-3 rounded-lg border border-green-500/20 bg-green-500/[0.05] p-3">
-                <p className="mb-3 text-xs font-bold text-green-300">Upload completed and stored</p>
+                <p className="mb-3 text-xs font-bold text-green-300">Upload completed and stored. File contents were not executed.</p>
                 <UploadMeta label="File Name" value={upload.filename} />
                 <UploadMeta label="Completed At" value={formatUploadTime(upload.uploadedAt ?? undefined)} />
                 <button
@@ -248,47 +304,81 @@ export function ActivityCard({
         </div>
       )}
 
+      {!isFileUpload && schedulingReason && activity.status !== 'scheduled' && (
+        <p className="mx-[var(--card-padding-md)] mb-4 text-xs text-rose-300">{schedulingReason}</p>
+      )}
+      {!isFileUpload && schedulingError && (
+        <p role="alert" className="mx-[var(--card-padding-md)] mb-4 text-xs text-rose-300">{schedulingError}</p>
+      )}
+      {!isFileUpload && executionMessage && (
+        <p role="alert" className="mx-[var(--card-padding-md)] mb-4 text-xs text-rose-300">{executionMessage}</p>
+      )}
+
       <div className="flex items-center gap-2.5 border-t border-white/[0.04] bg-white/[0.01] px-[var(--card-padding-md)] py-4">
-        {isFileUpload && ['idle', 'pending', 'scheduled', 'failed'].includes(activity.status) && (
+        {isFileUpload && !upload && ['idle', 'pending', 'scheduled', 'failed'].includes(activity.status) && (
           <button
-            onClick={handleRunNow}
+            onClick={() => onChooseFile?.(activity)}
             disabled={uploadStatus === 'registering' || uploadStatus === 'running'}
             className="ds-control flex flex-1 items-center justify-center gap-1.5 bg-green-500/80 text-[12px] font-bold text-white shadow-sm shadow-green-500/20 hover:bg-green-500"
           >
-            <Play className="h-3 w-3" /> {uploadStatus === 'scheduled' ? 'Run now (override)' : upload ? 'Run / Retry Now' : 'Run Now'}
+            <UploadCloud className="h-3 w-3" /> Choose file
           </button>
         )}
 
-        {isFileUpload && uploadStatus === 'scheduled' && upload && (
+        {isFileUpload && upload && ['pending', 'scheduled', 'failed'].includes(uploadStatus) && (
           <button
-            onClick={() => onExecuteScheduled?.(activity)}
-            className="ds-control flex flex-1 items-center justify-center gap-1.5 border border-amber-500/20 bg-amber-500/10 text-[12px] font-semibold text-amber-200 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={handleRunNow}
+            disabled={uploadStatus === 'registering' || uploadStatus === 'running'}
+            className="ds-control flex flex-1 items-center justify-center gap-1.5 bg-green-500/80 text-[12px] font-bold text-white shadow-sm shadow-green-500/20 hover:bg-green-500 disabled:opacity-50"
           >
-            <CalendarCheck2 className="h-3 w-3" /> Execute scheduled upload
+            <Play className="h-3 w-3" /> Run Now (stores file only)
           </button>
         )}
 
-        {isFileUpload && ['idle', 'pending', 'failed'].includes(activity.status) && (
+        {isFileUpload && upload && ['pending', 'failed'].includes(uploadStatus) && (
           <button
             onClick={handleSchedule}
             disabled={uploadStatus === 'registering' || uploadStatus === 'running'}
             className="ds-control flex flex-1 items-center justify-center gap-1.5 border border-white/[0.07] bg-white/[0.04] text-[12px] font-semibold text-slate-300 hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <Calendar className="h-3 w-3" /> {upload ? 'Schedule upload' : 'Select & schedule'}
+            <Calendar className="h-3 w-3" /> Schedule upload
           </button>
         )}
 
-        {!isFileUpload && (
-          <span className="flex-1 text-center text-xs text-slate-500">Planning only — this workload type has no executor.</span>
+        {!isFileUpload && ['idle', 'pending', 'paused', 'delayed'].includes(activity.status) && (
+          <button
+            onClick={() => onScheduleActivity?.(activity)}
+            disabled={scheduling}
+            className="ds-control flex flex-1 items-center justify-center gap-1.5 border border-green-500/20 bg-green-500/10 text-[12px] font-semibold text-green-200 hover:bg-green-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Calendar className="h-3 w-3" /> {scheduling ? 'Finding a window…' : 'Schedule activity'}
+          </button>
+        )}
+
+        {!isFileUpload && activity.status === 'scheduled' && (
+          <button
+            onClick={() => onRunActivity?.(activity)}
+            disabled={executing}
+            className="ds-control flex flex-1 items-center justify-center gap-1.5 bg-green-500/80 text-[12px] font-bold text-white shadow-sm shadow-green-500/20 hover:bg-green-500 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Play className="h-3 w-3" /> {executing ? 'Starting simulated run…' : 'Run Now (simulated)'}
+          </button>
+        )}
+
+        {!isFileUpload && activity.status === 'running' && (
+          <span className="flex-1 text-center text-xs text-green-300">Simulated execution is running.</span>
         )}
 
         <button
           onClick={() => onDelete(activity.id)}
-          className="ds-control flex h-10 w-10 flex-shrink-0 items-center justify-center border border-transparent text-slate-600 hover:border-rose-500/20 hover:bg-rose-500/10 hover:text-rose-400"
-          title="Cancel Activity"
-          aria-label="Cancel Activity"
+          disabled={deleting}
+          className="ds-control flex h-10 w-10 flex-shrink-0 items-center justify-center border border-transparent text-rose-400 hover:border-rose-500/20 hover:bg-rose-500/10 hover:text-rose-300"
+          title="Delete activity"
+          aria-label={`Delete activity ${activity.name}`}
+          aria-busy={deleting}
+          style={{ width: 40, height: 40, minHeight: 40, padding: 0 }}
         >
-          <XCircle className="h-4 w-4" />
+          <Trash2 width={28} height={28} className="h-7 w-7" strokeWidth={2.5} />
         </button>
       </div>
     </GlassCard>

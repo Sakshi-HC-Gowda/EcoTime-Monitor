@@ -546,7 +546,9 @@ def _build_window(
         user_convenience = 60
 
     return {
-        "id": f"win-{window_id}",
+        # Use the detected interval's UTC start so IDs remain stable when new
+        # forecast windows appear earlier in the horizon.
+        "id": f"win-{int(start_dt.astimezone(timezone.utc).timestamp())}",
         "startTime": points[0]["datetime"],
         "duration": len(points) * 60,  # 60 min per forecast point
         "avgCarbonIntensity": round(avg_intensity),

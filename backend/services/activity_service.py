@@ -16,6 +16,7 @@ import logging
 import math
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from sqlalchemy import func
 
 from extensions import db
 from models.activity import Activity
@@ -214,6 +215,87 @@ def _aware(dt: datetime | None) -> datetime | None:
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
+def start_simulated_activity(task_id: str, organization_id: int) -> tuple[dict | None, str | None]:
+    """Start a scheduled non-upload workload in the existing duration simulation."""
+    activity = Activity.query.filter_by(
+        id=task_id,
+        organization_id=organization_id,
+    ).first()
+    if activity is None:
+        return None, "Activity not found"
+    if activity.activity_type == "file-upload":
+        return None, "File uploads use the upload storage workflow; file contents are not executed"
+    if activity.status != "scheduled":
+        return None, f"Activity must be scheduled before it can run (current status: {activity.status})"
+    if activity.scheduled_start_time is None or not activity.assigned_window_id:
+        return None, "Activity has no persisted optimizer schedule"
+
+    now = datetime.now(timezone.utc)
+    earliest = _aware(activity.earliest_start)
+    deadline = _aware(activity.deadline)
+    if earliest and now < earliest:
+        return None, "This activity cannot start before its earliest-start time"
+    if deadline and now + timedelta(minutes=activity.duration) > deadline:
+        return None, "The simulated run cannot finish before the activity deadline"
+
+    previous_status = activity.status
+    previous_updated_at = _aware(activity.updated_at)
+    activity.status = "running"
+    activity.progress = 0.0
+    activity.execution_start_time = now
+    activity.updated_at = now
+    db.session.add(ActivityHistory(
+        activity_id=activity.id,
+        previous_status=previous_status,
+        new_status="running",
+        execution_time=(now - previous_updated_at).total_seconds() if previous_updated_at else None,
+    ))
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        logger.exception("Could not persist simulated execution start for activity %s", task_id)
+        return None, "Could not persist the simulated execution start"
+    return activity.to_dict(), None
+
+
+def advance_simulated_activities(organization_id: int) -> None:
+    """Persist elapsed-time progress and completion for simulated workloads."""
+    now = datetime.now(timezone.utc)
+    running = Activity.query.filter_by(
+        organization_id=organization_id,
+        status="running",
+    ).filter(Activity.activity_type != "file-upload").all()
+    changed = False
+    for activity in running:
+        started = _aware(activity.execution_start_time)
+        if started is None:
+            continue
+        elapsed_minutes = max(0.0, (now - started).total_seconds() / 60.0)
+        duration = max(0.1, float(activity.duration or 1.0))
+        progress = min(100.0, (elapsed_minutes / duration) * 100.0)
+        next_progress = 100.0 if progress >= 100.0 else round(progress, 1)
+        if activity.progress != next_progress or progress >= 100.0:
+            activity.progress = next_progress
+            activity.updated_at = now
+            changed = True
+        if progress >= 100.0:
+            activity.status = "completed"
+            activity.progress = 100.0
+            db.session.add(ActivityHistory(
+                activity_id=activity.id,
+                previous_status="running",
+                new_status="completed",
+                execution_time=(now - started).total_seconds(),
+            ))
+    if changed:
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            logger.exception("Could not persist simulated activity progress")
+
+
 # ---------------------------------------------------------------------------
 # CRUD Operations
 # ---------------------------------------------------------------------------
@@ -352,7 +434,7 @@ def create_activity(
         power_draw=power_draw,
         priority_score=priority_score,
         flexibility_score=flexibility_score,
-        status="idle",
+        status="pending",
         progress=0.0,
         assigned_window_id=None,
         earliest_start=earliest_start,
@@ -361,11 +443,11 @@ def create_activity(
 
     try:
         db.session.add(activity)
-        # Seed the history trail with the initial "idle" state.
+        # Newly registered work starts in the persisted pending state.
         db.session.add(ActivityHistory(
             activity_id=task_id,
             previous_status=None,
-            new_status="idle",
+            new_status="pending",
             execution_time=None,
         ))
         db.session.commit()
@@ -411,11 +493,19 @@ def list_activities(
     page = max(1, page)
     page_size = min(max(1, page_size), 200)
 
+    advance_simulated_activities(organization_id)
+
     query = Activity.query.filter_by(organization_id=organization_id)
     if status_filter:
         query = query.filter_by(status=status_filter)
 
     total = query.count()
+    status_counts = dict(
+        db.session.query(Activity.status, func.count(Activity.id))
+        .filter_by(organization_id=organization_id)
+        .group_by(Activity.status)
+        .all()
+    )
     items = (
         query.order_by(Activity.created_at.desc())
         .offset((page - 1) * page_size)
@@ -429,11 +519,13 @@ def list_activities(
         "page": page,
         "pageSize": page_size,
         "hasMore": (page - 1) * page_size + len(items) < total,
+        "statusCounts": status_counts,
     }
 
 
 def get_activity(task_id: str, organization_id: int) -> dict | None:
     """Retrieve a single activity by ID. Returns None if not found."""
+    advance_simulated_activities(organization_id)
     activity = Activity.query.filter_by(
         id=task_id,
         organization_id=organization_id,

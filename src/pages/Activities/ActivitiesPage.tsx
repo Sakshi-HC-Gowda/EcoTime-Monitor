@@ -16,10 +16,12 @@ import {
   type UploadRegistration,
   type UploadStatus,
 } from '@/services/uploadService';
-import { optimizerService } from '@/services/optimizerService';
 import type { Task } from '@/types/domain';
 
 type TabStatus = 'all' | 'pending' | 'scheduled' | 'running' | 'completed';
+
+const matchesStatusTab = (status: Task['status'], tab: TabStatus) =>
+  status.toLowerCase() === tab;
 
 const TABS: { value: TabStatus; label: string }[] = [
   { value: 'all',       label: 'All' },
@@ -51,21 +53,92 @@ export function ActivitiesPage() {
   const [activeTab, setActiveTab] = useState<TabStatus>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [uploadStates, setUploadStates] = useState<Record<string, UploadCardState>>({});
+  const [schedulingIds, setSchedulingIds] = useState<Set<string>>(new Set());
+  const [scheduleMessages, setScheduleMessages] = useState<Record<string, string>>({});
+  const [schedulingErrors, setSchedulingErrors] = useState<Record<string, string>>({});
+  const [executionMessages, setExecutionMessages] = useState<Record<string, string>>({});
+  const [deleteError, setDeleteError] = useState('');
+  const [selectedFiles, setSelectedFiles] = useState<Record<string, File>>({});
+  const [executingIds, setExecutingIds] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const pendingFileActionRef = useRef<{
-    activity: Task;
-    mode: 'run' | 'schedule';
-  } | null>(null);
+  const pendingFileActionRef = useRef<{ activity: Task } | null>(null);
   const activeUploadsRef = useRef<Set<string>>(new Set());
+  const schedulingIdsRef = useRef<Set<string>>(new Set());
+  const executingIdsRef = useRef<Set<string>>(new Set());
   const uploadRegistrationKeysRef = useRef(
     new Map<string, { signature: string; key: string }>(),
   );
 
-  const { data: activitiesData, isLoading, isError, refetch } = useActivitiesQuery(1, 200);
-  const { createMutation, updateMutation, deleteMutation } = useActivityMutations();
+  const { data: activitiesData, isLoading, isError, refetch } = useActivitiesQuery(
+    1,
+    200,
+    activeTab === 'all' ? undefined : activeTab,
+  );
+  const { createMutation, updateMutation, deleteMutation, scheduleMutation, runMutation } = useActivityMutations();
 
   const setUploadState = (id: string, state: UploadCardState) => {
     setUploadStates((prev) => ({ ...prev, [id]: state }));
+  };
+
+  const scheduleActivity = async (activity: Task) => {
+    if (schedulingIdsRef.current.has(activity.id)) return;
+    schedulingIdsRef.current.add(activity.id);
+    setSchedulingIds((current) => new Set(current).add(activity.id));
+    setScheduleMessages((current) => ({ ...current, [activity.id]: '' }));
+    setSchedulingErrors((current) => ({ ...current, [activity.id]: '' }));
+    try {
+      const response = await scheduleMutation.mutateAsync(activity.id);
+      if (!response.scheduled || !response.activity) {
+        setScheduleMessages((current) => ({
+          ...current,
+          [activity.id]: response.recommendation?.reason || 'No feasible scheduling window is available. The activity status is unchanged.',
+        }));
+      } else {
+        setScheduleMessages((current) => ({
+          ...current,
+          [activity.id]: response.recommendation?.reason || 'Schedule saved from the optimizer recommendation.',
+        }));
+      }
+    } catch (error) {
+      setSchedulingErrors((current) => ({ ...current, [activity.id]: error instanceof Error ? error.message : 'Scheduling failed' }));
+    } finally {
+      setSchedulingIds((current) => {
+        const next = new Set(current);
+        next.delete(activity.id);
+        return next;
+      });
+      schedulingIdsRef.current.delete(activity.id);
+    }
+  };
+
+  const runActivityNow = async (activity: Task) => {
+    if (executingIdsRef.current.has(activity.id)) return;
+    executingIdsRef.current.add(activity.id);
+    setExecutingIds((current) => new Set(current).add(activity.id));
+    setExecutionMessages((current) => ({ ...current, [activity.id]: '' }));
+    try {
+      await runMutation.mutateAsync(activity.id);
+    } catch (error) {
+      setExecutionMessages((current) => ({ ...current, [activity.id]: error instanceof Error ? error.message : 'Could not start the simulated run' }));
+    } finally {
+      executingIdsRef.current.delete(activity.id);
+      setExecutingIds((current) => {
+        const next = new Set(current);
+        next.delete(activity.id);
+        return next;
+      });
+    }
+  };
+
+  const confirmDelete = async (activityId: string) => {
+    const activity = activitiesData?.items.find((item) => item.id === activityId);
+    if (!activity || !window.confirm(`Delete activity “${activity.name}”? This cannot be undone.`)) return;
+    setDeleteError('');
+    try {
+      await deleteMutation.mutateAsync(activity.id);
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : 'Could not delete activity');
+    }
   };
 
   useEffect(() => {
@@ -196,47 +269,12 @@ export function ActivitiesPage() {
     void refetch();
   };
 
-  const getRecommendation = async (activity: Task) => {
-    const response = await optimizerService.runScheduler({
-      tasks: [activity],
-      method: 'greedy',
-      zone: activity.zone,
-    });
-    if (!response.success || !response.data) {
-      throw new Error(response.error || 'Could not obtain an optimizer recommendation');
-    }
-    const recommendation = response.data.recommendations.find((item) => item.activityId === activity.id);
-    if (!recommendation) {
-      throw new Error('The optimizer returned no recommendation for this activity.');
-    }
-    return recommendation;
-  };
-
   const runRegisteredNow = async (activity: Task, upload: UploadRegistration) => {
-    let recommendationReason: string;
-    try {
-      const recommendation = await getRecommendation(activity);
-      recommendationReason = recommendation.reason;
-      setUploadState(activity.id, {
-        progress: 0,
-        status: upload.status,
-        upload,
-        recommendationReason: recommendation.reason,
-      });
-    } catch (error) {
-      setUploadState(activity.id, {
-        progress: 0,
-        status: upload.status,
-        upload,
-        message: error instanceof Error ? error.message : 'Recommendation failed; upload remains pending.',
-      });
-      return;
-    }
-    await executeRegistered(activity, upload, true, recommendationReason);
+    await executeRegistered(activity, upload, true);
     void refetch();
   };
 
-  const startUpload = async (activity: Task, file: File, mode: 'run' | 'schedule') => {
+  const startUpload = async (activity: Task, file: File) => {
     const selectedFile = {
       selectedFilename: file.name,
       selectedSize: file.size,
@@ -305,42 +343,11 @@ export function ActivitiesPage() {
       upload: registered.data,
     });
 
-    if (mode === 'schedule') {
-      const scheduled = await uploadService.schedule(registered.data.id);
-      if (!scheduled.success || !scheduled.data) {
-        setUploadState(activity.id, {
-          progress: 0,
-          status: 'pending',
-          upload: registered.data,
-          message: scheduled.error || 'No permitted recommendation is available; upload remains pending.',
-        });
-        return;
-      }
-      setUploadState(activity.id, {
-        progress: 0,
-        status: 'scheduled',
-        upload: scheduled.data.upload,
-        recommendationReason: scheduled.data.recommendation.reason,
-      });
-      void refetch();
-      return;
-    }
-
-    try {
-      const recommendation = await getRecommendation(activity);
-      await executeRegistered(activity, registered.data, true, recommendation.reason);
-    } catch (error) {
-      setUploadState(activity.id, {
-        progress: 0,
-        status: 'pending',
-        upload: registered.data,
-        message: error instanceof Error ? error.message : 'Recommendation failed; upload remains pending.',
-      });
-    }
+    void refetch();
   };
 
-  const openFilePicker = (activity: Task, mode: 'run' | 'schedule') => {
-    pendingFileActionRef.current = { activity, mode };
+  const openFilePicker = (activity: Task) => {
+    pendingFileActionRef.current = { activity };
     const input = fileInputRef.current;
     if (!input) {
       setUploadState(activity.id, { progress: 0, status: 'failed', message: 'File picker is unavailable.' });
@@ -378,7 +385,7 @@ export function ActivitiesPage() {
       });
       return;
     }
-    await startUpload(pendingAction.activity, file, pendingAction.mode);
+    setSelectedFiles((current) => ({ ...current, [pendingAction.activity.id]: file }));
   };
 
   if (isLoading) {
@@ -403,7 +410,7 @@ export function ActivitiesPage() {
 
   const tasks = activeTab === 'all'
     ? activitiesData.items
-    : activitiesData.items.filter((task) => task.status === activeTab);
+    : activitiesData.items.filter((task) => matchesStatusTab(task.status, activeTab));
 
   return (
   <div className="page-shell page-stack activities-page">
@@ -411,6 +418,7 @@ export function ActivitiesPage() {
         ref={fileInputRef}
         type="file"
         accept=".csv,.json,.txt,.zip,.bin,.pt,.pth,.ckpt,.safetensors"
+        aria-label="Choose an activity file to upload"
         className="sr-only"
         onChange={handleFileSelection}
       />
@@ -436,11 +444,15 @@ export function ActivitiesPage() {
         </div>
 
         {/* ── Segment control tabs ────────────────────────────────────────────── */}
+        {deleteError && <p role="alert" className="rounded-lg border border-rose-500/20 bg-rose-500/10 p-3 text-sm text-rose-300">{deleteError}</p>}
         <div className="segment-control activities-segment w-full sm:w-auto">
           {TABS.map(({ value, label }) => {
             const count = value === 'all'
-              ? activitiesData.total
-              : activitiesData.items.filter(t => t.status === value).length;
+              ? activitiesData.statusCounts
+                ? Object.values(activitiesData.statusCounts).reduce((sum, value) => sum + (value ?? 0), 0)
+                : activeTab === 'all' ? activitiesData.total : activitiesData.items.length
+              : activitiesData.statusCounts?.[value]
+                ?? activitiesData.items.filter((task) => matchesStatusTab(task.status, value)).length;
 
             return (
               <button
@@ -489,18 +501,32 @@ export function ActivitiesPage() {
                 onRunNow={(activity) => {
                   const current = uploadStates[activity.id]?.upload;
                   if (current) void runRegisteredNow(activity, current);
-                  else openFilePicker(activity, 'run');
-                }}
-                onExecuteScheduled={(activity) => {
-                  const current = uploadStates[activity.id]?.upload;
-                  if (current) void executeRegistered(activity, current, false);
                 }}
                 onScheduleUpload={(activity) => {
                   const current = uploadStates[activity.id]?.upload;
                   if (current) void scheduleRegistered(activity, current);
-                  else openFilePicker(activity, 'schedule');
                 }}
-                onDelete={(id) => deleteMutation.mutate(id)}
+                onChooseFile={(activity) => openFilePicker(activity)}
+                onScheduleActivity={(activity) => void scheduleActivity(activity)}
+                onRunActivity={(activity) => void runActivityNow(activity)}
+                scheduling={schedulingIds.has(task.id)}
+                executing={executingIds.has(task.id)}
+                deleting={deleteMutation.isPending}
+                schedulingReason={scheduleMessages[task.id]}
+                schedulingError={schedulingErrors[task.id]}
+                executionMessage={executionMessages[task.id]}
+                selectedFile={selectedFiles[task.id]}
+                onUploadSelected={() => {
+                  const selected = selectedFiles[task.id];
+                  if (!selected) return;
+                  setSelectedFiles((current) => {
+                    const next = { ...current };
+                    delete next[task.id];
+                    return next;
+                  });
+                  void startUpload(task, selected);
+                }}
+                onDelete={(id) => void confirmDelete(id)}
                 uploadState={uploadStates[task.id]}
               />
             ))}
@@ -511,9 +537,13 @@ export function ActivitiesPage() {
         <CreateActivityModal
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
-          onSubmit={(newTask, idempotencyKey) =>
-            createMutation.mutate({ task: newTask, idempotencyKey })
-          }
+          onSubmit={async (newTask, idempotencyKey) => {
+            const response = await createMutation.mutateAsync({ task: newTask, idempotencyKey });
+            if (!response.success || !response.data) {
+              throw new Error(response.error || 'Could not register the activity.');
+            }
+            await refetch();
+          }}
         />
     </div>
   );

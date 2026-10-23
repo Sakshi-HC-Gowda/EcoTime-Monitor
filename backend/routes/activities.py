@@ -26,6 +26,7 @@ from services.activity_service import (
     list_activities,
     get_activity,
     update_activity,
+    start_simulated_activity,
     delete_activity,
     bulk_update_activities,
 )
@@ -176,6 +177,25 @@ def get_one(task_id: str):
     return jsonify({
         "success": True,
         "data": task,
+        "timestamp": _now_iso(),
+    }), 200
+
+
+@activities_bp.route("/activities/<task_id>/run", methods=["POST"])
+@require_auth
+def run_now(task_id: str):
+    """Start an authenticated, organization-scoped simulated workload run."""
+    task, error = start_simulated_activity(task_id, request.user.organization_id)
+    if error:
+        status_code = 500 if error.startswith("Could not persist") else 404 if error == "Activity not found" else 409
+        return jsonify({
+            "success": False,
+            "error": error,
+            "timestamp": _now_iso(),
+        }), status_code
+    return jsonify({
+        "success": True,
+        "data": {"activity": task, "executionMode": "simulated"},
         "timestamp": _now_iso(),
     }), 200
 

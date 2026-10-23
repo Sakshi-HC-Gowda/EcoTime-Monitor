@@ -41,6 +41,7 @@ class UploadRegistration(db.Model):
     staging_path = db.Column(db.String(1024), nullable=False)
     final_path = db.Column(db.String(1024), nullable=False)
     scheduled_start_time = db.Column(db.DateTime(timezone=True), nullable=True)
+    scheduled_end_time = db.Column(db.DateTime(timezone=True), nullable=True)
     recommendation_reason = db.Column(db.Text, nullable=True)
     window_id = db.Column(db.String(64), nullable=True)
     execution_started_at = db.Column(db.DateTime(timezone=True), nullable=True)
@@ -77,6 +78,7 @@ class UploadRegistration(db.Model):
             "contentType": self.content_type,
             "status": self.status,
             "scheduledStartTime": self._iso(self.scheduled_start_time),
+            "scheduledEndTime": self._iso(self.scheduled_end_time),
             "recommendationReason": self.recommendation_reason,
             "windowId": self.window_id,
             "uploadedAt": self._iso(self.completed_at),

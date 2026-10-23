@@ -30,9 +30,31 @@ export function useActivityMutations() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => activitiesService.deleteTask(id),
+    mutationFn: async (id: string) => {
+      const response = await activitiesService.deleteTask(id);
+      if (!response.success) throw new Error(response.error || 'Could not delete activity');
+      return response;
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['activities'] }),
   });
 
-  return { createMutation, updateMutation, deleteMutation };
+  const scheduleMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await activitiesService.scheduleTask(id);
+      if (!response.success || !response.data) throw new Error(response.error || 'Scheduling failed');
+      return response.data;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['activities'] }),
+  });
+
+  const runMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await activitiesService.runTask(id);
+      if (!response.success || !response.data) throw new Error(response.error || 'Could not start the simulated run');
+      return response.data;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['activities'] }),
+  });
+
+  return { createMutation, updateMutation, deleteMutation, scheduleMutation, runMutation };
 }

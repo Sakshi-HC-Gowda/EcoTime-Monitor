@@ -20,6 +20,7 @@ from extensions import db
 from models.activity import Activity
 from models.activity_history import ActivityHistory
 from models.upload_registration import UploadRegistration
+from models.simulation_config import SimulationConfig
 from services import optimizer_service
 
 logger = logging.getLogger(__name__)
@@ -242,12 +243,16 @@ def schedule_upload(upload_id: str, organization_id: int) -> tuple[UploadRegistr
     if not Path(registration.staging_path).is_file():
         raise UploadError("The staged upload is unavailable; register the file again", 409)
 
+    config = db.session.get(SimulationConfig, 1)
+    zone_id = config.zone if config else os.getenv("DEFAULT_ZONE", "US-CA")
+    baseline = config.baseline_intensity if config else 380.0
     try:
         result = optimizer_service.recommend_schedule(
             tasks=[activity.to_dict()],
             permitted_window=None,
             method="greedy",
-            zone_id=os.getenv("DEFAULT_ZONE", "US-CA"),
+            zone_id=zone_id,
+            baseline_intensity=baseline,
         )
     except optimizer_service.RecommendationDataUnavailable as exc:
         registration.recommendation_reason = str(exc)
@@ -289,12 +294,40 @@ def schedule_upload(upload_id: str, organization_id: int) -> tuple[UploadRegistr
         db.session.commit()
         raise UploadError(registration.recommendation_reason, 409)
 
+    window = next((item for item in result.get("windows", []) if str(item.get("id")) == str(recommendation.get("windowId"))), None)
+    window_start = optimizer_service._parse_datetime(window.get("startTime")) if window else None
+    window_end = optimizer_service._parse_datetime(window.get("endTime")) if window else None
+    if window_start is None or window_end is None:
+        raise UploadError("Optimizer did not return the selected Green Window bounds", 503)
+    db.session.query(SimulationConfig).filter_by(id=1).with_for_update().first()
+    reservations = Activity.query.filter(
+        Activity.organization_id == organization_id,
+        Activity.assigned_window_id == recommendation.get("windowId"),
+        Activity.status == "scheduled",
+        Activity.id != activity.id,
+    ).order_by(Activity.scheduled_start_time.asc()).all()
+    duration = timedelta(minutes=activity.duration)
+    start = max(start, _now(), _utc(window_start) or start, _utc(activity.earliest_start) or start)
+    for reserved in reservations:
+        reserved_start = _utc(reserved.scheduled_start_time)
+        if reserved_start is None:
+            continue
+        reserved_end = _utc(reserved.expected_end_time) or reserved_start + timedelta(minutes=reserved.duration)
+        if start < reserved_end and start + duration > reserved_start:
+            start = reserved_end
+    end = start + duration
+    if end > (_utc(window_end) or end) or (deadline and end > deadline):
+        raise UploadError("No remaining capacity fits this activity in its Green Window", 409)
+
     registration.scheduled_start_time = start
+    registration.scheduled_end_time = end
     registration.recommendation_reason = recommendation.get("reason")
     registration.window_id = recommendation.get("windowId")
     registration.status = "scheduled"
     registration.error_message = None
     activity.assigned_window_id = recommendation.get("windowId")
+    activity.scheduled_start_time = start
+    activity.expected_end_time = end
     _append_activity_transition(activity, "scheduled")
     try:
         db.session.commit()
@@ -442,6 +475,50 @@ def execute_upload(
             500,
         ) from exc
     return registration
+
+
+def process_due_uploads(limit: int = 25) -> int:
+    """Execute due registrations from a backend worker; row locks coordinate workers."""
+    completed = 0
+    for _ in range(max(1, limit)):
+        now = _now()
+        registration = (
+            UploadRegistration.query
+            .filter(
+                UploadRegistration.status == "scheduled",
+                UploadRegistration.scheduled_start_time <= now,
+            )
+            .order_by(UploadRegistration.scheduled_start_time.asc())
+            .with_for_update(skip_locked=True)
+            .first()
+        )
+        if registration is None:
+            registration = (
+                UploadRegistration.query
+                .filter(
+                    UploadRegistration.status == "running",
+                    UploadRegistration.execution_started_at <= now - STALE_EXECUTION_AFTER,
+                )
+                .order_by(UploadRegistration.execution_started_at.asc())
+                .with_for_update(skip_locked=True)
+                .first()
+            )
+            if registration is None:
+                db.session.rollback()
+                break
+        upload_id = registration.id
+        organization_id = registration.organization_id
+        try:
+            execute_upload(upload_id, organization_id, run_now=False)
+            completed += 1
+        except UploadError as exc:
+            # execute_upload persists supported failures as failed for safe retry.
+            logger.warning("Scheduled upload %s was not completed: %s", upload_id, exc)
+            db.session.rollback()
+        except Exception:
+            db.session.rollback()
+            logger.exception("Unexpected worker failure for upload %s", upload_id)
+    return completed
 
 
 def upload_file_path(upload_id: str, organization_id: int) -> tuple[UploadRegistration, Path]:

@@ -44,6 +44,16 @@ export function WindowCard({ window, onSchedule }: Props) {
           <span className="font-semibold text-white block">{window.duration} Minutes</span>
         </div>
 
+        {window.remainingCapacity !== undefined && (
+          <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05]">
+            <span className="text-slate-400 block text-xs mb-1">Scheduled Workload</span>
+            <span className="font-semibold text-white block">
+              {window.scheduledActivityCount ?? 0} activities · {window.scheduledDuration ?? 0} min
+            </span>
+            <span className="mt-1 block text-xs text-teal-300">{window.remainingCapacity} min capacity remaining</span>
+          </div>
+        )}
+
         <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05]">
           <span className="text-slate-400 block text-xs mb-1">Avg / Min Carbon</span>
           <span className="font-bold text-teal-300 block text-lg">

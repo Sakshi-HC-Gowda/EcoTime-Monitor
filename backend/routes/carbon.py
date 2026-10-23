@@ -13,6 +13,7 @@ import logging
 from datetime import datetime, timezone
 from flask import Blueprint, request, jsonify
 from auth_utils import require_auth
+from models.activity import Activity
 
 from services.carbon_service import (
     get_carbon_data,
@@ -119,7 +120,23 @@ def get_windows():
             current_datetime=carbon["current"]["datetime"],
             threshold=threshold,
         )
+        for window in raw_windows:
+            window["id"] = f"{zone}:{window['id']}"
         ranked = rank_windows(raw_windows)
+        reservations = Activity.query.filter(
+            Activity.organization_id == request.user.organization_id,
+            Activity.status.in_(["scheduled", "running"]),
+        ).all()
+        reserved_by_window: dict[str, list[Activity]] = {}
+        for activity in reservations:
+            if activity.assigned_window_id:
+                reserved_by_window.setdefault(activity.assigned_window_id, []).append(activity)
+        for window in ranked:
+            assigned = reserved_by_window.get(str(window["id"]), [])
+            reserved_minutes = sum(float(activity.duration) for activity in assigned)
+            window["scheduledActivityCount"] = len(assigned)
+            window["scheduledDuration"] = round(reserved_minutes, 2)
+            window["remainingCapacity"] = round(max(0.0, float(window["duration"]) - reserved_minutes), 2)
     except Exception as exc:
         logger.exception("GET /api/windows failed for zone %s", zone)
         return jsonify({

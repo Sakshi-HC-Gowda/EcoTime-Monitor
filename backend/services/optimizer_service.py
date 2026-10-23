@@ -253,12 +253,13 @@ def recommend_schedule(
     ):
         raise ValueError("The permitted scheduling interval is invalid.")
 
-    windows = rank_windows(
-        detect_green_windows(
-            forecast=forecast,
-            current_datetime=carbon["current"]["datetime"],
-        )
+    detected_windows = detect_green_windows(
+        forecast=forecast,
+        current_datetime=carbon["current"]["datetime"],
     )
+    for window in detected_windows:
+        window["id"] = f"{zone_id}:{window['id']}"
+    windows = rank_windows(detected_windows)
     bounded_windows = []
     for window in windows:
         start = _parse_datetime(window.get("startTime"))

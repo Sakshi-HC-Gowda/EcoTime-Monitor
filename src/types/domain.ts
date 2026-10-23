@@ -142,6 +142,9 @@ export interface GreenWindow {
   rank?: number;
   recommendation?: string;
   detectedAt?: string;
+  scheduledActivityCount?: number;
+  scheduledDuration?: number;
+  remainingCapacity?: number;
 }
 
 export interface ForecastPoint extends CarbonDataPoint {
@@ -294,6 +297,7 @@ export interface ApiResponse<T> {
 export interface PaginatedResponse<T> {
   items: T[];
   total: number;
+  statusCounts?: Partial<Record<TaskStatus, number>>;
   page: number;
   pageSize: number;
   hasMore: boolean;

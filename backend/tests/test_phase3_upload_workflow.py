@@ -106,7 +106,7 @@ def test_successful_upload_is_staged_then_actually_stored_and_downloadable(clien
     with client.application.app_context():
         stored = db.session.get(UploadRegistration, upload["id"])
         assert stored.organization_id == organization_id
-        assert db.session.get(Activity, activity["id"]).status == "idle"
+        assert db.session.get(Activity, activity["id"]).status == "pending"
 
     executed = client.post(
         f"/api/uploads/{upload['id']}/execute",
@@ -236,7 +236,7 @@ def test_upload_status_and_activity_history_are_persisted(client, app):
         transitions = ActivityHistory.query.filter_by(activity_id=activity["id"]).all()
         assert stored.status == "completed"
         assert activity_record.status == "completed"
-        assert [row.new_status for row in transitions] == ["idle", "running", "completed"]
+        assert [row.new_status for row in transitions] == ["pending", "running", "completed"]
 
 
 def test_schedule_rejects_inflexible_urgent_and_deadline_infeasible_activities(client, monkeypatch):
@@ -301,7 +301,12 @@ def test_valid_schedule_uses_optimizer_recommendation_and_executes_only_when_due
                 "startTime": start.isoformat(),
                 "windowId": "green-window",
                 "reason": "Complete duration fits before the deadline.",
-            }]
+            }],
+            "windows": [{
+                "id": "green-window",
+                "startTime": (start - timedelta(minutes=1)).isoformat(),
+                "endTime": (start + timedelta(minutes=30)).isoformat(),
+            }],
         },
     )
 
@@ -328,6 +333,26 @@ def test_valid_schedule_uses_optimizer_recommendation_and_executes_only_when_due
     )
     assert too_early.status_code == 409
     assert "not due yet" in too_early.get_json()["error"]
+
+
+def test_backend_worker_executes_due_upload_once(client, app):
+    token = register_user(client, "upload-worker@example.com", "Upload Worker")
+    activity = create_activity(client, token)
+    upload = register_file(client, token, activity["id"]).get_json()["data"]
+    with app.app_context():
+        registration = db.session.get(UploadRegistration, upload["id"])
+        activity_record = db.session.get(Activity, activity["id"])
+        registration.status = "scheduled"
+        registration.scheduled_start_time = datetime.now(timezone.utc) - timedelta(seconds=1)
+        registration.window_id = "forecast-window-1"
+        activity_record.assigned_window_id = registration.window_id
+        activity_record.status = "scheduled"
+        db.session.commit()
+
+        assert upload_service.process_due_uploads() == 1
+        assert upload_service.process_due_uploads() == 0
+        assert db.session.get(UploadRegistration, upload["id"]).status == "completed"
+        assert db.session.get(Activity, activity["id"]).status == "completed"
 
 
 def test_upload_status_history_and_download_are_isolated_by_organization(client):

@@ -12,13 +12,14 @@ from __future__ import annotations
 import logging
 import math
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from flask import Blueprint, request, jsonify
 from auth_utils import require_auth, require_organization_admin
 
 from extensions import db
 from optimization.carbon_calculator import calculate_emissions_grams
 from models.activity import Activity
+from models.activity_history import ActivityHistory
 from models.simulation_config import SimulationConfig
 from models.analytics_recommendation import AnalyticsRecommendation
 from services.optimizer_service import (
@@ -244,6 +245,126 @@ def schedule():
     return jsonify({
         "success": True,
         "data": sched_result,
+        "timestamp": _now_iso(),
+    }), 200
+
+
+@optimizer_bp.route("/activities/<activity_id>/schedule", methods=["POST"])
+@require_auth
+def schedule_activity(activity_id: str):
+    """Get a real optimizer recommendation and persist it only when feasible."""
+    activity = Activity.query.filter_by(
+        id=activity_id,
+        organization_id=request.user.organization_id,
+    ).first()
+    if activity is None:
+        return jsonify({"success": False, "error": "Activity not found", "timestamp": _now_iso()}), 404
+    if activity.activity_type == "file-upload":
+        return jsonify({"success": False, "error": "File uploads must be scheduled through the upload workflow", "timestamp": _now_iso()}), 409
+    if activity.status not in {"idle", "pending", "paused", "delayed"}:
+        return jsonify({"success": False, "error": f"Activity cannot be scheduled while {activity.status}", "timestamp": _now_iso()}), 409
+
+    config = _get_simulation_config()
+    try:
+        result = recommend_schedule(
+            tasks=[activity.to_dict()],
+            permitted_window=None,
+            method="greedy",
+            baseline_intensity=config.baseline_intensity,
+            zone_id=config.zone,
+        )
+    except RecommendationDataUnavailable as exc:
+        return jsonify({"success": False, "error": str(exc), "timestamp": _now_iso()}), 503
+    except ValueError as exc:
+        return jsonify({"success": False, "error": str(exc), "timestamp": _now_iso()}), 400
+
+    recommendation = next(
+        (item for item in result.get("recommendations", []) if item.get("activityId") == activity.id),
+        None,
+    )
+    raw_start = recommendation.get("startTime") if recommendation else None
+    try:
+        start = datetime.fromisoformat(raw_start.replace("Z", "+00:00")) if isinstance(raw_start, str) else None
+        if start and start.tzinfo is None:
+            start = start.replace(tzinfo=timezone.utc)
+    except ValueError:
+        start = None
+    if (
+        recommendation is None
+        or recommendation.get("status") != "scheduled"
+        or start is None
+        or not recommendation.get("windowId")
+    ):
+        return jsonify({
+            "success": True,
+            "data": {"scheduled": False, "recommendation": recommendation},
+            "timestamp": _now_iso(),
+        }), 200
+
+    now = datetime.now(timezone.utc)
+    earliest = activity.earliest_start
+    deadline = activity.deadline
+    earliest = earliest.replace(tzinfo=timezone.utc) if earliest and earliest.tzinfo is None else earliest
+    deadline = deadline.replace(tzinfo=timezone.utc) if deadline and deadline.tzinfo is None else deadline
+    window = next((item for item in result.get("windows", []) if str(item.get("id")) == str(recommendation["windowId"])), None)
+    window_start = datetime.fromisoformat(window["startTime"].replace("Z", "+00:00")) if window else None
+    window_end = datetime.fromisoformat(window["endTime"].replace("Z", "+00:00")) if window else None
+    if window_start and window_start.tzinfo is None:
+        window_start = window_start.replace(tzinfo=timezone.utc)
+    if window_end and window_end.tzinfo is None:
+        window_end = window_end.replace(tzinfo=timezone.utc)
+    if window_start is None or window_end is None:
+        return jsonify({"success": False, "error": "Optimizer did not return the selected Green Window bounds", "timestamp": _now_iso()}), 503
+    start = max(start, now, window_start, earliest or now)
+
+    # Serialize reservation checks through the shared simulation config row.
+    db.session.query(SimulationConfig).filter_by(id=1).with_for_update().first()
+    reservations = Activity.query.filter(
+        Activity.organization_id == request.user.organization_id,
+        Activity.assigned_window_id == recommendation["windowId"],
+        Activity.status == "scheduled",
+        Activity.id != activity.id,
+    ).order_by(Activity.scheduled_start_time.asc()).all()
+    duration = timedelta(minutes=activity.duration)
+    for reserved in reservations:
+        reserved_start = reserved.scheduled_start_time
+        if reserved_start is None:
+            continue
+        if reserved_start.tzinfo is None:
+            reserved_start = reserved_start.replace(tzinfo=timezone.utc)
+        reserved_end = reserved.expected_end_time or reserved_start + timedelta(minutes=reserved.duration)
+        if reserved_end.tzinfo is None:
+            reserved_end = reserved_end.replace(tzinfo=timezone.utc)
+        if start < reserved_end and start + duration > reserved_start:
+            start = reserved_end
+    end = start + duration
+    if start < now or (earliest and start < earliest) or end > window_end or (deadline and end > deadline):
+        return jsonify({"success": False, "error": "Optimizer returned a time outside the activity's permitted scheduling window", "timestamp": _now_iso()}), 409
+
+    previous = activity.status
+    previous_updated_at = activity.updated_at
+    if previous_updated_at and previous_updated_at.tzinfo is None:
+        previous_updated_at = previous_updated_at.replace(tzinfo=timezone.utc)
+    activity.status = "scheduled"
+    activity.assigned_window_id = recommendation.get("windowId")
+    activity.scheduled_start_time = start
+    activity.expected_end_time = end
+    activity.updated_at = now
+    db.session.add(ActivityHistory(
+        activity_id=activity.id,
+        previous_status=previous,
+        new_status="scheduled",
+        execution_time=(now - previous_updated_at).total_seconds() if previous_updated_at else None,
+    ))
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        logger.exception("Could not persist optimizer schedule for activity %s", activity_id)
+        return jsonify({"success": False, "error": "Could not save the recommended schedule", "timestamp": _now_iso()}), 500
+    return jsonify({
+        "success": True,
+        "data": {"scheduled": True, "activity": activity.to_dict(), "recommendation": recommendation},
         "timestamp": _now_iso(),
     }), 200
 # ---------------------------------------------------------------------------

@@ -127,7 +127,7 @@ def test_direct_activity_api_cannot_bypass_optimizer_scheduling(client):
     assert response.status_code == 400
     assert "optimizer" in response.get_json()["error"].lower()
     with client.application.app_context():
-        assert db.session.get(Activity, activity["id"]).status == "idle"
+        assert db.session.get(Activity, activity["id"]).status == "pending"
     upload_state_change = client.patch(
         f"/api/activities/{activity['id']}",
         headers=auth(token),
@@ -152,8 +152,8 @@ def test_bulk_update_is_atomic_and_does_not_report_partial_success(client):
     assert response.status_code == 400
     assert response.get_json()["success"] is False
     with client.application.app_context():
-        assert db.session.get(Activity, first["id"]).status == "idle"
-        assert db.session.get(Activity, second["id"]).status == "idle"
+        assert db.session.get(Activity, first["id"]).status == "pending"
+        assert db.session.get(Activity, second["id"]).status == "pending"
 
 
 def test_activity_database_failure_returns_500_not_success(client, monkeypatch):

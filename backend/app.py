@@ -85,6 +85,10 @@ def create_app(config_name: str | None = None) -> Flask:
         valid_database_prefixes = ("postgresql://", "postgresql+psycopg2://")
     if not database_url.startswith(valid_database_prefixes):
         raise RuntimeError("DATABASE_URL must use a PostgreSQL URL outside testing.")
+    if database_url.startswith("postgresql://"):
+        database_url = database_url.replace(
+            "postgresql://", "postgresql+psycopg2://", 1
+        )
 
     app.config.update(
         SECRET_KEY=secret_key,
@@ -154,6 +158,7 @@ def create_app(config_name: str | None = None) -> Flask:
             # create_all() creates only absent tables and never drops data.
             db.create_all()
             _ensure_organization_ownership_schema()
+            _migrate_legacy_idle_activities()
             db.session.execute(text("SELECT 1"))
             db.session.commit()
             app.config["DATABASE_AVAILABLE"] = True
@@ -307,6 +312,18 @@ def _ensure_organization_ownership_schema() -> None:
         "ALTER TABLE activities ADD COLUMN IF NOT EXISTS earliest_start TIMESTAMP WITH TIME ZONE"
     ))
     db.session.execute(text(
+        "ALTER TABLE activities ADD COLUMN IF NOT EXISTS scheduled_start_time TIMESTAMP WITH TIME ZONE"
+    ))
+    db.session.execute(text(
+        "ALTER TABLE activities ADD COLUMN IF NOT EXISTS expected_end_time TIMESTAMP WITH TIME ZONE"
+    ))
+    db.session.execute(text(
+        "ALTER TABLE upload_registrations ADD COLUMN IF NOT EXISTS scheduled_end_time TIMESTAMP WITH TIME ZONE"
+    ))
+    db.session.execute(text(
+        "ALTER TABLE activities ADD COLUMN IF NOT EXISTS execution_start_time TIMESTAMP WITH TIME ZONE"
+    ))
+    db.session.execute(text(
         "ALTER TABLE activities ADD COLUMN IF NOT EXISTS deadline TIMESTAMP WITH TIME ZONE"
     ))
     db.session.execute(text(
@@ -374,6 +391,31 @@ def _ensure_organization_ownership_schema() -> None:
         db.session.execute(text(
             "ALTER TABLE activities ALTER COLUMN organization_id SET NOT NULL"
         ))
+
+
+def _migrate_legacy_idle_activities() -> None:
+    """Move activities created by older versions into the Pending lifecycle state."""
+    from models.activity import Activity
+    from models.activity_history import ActivityHistory
+
+    legacy_activities = Activity.query.filter_by(status="idle").with_for_update().all()
+    if not legacy_activities:
+        return
+
+    now = datetime.now(timezone.utc)
+    for activity in legacy_activities:
+        previous_updated_at = activity.updated_at
+        if previous_updated_at and previous_updated_at.tzinfo is None:
+            previous_updated_at = previous_updated_at.replace(tzinfo=timezone.utc)
+        db.session.add(ActivityHistory(
+            activity_id=activity.id,
+            previous_status="idle",
+            new_status="pending",
+            execution_time=(now - previous_updated_at).total_seconds() if previous_updated_at else None,
+        ))
+        activity.status = "pending"
+        activity.updated_at = now
+    logger.info("Migrated %d legacy idle activities to pending", len(legacy_activities))
 
 
 # ---------------------------------------------------------------------------

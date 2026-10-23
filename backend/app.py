@@ -120,6 +120,9 @@ def create_app(config_name: str | None = None) -> Flask:
             OrganizationMember,
             Role,
             SimulationConfig,
+            EcoPointTransaction,
+            SustainabilityScore,
+            Badge,
             User,
         )
         try:
@@ -151,7 +154,7 @@ def create_app(config_name: str | None = None) -> Flask:
         }
     })
 
-    # -----------------------------------------------------------------------
+       # -----------------------------------------------------------------------
     # Blueprint Registration
     # -----------------------------------------------------------------------
     from routes.auth import auth_bp
@@ -161,16 +164,25 @@ def create_app(config_name: str | None = None) -> Flask:
     from routes.forecast import forecast_bp
     from routes.organizations import organizations_bp
     from routes.upload import upload_bp
+    from routes.ecopoints import ecopoints_bp
+    from routes.badges import badges_bp
+    from routes.leaderboard import leaderboard_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api")
     app.register_blueprint(carbon_bp, url_prefix="/api")
     app.register_blueprint(activities_bp, url_prefix="/api")
     app.register_blueprint(optimizer_bp, url_prefix="/api")
     app.register_blueprint(forecast_bp, url_prefix="/api")
+    app.register_blueprint(ecopoints_bp, url_prefix="/api")
+    app.register_blueprint(badges_bp, url_prefix="/api")
+    app.register_blueprint(leaderboard_bp, url_prefix="/api")
     app.register_blueprint(organizations_bp, url_prefix="/api")
     app.register_blueprint(upload_bp, url_prefix="/api")
 
-    logger.info("Blueprints registered: auth, carbon, activities, optimizer, forecast, organizations, upload")
+    logger.info(
+        "Blueprints registered: carbon, activities, optimizer, forecast, "
+        "ecopoints, badges, leaderboard, organizations, upload"
+    )
 
     # -----------------------------------------------------------------------
     # Health Check & Root

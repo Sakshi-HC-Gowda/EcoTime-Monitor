@@ -17,6 +17,51 @@ import type {
   SimulationConfig,
 } from '../types/domain';
 
+export interface EcoPointTransaction {
+  id: string;
+  userId: string;
+  organizationId: string | null;
+  activityId: string | null;
+  recommendationId: number | null;
+  eventType: string;
+  eventId: string;
+  points: number;
+  description: string | null;
+  createdAt: string;
+}
+
+export interface SustainabilityScore {
+  id: string;
+  userId: string;
+  organizationId: string | null;
+  score: number;
+  totalPoints: number;
+  currentStreak: number;
+  longestStreak: number;
+  lastSustainableDate: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UserBadge {
+  id: string;
+  userId: string;
+  organizationId: string | null;
+  badgeType: string;
+  name: string;
+  description: string | null;
+  earnedAt: string;
+}
+
+export interface LeaderboardEntry {
+  rank: number;
+  userId: string;
+  score: number;
+  totalPoints: number;
+  currentStreak: number;
+  longestStreak: number;
+}
+
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5000/api';
 
 class ApiClient {
@@ -147,6 +192,82 @@ class ApiClient {
 
     return this.request<EcoScore>(`/eco-score?${params.toString()}`);
   }
+    // ========================================================================
+  // EcoPoints & Sustainability Endpoints
+  // ========================================================================
+
+  async getEcoPointTransactions(
+    userId: string
+  ): Promise<ApiResponse<{
+    userId: string;
+    transactions: EcoPointTransaction[];
+    totalTransactions: number;
+  }>> {
+    return this.request<{
+      userId: string;
+      transactions: EcoPointTransaction[];
+      totalTransactions: number;
+    }>(`/ecopoints/${userId}`);
+  }
+
+  async getSustainabilityScore(
+    userId: string
+  ): Promise<ApiResponse<SustainabilityScore>> {
+    return this.request<SustainabilityScore>(
+      `/ecopoints/${userId}/score`
+    );
+  }
+
+  async getUserBadges(
+    userId: string
+  ): Promise<ApiResponse<{
+    userId: string;
+    badges: UserBadge[];
+    totalBadges: number;
+  }>> {
+    return this.request<{
+      userId: string;
+      badges: UserBadge[];
+      totalBadges: number;
+    }>(`/badges/${userId}`);
+  }
+
+  async getOrganizationLeaderboard(
+    organizationId: string
+  ): Promise<ApiResponse<{
+    organizationId: string;
+    leaderboard: LeaderboardEntry[];
+    totalUsers: number;
+  }>> {
+    return this.request<{
+      organizationId: string;
+      leaderboard: LeaderboardEntry[];
+      totalUsers: number;
+    }>(`/organizations/${organizationId}/leaderboard`);
+  }
+  async setLeaderboardOptIn(
+  organizationId: string,
+  userId: string,
+  enabled: boolean
+): Promise<ApiResponse<{
+  userId: string;
+  organizationId: string;
+  leaderboardOptIn: boolean;
+  message: string;
+}>> {
+  return this.request<{
+    userId: string;
+    organizationId: string;
+    leaderboardOptIn: boolean;
+    message: string;
+  }>(`/organizations/${organizationId}/leaderboard/opt-in`, {
+    method: 'POST',
+    body: JSON.stringify({
+      userId,
+      enabled,
+    }),
+  });
+}
 
   // ========================================================================
   // Health & Configuration Endpoints

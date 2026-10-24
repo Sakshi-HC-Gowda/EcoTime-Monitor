@@ -16,6 +16,7 @@ from .eco_point_transaction import EcoPointTransaction
 from .sustainability_score import SustainabilityScore
 from .badge import Badge
 from .user import User
+from .upload_registration import UploadRegistration
 
 __all__ = [
     "Activity",
@@ -29,4 +30,5 @@ __all__ = [
     "SustainabilityScore",
     "Badge",
     "User",
+    "UploadRegistration",
 ]

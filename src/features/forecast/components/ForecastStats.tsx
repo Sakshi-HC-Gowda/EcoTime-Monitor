@@ -30,7 +30,7 @@ export function ForecastStats({ forecast }: Props) {
           <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Lowest Carbon Window</span>
           <ArrowDownRight className="w-5 h-5 text-green-400" />
         </div>
-        <div className="text-3xl font-extrabold text-green-400 mt-2">{minVal} <span className="text-xs text-slate-400">gCO2/kWh</span></div>
+        <div className="text-3xl font-extrabold text-green-400 mt-2">{minVal} <span className="text-xs text-slate-400">gCO2e/kWh</span></div>
         <p className="text-xs text-slate-300 mt-1 flex items-center gap-1">
           <Clock className="w-3.5 h-3.5 text-green-400" /> Optimal execution at {bestTime}
         </p>
@@ -41,7 +41,7 @@ export function ForecastStats({ forecast }: Props) {
           <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Peak Carbon Period</span>
           <ArrowUpRight className="w-5 h-5 text-rose-400" />
         </div>
-        <div className="text-3xl font-extrabold text-rose-400 mt-2">{maxVal} <span className="text-xs text-slate-400">gCO2/kWh</span></div>
+        <div className="text-3xl font-extrabold text-rose-400 mt-2">{maxVal} <span className="text-xs text-slate-400">gCO2e/kWh</span></div>
         <p className="text-xs text-slate-300 mt-1 flex items-center gap-1">
           <Clock className="w-3.5 h-3.5 text-rose-400" /> Thermal generation peak at {peakTime}
         </p>

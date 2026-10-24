@@ -1,7 +1,7 @@
 # Diagram 2 — Component Diagram
 
-**Description:** Shows the backend Python package hierarchy and inter-module dependencies
-exactly as laid out in the `backend/` folder structure. Every node is a real file.
+**Description:** Shows the backend package areas used by the authenticated API,
+the activity and upload services, and shared forecasting/optimization modules.
 
 **Recommended placement:** BE Report — Section 3 (System Design); IEEE Paper — Figure 2.
 
@@ -12,10 +12,12 @@ graph TB
         INIT["__init__.py"]
 
         subgraph routes["routes/"]
+            RAUTH["auth.py\nauth_bp"]
             RC["carbon.py\ncarbon_bp"]
             RA["activities.py\nactivities_bp"]
             RO["optimizer.py\noptimizer_bp"]
             RF["forecast.py\nforecast_bp"]
+            RU["upload.py\nupload_bp"]
             RI["__init__.py"]
         end
 
@@ -23,11 +25,15 @@ graph TB
             SC["carbon_service.py"]
             SA["activity_service.py"]
             SO["optimizer_service.py"]
+            SU["upload_service.py"]
             SI["__init__.py"]
         end
 
         subgraph models["models/"]
             MA["activity.py\nActivity(db.Model)"]
+            MH["activity_history.py\nActivityHistory(db.Model)"]
+            MU["upload_registration.py\nUploadRegistration(db.Model)"]
+            MO["organization.py · user.py · role.py"]
             MI["__init__.py"]
         end
 
@@ -48,30 +54,45 @@ graph TB
         end
 
         subgraph data["data/"]
-            DM["best_model.pkl"]
-            DR["training_report.json"]
+            DM["best_model.pkl\n(optional generated artifact)"]
+            DR["training_report.json\n(optional generated artifact)"]
         end
+
+        DB[("PostgreSQL in application deployments\nSQLite in-memory for tests")]
+        UPLOADS[("Local backend/uploads/org-<id>/")]
     end
 
-    APP --> RC & RA & RO & RF
+    APP --> RAUTH & RC & RA & RO & RF & RU
     APP --> MA
 
     RC --> SC
     RC --> OW
 
-    RA --> SA
-    SA --> MA
+    RA --> SA --> MA & MH
+    RAUTH --> MO
 
     RO --> SO
     RF --> FP
     RF --> SC
+    RU --> SU
 
     SO --> OE & OW & OG & OC
     OG --> OC
     OG --> OW
+    SO --> MA
+    SU --> MU & MA & SO
+    MA --> DB
+    MH --> DB
+    MU --> DB
+    MO --> DB
+    SU --> UPLOADS
 
     FP --> FF
     FT --> FPR & FF & SC
     FT --> DM & DR
-    FP --> DM & DR
+    FP --> DM
 ```
+
+Startup uses SQLAlchemy `create_all()` plus a PostgreSQL-specific additive
+schema helper. This is not a versioned migration framework; legacy ownership
+data is not guessed. Automated tests use SQLite fixtures.

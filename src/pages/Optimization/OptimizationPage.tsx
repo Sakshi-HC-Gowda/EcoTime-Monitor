@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Activity, Brain, CalendarClock, Cpu, ListChecks, PauseCircle, RefreshCw, Zap } from 'lucide-react';
 import { useActivitiesQuery } from '@/features/activities/hooks/useActivitiesQuery';
-import { useGreenWindows } from '@/features/carbon/hooks/useCarbon';
 import { useZone } from '@/app/ZoneProvider';
 import { useOptimizationSchedule } from '@/features/optimization/hooks/useOptimization';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -23,19 +22,21 @@ export function OptimizationPage() {
     isError: activitiesIsError,
     error: activitiesError,
     refetch: refetchActivities,
-  } = useActivitiesQuery(1, 50, 'pending');
-  const {
-    data: windows,
-    isLoading: windowsLoading,
-    isError: windowsIsError,
-    error: windowsError,
-    refetch: refetchWindows,
-  } = useGreenWindows(selectedZone, 180);
-
-  const tasks = useMemo(() => activitiesData?.items ?? [], [activitiesData?.items]);
-  const selectedGreenWindow = windows?.[0] ?? null;
-  const schedulingEnabled = tasks.length > 0 && !!selectedGreenWindow;
-  const scheduleQuery = useOptimizationSchedule(tasks, selectedGreenWindow, method, schedulingEnabled);
+  } = useActivitiesQuery(1, 50);
+  const tasks = useMemo(
+    () => (activitiesData?.items ?? []).filter((task) =>
+      ['idle', 'pending', 'paused', 'delayed'].includes(task.status),
+    ),
+    [activitiesData?.items],
+  );
+  const schedulingEnabled = tasks.length > 0;
+  const scheduleQuery = useOptimizationSchedule(
+    tasks,
+    null,
+    method,
+    schedulingEnabled,
+    selectedZone ?? undefined,
+  );
 
   const optimization = scheduleQuery.data;
   const result = optimization?.result;
@@ -45,12 +46,20 @@ export function OptimizationPage() {
     () => new Set(selectedTasks.map((task) => task.id)),
     [selectedTasks],
   );
+  const recommendationById = useMemo(
+    () => new Map((optimization?.recommendations ?? []).map((item) => [item.activityId, item])),
+    [optimization?.recommendations],
+  );
   const deferredTasks = useMemo(
     () => (optimization?.tasks ?? tasks).filter((task) => !selectedTaskIds.has(task.id)),
     [optimization?.tasks, selectedTaskIds, tasks],
   );
+  const usedWindows = useMemo(() => {
+    const usedIds = new Set(selectedTasks.map((task) => task.assignedWindowId));
+    return (optimization?.windows ?? []).filter((window) => usedIds.has(window.id));
+  }, [optimization?.windows, selectedTasks]);
 
-  if (activitiesLoading || windowsLoading) {
+  if (activitiesLoading) {
     return (
       <div className="page-shell page-stack max-w-[1650px] mx-auto">
         <LoadingSkeleton count={3} height="h-40" />
@@ -58,15 +67,14 @@ export function OptimizationPage() {
     );
   }
 
-  if (activitiesIsError || windowsIsError) {
+  if (activitiesIsError) {
     return (
       <div className="page-shell page-stack">
         <ErrorState
           title="Unable to load optimization inputs"
-          message={(activitiesError || windowsError)?.message || 'Activities or Green Windows could not be loaded.'}
+          message={activitiesError?.message || 'Activities could not be loaded.'}
           onRetry={() => {
             refetchActivities();
-            refetchWindows();
           }}
         />
       </div>
@@ -88,10 +96,13 @@ export function OptimizationPage() {
     typeof value === 'number' && Number.isFinite(value) ? value.toFixed(digits) : '0.0'
   );
 
-  const formatCo2 = (value?: number) => `${formatNumber(value, 1)} g CO2`;
+  const formatCo2 = (value?: number) => {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return 'Unavailable';
+    const amount = `${Math.abs(value).toFixed(2)} gCO2e`;
+    return value < 0 ? `${amount} higher emissions` : `${amount} estimated savings`;
+  };
 
-  const getWindowEnd = (window: GreenWindow | null) => {
-    if (!window) return undefined;
+  const getWindowEnd = (window: GreenWindow) => {
     if (window.endTime) return window.endTime;
 
     const start = new Date(window.startTime);
@@ -99,9 +110,11 @@ export function OptimizationPage() {
     return start.toISOString();
   };
 
-  const greenWindowLabel = selectedGreenWindow
-    ? `${formatDateTime(selectedGreenWindow.startTime)} - ${formatDateTime(getWindowEnd(selectedGreenWindow))}`
-    : 'No Green Window available';
+  const greenWindowLabel = usedWindows.length > 1
+    ? `${usedWindows.length} Green Windows`
+    : usedWindows.length === 1
+      ? `${formatDateTime(usedWindows[0].startTime)} - ${formatDateTime(getWindowEnd(usedWindows[0]))}`
+      : 'No feasible Green Window';
 
   const renderTaskRows = (items: Task[], emptyText: string) => (
     <div className="overflow-x-auto rounded-xl border border-white/10">
@@ -109,8 +122,8 @@ export function OptimizationPage() {
         <thead className="bg-white/[0.03] text-xs uppercase tracking-wide text-slate-400">
           <tr>
             <th className="px-4 py-3 font-semibold">Activity</th>
-            <th className="px-4 py-3 font-semibold">Duration</th>
-            <th className="px-4 py-3 font-semibold">Power</th>
+            <th className="px-4 py-3 font-semibold">Estimated duration</th>
+            <th className="px-4 py-3 font-semibold">Assumed power</th>
             <th className="px-4 py-3 font-semibold">Status</th>
           </tr>
         </thead>
@@ -118,7 +131,12 @@ export function OptimizationPage() {
           {items.length > 0 ? (
             items.map((task) => (
               <tr key={task.id} className="text-slate-300">
-                <td className="px-4 py-3 font-medium text-white">{task.name}</td>
+                <td className="px-4 py-3 font-medium text-white">
+                  <div>{task.name}</div>
+                  <div className="mt-1 text-xs font-normal text-slate-400">
+                    {task.recommendationReason ?? recommendationById.get(task.id)?.reason}
+                  </div>
+                </td>
                 <td className="px-4 py-3">{task.duration} min</td>
                 <td className="px-4 py-3">{task.powerDraw} W</td>
                 <td className="px-4 py-3 capitalize">{task.status.replace('-', ' ')}</td>
@@ -147,7 +165,7 @@ export function OptimizationPage() {
             </span>
           </h1>
           <p className="page-header-subtitle">
-            Schedule pending activities into the cleanest backend-detected Green Window for {selectedZone}.
+            Find feasible lower-carbon windows for schedulable activities in {selectedZone}.
           </p>
         </div>
       </div>
@@ -177,8 +195,22 @@ export function OptimizationPage() {
 
             <div className="mt-5 space-y-3 text-sm">
               <SummaryRow label="Algorithm Used" value={result?.method ?? method} />
-              <SummaryRow label="Pending Activities" value={tasks.length} />
-              <SummaryRow label="Green Window Used" value={selectedGreenWindow?.id ?? 'None'} />
+              <SummaryRow label="Schedulable Activities" value={tasks.length} />
+              <SummaryRow label="Green Window Used" value={usedWindows.map((window) => window.id).join(', ') || 'None'} />
+              <SummaryRow
+                label="Carbon data"
+                value={optimization
+                  ? `${optimization.carbonData.isSimulated ? 'simulated' : optimization.carbonData.source}; forecast: ${optimization.carbonData.forecastSource}`
+                  : 'Not available'}
+              />
+              <SummaryRow
+                label="Observed at"
+                value={formatDateTime(optimization?.carbonData.observedAt)}
+              />
+              <SummaryRow
+                label="Carbon classification"
+                value={optimization?.carbonData.classification ?? 'Not available'}
+              />
             </div>
 
             <Button
@@ -199,8 +231,13 @@ export function OptimizationPage() {
             </h3>
             <div className="space-y-3 text-sm">
               <SummaryRow label="Window" value={greenWindowLabel} />
-              <SummaryRow label="Duration" value={`${selectedGreenWindow?.duration ?? 0} min`} />
-              <SummaryRow label="Avg Carbon" value={`${selectedGreenWindow?.avgCarbonIntensity ?? 0} gCO2/kWh`} />
+              <SummaryRow label="Duration" value={`${usedWindows.reduce((total, window) => total + window.duration, 0)} min`} />
+              <SummaryRow
+                label="Avg Carbon"
+                value={usedWindows.length
+                  ? `${(usedWindows.reduce((total, window) => total + window.avgCarbonIntensity, 0) / usedWindows.length).toFixed(1)} gCO2e/kWh`
+                  : 'Not available'}
+              />
               <SummaryRow label="Carbon Reduction" value={`${formatNumber(savings?.reductionPercent, 1)}%`} />
             </div>
           </GlassCard>
@@ -240,7 +277,7 @@ export function OptimizationPage() {
           {schedulingEnabled && optimization && !scheduleQuery.isError && (
             <>
               <div className="grid gap-4 md:grid-cols-4">
-                <MetricTile icon={Zap} label="Total CO2 Saved" value={formatCo2(savings?.totalSavedCo2)} />
+                <MetricTile icon={Zap} label="Estimated net emissions difference" value={formatCo2(savings?.totalSavedCo2)} />
                 <MetricTile icon={Cpu} label="Window Utilization" value={`${formatNumber(result?.utilizationPercent, 1)}%`} />
                 <MetricTile icon={ListChecks} label="Selected Tasks" value={selectedTasks.length} />
                 <MetricTile icon={PauseCircle} label="Deferred Tasks" value={deferredTasks.length} />

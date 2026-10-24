@@ -97,7 +97,6 @@ export function LoginPage() {
               ? 'Welcome Back'
               : 'Create Your Organization'}
           </h1>
-
           <p className="mt-2 text-sm text-slate-400">
             {mode === 'login'
               ? 'Sign in to access your EcoTime dashboard'
@@ -105,7 +104,6 @@ export function LoginPage() {
           </p>
         </div>
 
-        {/* Login / Register Toggle */}
         <div className="mb-6 flex rounded-xl border border-white/[0.08] bg-black/20 p-1">
           <button
             type="button"
@@ -138,7 +136,6 @@ export function LoginPage() {
           </button>
         </div>
 
-        {/* Error Display */}
         {error && (
           <div
             role="alert"
@@ -180,6 +177,7 @@ export function LoginPage() {
               <input
                 id="login-password"
                 type="password"
+                placeholder="Password"
                 autoComplete="current-password"
                 placeholder="Enter your password"
                 value={password}
@@ -284,6 +282,7 @@ export function LoginPage() {
               <input
                 id="register-password"
                 type="password"
+D                placeholder="Password"
                 autoComplete="new-password"
                 placeholder="Create a password"
                 value={password}

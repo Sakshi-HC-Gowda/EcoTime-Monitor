@@ -3,7 +3,7 @@ import type { SchedulingRequest, SchedulingResponse, EcoScore, SimulationConfig,
 
 export const optimizerService = {
   async runScheduler(request: SchedulingRequest): Promise<ApiResponse<SchedulingResponse>> {
-    return apiClient.request<SchedulingResponse>('/scheduler', {
+    return apiClient.request<SchedulingResponse>('/recommendations', {
       method: 'POST',
       body: JSON.stringify(request),
     });

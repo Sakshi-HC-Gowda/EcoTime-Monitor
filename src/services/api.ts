@@ -140,10 +140,11 @@ class ApiClient {
   // Activity Endpoints
   // ========================================================================
 
-  async createTask(task: CreateTaskRequest): Promise<ApiResponse<Task>> {
+  async createTask(task: CreateTaskRequest, idempotencyKey?: string): Promise<ApiResponse<Task>> {
     return this.request<Task>('/activities', {
       method: 'POST',
       body: JSON.stringify(task),
+      headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
     });
   }
 

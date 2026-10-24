@@ -12,9 +12,10 @@ import logging
 import threading
 from datetime import datetime, timezone
 from flask import Blueprint, request, jsonify
+from auth_utils import require_auth, require_organization_admin
 
 from forecast.predict import get_predictor
-from services.carbon_service import get_carbon_data, generate_simulated_data
+from services.carbon_service import get_carbon_data
 
 logger = logging.getLogger(__name__)
 forecast_bp = Blueprint("forecast", __name__)
@@ -33,6 +34,7 @@ def _now_iso() -> str:
 # ---------------------------------------------------------------------------
 
 @forecast_bp.route("/forecast", methods=["GET"])
+@require_auth
 def get_forecast():
     """
     Generate a carbon intensity forecast for a grid zone.
@@ -51,39 +53,54 @@ def get_forecast():
             }
         }
     """
-    zone = request.args.get("zone", "US-CA").strip()
+    raw_zone = request.args.get("zone", "US-CA")
+    zone = raw_zone.strip() if isinstance(raw_zone, str) else ""
     hours = request.args.get("hours", 24, type=int)
     hours = max(1, min(hours, 48))  # Clamp to [1, 48]
 
     logger.info("GET /api/forecast zone=%s hours=%d", zone, hours)
 
     try:
+        if not zone:
+            raise ValueError("A non-empty grid zone is required")
         carbon = get_carbon_data(zone_id=zone, offset_hours=0)
-        history = carbon.get("history", [])
-
         predictor = get_predictor()
-        forecast_points = predictor.predict(
-            zone_id=zone,
-            horizon_hours=hours,
-            history=history,
-        )
+        if carbon.get("error"):
+            raise RuntimeError(carbon["error"])
+        if predictor.is_trained():
+            forecast_points = predictor.predict(
+                zone_id=zone,
+                horizon_hours=hours,
+                history=carbon.get("history", []),
+            )
+            forecast_source = "ml_model"
+        else:
+            forecast_points = carbon.get("forecast", [])[:hours]
+            predictor._validate_forecast(forecast_points, len(forecast_points))
+            if not forecast_points:
+                raise ValueError("No forecast points are available")
+            if len(forecast_points) < hours:
+                raise ValueError(
+                    f"Only {len(forecast_points)} forecast points are available; {hours} requested"
+                )
+            forecast_points = [{**point, "isML": False} for point in forecast_points]
+            forecast_source = carbon.get("forecastSource", "unavailable")
     except Exception as exc:
         logger.exception("GET /api/forecast failed for zone %s", zone)
-        carbon = generate_simulated_data(zone, 0)
-        history = carbon.get("history", [])
-        predictor = get_predictor()
-        forecast_points = predictor.predict(
-            zone_id=zone,
-            horizon_hours=hours,
-            history=history,
-        )
-        logger.warning("Forecast used simulation anchor after error: %s", exc)
+        return jsonify({
+            "success": False,
+            "error": f"Forecast unavailable: {exc}",
+            "timestamp": _now_iso(),
+        }), 503
 
     return jsonify({
         "success": True,
         "data": {
             "zone": zone,
             "forecast": forecast_points,
+            "source": carbon.get("source"),
+            "forecastSource": forecast_source,
+            "observedAt": carbon.get("observedAt"),
             "model": {
                 "model_name": predictor._model_name,
                 "is_trained": predictor.is_trained(),
@@ -99,6 +116,7 @@ def get_forecast():
 # ---------------------------------------------------------------------------
 
 @forecast_bp.route("/forecast/info", methods=["GET"])
+@require_auth
 def forecast_info():
     """
     Return metadata about the currently loaded ML model.
@@ -129,6 +147,7 @@ def forecast_info():
 # ---------------------------------------------------------------------------
 
 @forecast_bp.route("/ml/train", methods=["POST"])
+@require_organization_admin
 def trigger_training():
     """
     Trigger ML model (re)training in a background thread.

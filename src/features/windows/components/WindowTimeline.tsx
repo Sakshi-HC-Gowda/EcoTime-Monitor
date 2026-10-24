@@ -25,8 +25,8 @@ export function WindowTimeline({ windows }: Props) {
                   <p className="text-xs text-white font-semibold">{time} ({w.duration} min duration)</p>
                 </div>
                 <div className="text-right">
-                  <span className="text-xs font-bold text-green-400">-{Math.round(w.carbonSavingPercent)}% Carbon</span>
-                  <p className="text-[10px] text-slate-400">{Math.round(w.avgCarbonIntensity)} gCO2/kWh avg</p>
+                  <span className="text-xs font-bold text-green-400">{Math.round(w.carbonSavingPercent)}% below forecast peak</span>
+                  <p className="text-[10px] text-slate-400">{Math.round(w.avgCarbonIntensity)} gCO2e/kWh avg</p>
                 </div>
               </div>
             </div>

@@ -10,16 +10,23 @@ GET  /api/config/simulation  — Retrieve current simulation configuration
 from __future__ import annotations
 
 import logging
+import math
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from flask import Blueprint, request, jsonify
 from auth_utils import require_auth, require_organization_admin
 
 from extensions import db
+from optimization.carbon_calculator import calculate_emissions_grams
 from models.activity import Activity
+from models.activity_history import ActivityHistory
 from models.simulation_config import SimulationConfig
 from models.analytics_recommendation import AnalyticsRecommendation
-from services.optimizer_service import compute_eco_score, run_scheduler, compute_savings_summary
+from services.optimizer_service import (
+    RecommendationDataUnavailable,
+    compute_eco_score,
+    recommend_schedule,
+)
 from services.activity_service import get_activity
 from services.analytics_service import log_recommendation
 
@@ -52,6 +59,7 @@ def _get_simulation_config() -> SimulationConfig:
 # ---------------------------------------------------------------------------
 
 @optimizer_bp.route("/scheduler", methods=["POST"])
+@optimizer_bp.route("/recommendations", methods=["POST"])
 @require_auth
 def schedule():
     """
@@ -83,7 +91,7 @@ def schedule():
         }), 400
 
     # Validate required fields
-    missing = [f for f in ["tasks", "window"] if f not in data]
+    missing = [f for f in ["tasks"] if f not in data]
     if missing:
         return jsonify({
             "success": False,
@@ -91,10 +99,42 @@ def schedule():
             "timestamp": _now_iso(),
         }), 400
 
-    tasks = data.get("tasks", [])
-    window = data.get("window", {})
-    method = data.get("method", "greedy").lower()
-    baseline = float(data.get("baselineIntensity", _get_simulation_config().baseline_intensity))
+    requested_tasks = data.get("tasks", [])
+    requested_window = data.get("window")
+    method_value = data.get("method", "greedy")
+    if not isinstance(method_value, str):
+        return jsonify({
+            "success": False,
+            "error": "Field 'method' must be 'greedy' or 'knapsack'",
+            "timestamp": _now_iso(),
+        }), 400
+    method = method_value.lower()
+    config = _get_simulation_config()
+    try:
+        raw_baseline = data.get("baselineIntensity", config.baseline_intensity)
+        if isinstance(raw_baseline, bool):
+            raise ValueError("Field 'baselineIntensity' must be numeric")
+        baseline = float(raw_baseline)
+    except (TypeError, ValueError):
+        return jsonify({
+            "success": False,
+            "error": "Field 'baselineIntensity' must be numeric",
+            "timestamp": _now_iso(),
+        }), 400
+    if not math.isfinite(baseline) or baseline < 0:
+        return jsonify({
+            "success": False,
+            "error": "Field 'baselineIntensity' must be a non-negative finite number",
+            "timestamp": _now_iso(),
+        }), 400
+    zone_value = data.get("zone", config.zone)
+    if not isinstance(zone_value, str) or not zone_value.strip():
+        return jsonify({
+            "success": False,
+            "error": "Field 'zone' must be a non-empty string",
+            "timestamp": _now_iso(),
+        }), 400
+    zone = zone_value.strip()
 
     if method not in ("greedy", "knapsack"):
         return jsonify({
@@ -103,70 +143,228 @@ def schedule():
             "timestamp": _now_iso(),
         }), 400
 
-    if not isinstance(tasks, list) or len(tasks) == 0:
+    if not isinstance(requested_tasks, list) or len(requested_tasks) == 0:
         return jsonify({
             "success": False,
             "error": "Field 'tasks' must be a non-empty array",
             "timestamp": _now_iso(),
         }), 400
 
-    task_ids = {task.get("id") for task in tasks if isinstance(task, dict) and task.get("id")}
-    owned_count = Activity.query.filter(
-        Activity.organization_id == request.user.organization_id,
-        Activity.id.in_(task_ids or {""}),
-    ).count()
-    if owned_count != len(task_ids):
+    if requested_window is not None and not isinstance(requested_window, dict):
         return jsonify({
             "success": False,
-            "error": "Scheduler tasks must belong to your organization",
+            "error": "Field 'window' must define the permitted scheduling interval",
             "timestamp": _now_iso(),
-        }), 403
+        }), 400
+
+    if any(not isinstance(task, dict) or not task.get("id") for task in requested_tasks):
+        return jsonify({
+            "success": False,
+            "error": "Every task must include an activity id",
+            "timestamp": _now_iso(),
+        }), 400
+    task_ids = [str(task["id"]) for task in requested_tasks]
+    if len(set(task_ids)) != len(task_ids):
+        return jsonify({
+            "success": False,
+            "error": "Activity ids must be unique",
+            "timestamp": _now_iso(),
+        }), 400
+
+    owned_tasks = Activity.query.filter(
+        Activity.organization_id == request.user.organization_id,
+        Activity.id.in_(task_ids),
+    ).all()
+    if len(owned_tasks) != len(task_ids):
+        any_tasks = Activity.query.filter(Activity.id.in_(task_ids)).all()
+        if any(task.organization_id != request.user.organization_id for task in any_tasks):
+            return jsonify({
+                "success": False,
+                "error": "Scheduler tasks must belong to your organization",
+                "timestamp": _now_iso(),
+            }), 403
+        return jsonify({
+            "success": False,
+            "error": "One or more activities could not be found",
+            "timestamp": _now_iso(),
+        }), 404
+
+    stored_by_id = {task.id: task.to_dict() for task in owned_tasks}
+    tasks = [stored_by_id[str(request_task["id"])] for request_task in requested_tasks]
 
     logger.info(
-        "POST /api/scheduler method=%s tasks=%d window=%s",
-        method, len(tasks), window.get("id", "?")
+        "POST /api/recommendations method=%s tasks=%d zone=%s",
+        method, len(tasks), zone
     )
 
-    sched_result = run_scheduler(
-        tasks=tasks,
-        window=window,
-        method=method,
-        baseline_intensity=baseline,
-    )
-
-    # Add savings summary
-    savings = compute_savings_summary(
-        selected_tasks=sched_result["result"].get("selectedTasks", []),
-        window=window,
-        baseline_intensity=baseline,
-    )
-
-    # Persist this scheduling decision as an accepted recommendation so
-    # Analytics can report on it (best-effort — never blocks the response).
     try:
-        selected = sched_result["result"].get("selectedTasks", [])
-        total_energy_kwh = sum(
-            (t.get("duration", 0) / 60.0) * (t.get("powerDraw", 0) / 1000.0)
-            for t in selected
+        sched_result = recommend_schedule(
+            tasks=tasks,
+            permitted_window=requested_window,
+            method=method,
+            baseline_intensity=baseline,
+            zone_id=zone,
         )
-        log_recommendation(
-            text=f"Scheduled {len(selected)} task(s) into window '{window.get('id', '?')}' via {method}.",
-            reason=f"Estimated {savings['reductionPercent']}% carbon reduction vs. baseline intensity.",
-            expected_carbon_saving=savings["totalSavedCo2"],
-            expected_energy_saving=round(total_energy_kwh, 4),
-            status="accepted",
-            organization_id=request.user.organization_id,
-        )
+    except RecommendationDataUnavailable as exc:
+        logger.warning("Scheduling recommendation data unavailable: %s", exc)
+        return jsonify({
+            "success": False,
+            "error": str(exc),
+            "timestamp": _now_iso(),
+        }), 503
+    except ValueError as exc:
+        return jsonify({
+            "success": False,
+            "error": str(exc),
+            "timestamp": _now_iso(),
+        }), 400
+
+    try:
+        task_by_id = {task["id"]: task for task in tasks}
+        for recommendation in sched_result["recommendations"]:
+            activity_id = recommendation["activityId"]
+            task = task_by_id.get(activity_id, {})
+            log_recommendation(
+                activity_id=activity_id,
+                text=recommendation["recommendation"],
+                reason=recommendation["reason"],
+                expected_carbon_saving=recommendation.get("carbonSavings"),
+                expected_energy_saving=None,
+                status=recommendation["status"],
+                organization_id=request.user.organization_id,
+            )
     except Exception:
-        logger.exception("Failed to log scheduling recommendation")
+        db.session.rollback()
+        logger.exception("Failed to persist scheduling recommendations")
+        return jsonify({
+            "success": False,
+            "error": "Scheduling completed, but recommendation records could not be saved.",
+            "timestamp": _now_iso(),
+        }), 503
 
     return jsonify({
         "success": True,
-        "data": {
-            "result": sched_result["result"],
-            "tasks": sched_result["tasks"],
-            "savings": savings,
-        },
+        "data": sched_result,
+        "timestamp": _now_iso(),
+    }), 200
+
+
+@optimizer_bp.route("/activities/<activity_id>/schedule", methods=["POST"])
+@require_auth
+def schedule_activity(activity_id: str):
+    """Get a real optimizer recommendation and persist it only when feasible."""
+    activity = Activity.query.filter_by(
+        id=activity_id,
+        organization_id=request.user.organization_id,
+    ).first()
+    if activity is None:
+        return jsonify({"success": False, "error": "Activity not found", "timestamp": _now_iso()}), 404
+    if activity.activity_type == "file-upload":
+        return jsonify({"success": False, "error": "File uploads must be scheduled through the upload workflow", "timestamp": _now_iso()}), 409
+    if activity.status not in {"idle", "pending", "paused", "delayed"}:
+        return jsonify({"success": False, "error": f"Activity cannot be scheduled while {activity.status}", "timestamp": _now_iso()}), 409
+
+    config = _get_simulation_config()
+    try:
+        result = recommend_schedule(
+            tasks=[activity.to_dict()],
+            permitted_window=None,
+            method="greedy",
+            baseline_intensity=config.baseline_intensity,
+            zone_id=config.zone,
+        )
+    except RecommendationDataUnavailable as exc:
+        return jsonify({"success": False, "error": str(exc), "timestamp": _now_iso()}), 503
+    except ValueError as exc:
+        return jsonify({"success": False, "error": str(exc), "timestamp": _now_iso()}), 400
+
+    recommendation = next(
+        (item for item in result.get("recommendations", []) if item.get("activityId") == activity.id),
+        None,
+    )
+    raw_start = recommendation.get("startTime") if recommendation else None
+    try:
+        start = datetime.fromisoformat(raw_start.replace("Z", "+00:00")) if isinstance(raw_start, str) else None
+        if start and start.tzinfo is None:
+            start = start.replace(tzinfo=timezone.utc)
+    except ValueError:
+        start = None
+    if (
+        recommendation is None
+        or recommendation.get("status") != "scheduled"
+        or start is None
+        or not recommendation.get("windowId")
+    ):
+        return jsonify({
+            "success": True,
+            "data": {"scheduled": False, "recommendation": recommendation},
+            "timestamp": _now_iso(),
+        }), 200
+
+    now = datetime.now(timezone.utc)
+    earliest = activity.earliest_start
+    deadline = activity.deadline
+    earliest = earliest.replace(tzinfo=timezone.utc) if earliest and earliest.tzinfo is None else earliest
+    deadline = deadline.replace(tzinfo=timezone.utc) if deadline and deadline.tzinfo is None else deadline
+    window = next((item for item in result.get("windows", []) if str(item.get("id")) == str(recommendation["windowId"])), None)
+    window_start = datetime.fromisoformat(window["startTime"].replace("Z", "+00:00")) if window else None
+    window_end = datetime.fromisoformat(window["endTime"].replace("Z", "+00:00")) if window else None
+    if window_start and window_start.tzinfo is None:
+        window_start = window_start.replace(tzinfo=timezone.utc)
+    if window_end and window_end.tzinfo is None:
+        window_end = window_end.replace(tzinfo=timezone.utc)
+    if window_start is None or window_end is None:
+        return jsonify({"success": False, "error": "Optimizer did not return the selected Green Window bounds", "timestamp": _now_iso()}), 503
+    start = max(start, now, window_start, earliest or now)
+
+    # Serialize reservation checks through the shared simulation config row.
+    db.session.query(SimulationConfig).filter_by(id=1).with_for_update().first()
+    reservations = Activity.query.filter(
+        Activity.organization_id == request.user.organization_id,
+        Activity.assigned_window_id == recommendation["windowId"],
+        Activity.status == "scheduled",
+        Activity.id != activity.id,
+    ).order_by(Activity.scheduled_start_time.asc()).all()
+    duration = timedelta(minutes=activity.duration)
+    for reserved in reservations:
+        reserved_start = reserved.scheduled_start_time
+        if reserved_start is None:
+            continue
+        if reserved_start.tzinfo is None:
+            reserved_start = reserved_start.replace(tzinfo=timezone.utc)
+        reserved_end = reserved.expected_end_time or reserved_start + timedelta(minutes=reserved.duration)
+        if reserved_end.tzinfo is None:
+            reserved_end = reserved_end.replace(tzinfo=timezone.utc)
+        if start < reserved_end and start + duration > reserved_start:
+            start = reserved_end
+    end = start + duration
+    if start < now or (earliest and start < earliest) or end > window_end or (deadline and end > deadline):
+        return jsonify({"success": False, "error": "Optimizer returned a time outside the activity's permitted scheduling window", "timestamp": _now_iso()}), 409
+
+    previous = activity.status
+    previous_updated_at = activity.updated_at
+    if previous_updated_at and previous_updated_at.tzinfo is None:
+        previous_updated_at = previous_updated_at.replace(tzinfo=timezone.utc)
+    activity.status = "scheduled"
+    activity.assigned_window_id = recommendation.get("windowId")
+    activity.scheduled_start_time = start
+    activity.expected_end_time = end
+    activity.updated_at = now
+    db.session.add(ActivityHistory(
+        activity_id=activity.id,
+        previous_status=previous,
+        new_status="scheduled",
+        execution_time=(now - previous_updated_at).total_seconds() if previous_updated_at else None,
+    ))
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        logger.exception("Could not persist optimizer schedule for activity %s", activity_id)
+        return jsonify({"success": False, "error": "Could not save the recommended schedule", "timestamp": _now_iso()}), 500
+    return jsonify({
+        "success": True,
+        "data": {"scheduled": True, "activity": activity.to_dict(), "recommendation": recommendation},
         "timestamp": _now_iso(),
     }), 200
 # ---------------------------------------------------------------------------
@@ -196,32 +394,45 @@ def eco_score():
             "timestamp": _now_iso(),
         }), 400
 
-    current_intensity = request.args.get("currentIntensity", type=float)
-    if current_intensity is None:
+    raw_current_intensity = request.args.get("currentIntensity")
+    if raw_current_intensity is None:
         return jsonify({
             "success": False,
             "error": "Missing required parameter: currentIntensity",
             "timestamp": _now_iso(),
         }), 400
+    try:
+        current_intensity = float(raw_current_intensity)
+        baseline = float(
+            request.args.get("baselineIntensity")
+            if request.args.get("baselineIntensity") is not None
+            else _get_simulation_config().baseline_intensity
+        )
+        peak = float(request.args.get("peakIntensity", "800"))
+        from optimization.eco_score import calculate_carbon_score
+        calculate_carbon_score(current_intensity, baseline, peak)
+    except (TypeError, ValueError) as exc:
+        return jsonify({
+            "success": False,
+            "error": str(exc) or "Intensity values must be numeric.",
+            "timestamp": _now_iso(),
+        }), 400
 
-    baseline = request.args.get("baselineIntensity", _get_simulation_config().baseline_intensity, type=float)
-    peak = request.args.get("peakIntensity", 800.0, type=float)
-
-    # Try to fetch task from store; if not found, use a generic flexible task
     persisted_task = get_activity(task_id, request.user.organization_id)
-    if Activity.query.filter_by(id=task_id).first() is not None and persisted_task is None:
+    if persisted_task is None:
+        existing = Activity.query.filter_by(id=task_id).first()
+        if existing is None:
+            return jsonify({
+                "success": False,
+                "error": "Activity not found",
+                "timestamp": _now_iso(),
+            }), 404
         return jsonify({
             "success": False,
             "error": "Activity does not belong to your organization",
             "timestamp": _now_iso(),
         }), 403
-    task = persisted_task or {
-        "id": task_id,
-        "type": "flexible",
-        "status": "idle",
-        "flexibilityScore": 70,
-        "priorityScore": 50,
-    }
+    task = persisted_task
 
     score = compute_eco_score(
         task=task,
@@ -236,22 +447,20 @@ def eco_score():
     )
 
     # Log this as a pending recommendation (an advisory, not yet acted on).
-    # Only estimate savings when the task has real duration/powerDraw data.
+    # Scheduling changes timing rather than workload energy, so energy savings
+    # are not claimed. Carbon savings are an estimate against the two intensities.
     try:
-        expected_energy = None
         expected_carbon = None
-        if "duration" in task and "powerDraw" in task:
-            from optimization.carbon_calculator import calculate_savings_grams
-            expected_energy = round((task["duration"] / 60.0) * (task["powerDraw"] / 1000.0), 4)
-            expected_carbon = calculate_savings_grams(
-                task["duration"], task["powerDraw"], baseline, current_intensity
-            )
+        from optimization.carbon_calculator import calculate_savings_grams
+        expected_carbon = calculate_savings_grams(
+            task["duration"], task["powerDraw"], baseline, current_intensity
+        )
         log_recommendation(
             activity_id=task_id if persisted_task else None,
             text=score["recommendation"],
             reason=score["reason"],
             expected_carbon_saving=expected_carbon,
-            expected_energy_saving=expected_energy,
+            expected_energy_saving=None,
             status="pending",
             organization_id=request.user.organization_id,
         )
@@ -286,17 +495,42 @@ def set_config():
     """
     data = request.get_json(silent=True) or {}
 
-    config = _get_simulation_config()
-    if "zone" in data:
-        config.zone = str(data["zone"]).strip()
-    if "lowCarbonThreshold" in data:
-        config.low_carbon_threshold = float(data["lowCarbonThreshold"])
-    if "baselineIntensity" in data:
-        config.baseline_intensity = float(data["baselineIntensity"])
-    if "simulationSpeed" in data:
-        config.simulation_speed = int(data["simulationSpeed"])
-    if "isSimulating" in data:
-        config.is_simulating = bool(data["isSimulating"])
+    try:
+        config = _get_simulation_config()
+        if "zone" in data:
+            if not isinstance(data["zone"], str) or not data["zone"].strip():
+                raise ValueError("Field 'zone' must be a non-empty string")
+            config.zone = data["zone"].strip()
+        if "lowCarbonThreshold" in data:
+            if isinstance(data["lowCarbonThreshold"], bool):
+                raise ValueError(
+                    "Field 'lowCarbonThreshold' must be a non-negative finite number"
+                )
+            calculate_emissions_grams(0.0, data["lowCarbonThreshold"])
+            config.low_carbon_threshold = float(data["lowCarbonThreshold"])
+        if "baselineIntensity" in data:
+            if isinstance(data["baselineIntensity"], bool):
+                raise ValueError(
+                    "Field 'baselineIntensity' must be a non-negative finite number"
+                )
+            calculate_emissions_grams(0.0, data["baselineIntensity"])
+            config.baseline_intensity = float(data["baselineIntensity"])
+        if "simulationSpeed" in data:
+            raw_speed = data["simulationSpeed"]
+            if isinstance(raw_speed, bool) or not isinstance(raw_speed, int) or raw_speed <= 0:
+                raise ValueError("Field 'simulationSpeed' must be a positive integer")
+            config.simulation_speed = raw_speed
+        if "isSimulating" in data:
+            if not isinstance(data["isSimulating"], bool):
+                raise ValueError("Field 'isSimulating' must be a boolean")
+            config.is_simulating = data["isSimulating"]
+    except (TypeError, ValueError) as exc:
+        db.session.rollback()
+        return jsonify({
+            "success": False,
+            "error": str(exc),
+            "timestamp": _now_iso(),
+        }), 400
 
     db.session.commit()
     config_data = config.to_dict()
@@ -341,19 +575,15 @@ def get_recommendations():
     Returns 200: { success: true, data: list[dict], count: int, timestamp: str }
     """
     limit = min(request.args.get("limit", 50, type=int), 200)
-    try:
-        recs = (
-            AnalyticsRecommendation.query.filter_by(
-                organization_id=request.user.organization_id
-            )
-            .order_by(AnalyticsRecommendation.created_at.desc())
-            .limit(limit)
-            .all()
+    recs = (
+        AnalyticsRecommendation.query.filter_by(
+            organization_id=request.user.organization_id
         )
-        data = [recommendation.to_dict() for recommendation in recs]
-    except Exception as exc:
-        logger.warning("Could not fetch analytics recommendations: %s", exc)
-        data = []
+        .order_by(AnalyticsRecommendation.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    data = [recommendation.to_dict() for recommendation in recs]
 
     return jsonify({
         "success": True,
@@ -361,4 +591,3 @@ def get_recommendations():
         "count": len(data),
         "timestamp": _now_iso(),
     }), 200
-

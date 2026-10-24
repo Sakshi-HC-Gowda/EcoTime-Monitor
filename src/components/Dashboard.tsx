@@ -251,7 +251,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <div style={{ display: 'flex', gap: '10px', fontSize: '12px', background: 'rgba(255,255,255,0.02)', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-glass)' }}>
               <Info size={16} style={{ color: 'var(--blue)', flexShrink: 0 }} />
               <div>
-                <strong>Grid Generation Type:</strong> {zoneInfo.type.toUpperCase()}-heavy grid. Base intensity is ~{zoneInfo.baseIntensity} g/kWh.
+                <strong>Grid Generation Type:</strong> {zoneInfo.type.toUpperCase()}-heavy grid. Base intensity is ~{zoneInfo.baseIntensity} gCO2e/kWh.
               </div>
             </div>
           </div>
@@ -432,7 +432,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <div>
               <h4 style={{ fontSize: '14px', fontWeight: '600' }}>No Green Windows Detected</h4>
               <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                Grid carbon intensity is expected to remain above the threshold ({lowCarbonThreshold} g/kWh).
+                Grid carbon intensity is expected to remain above the threshold ({lowCarbonThreshold} gCO2e/kWh).
               </p>
             </div>
           </div>
@@ -483,7 +483,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
                     <span className="window-savings-tag">
-                      {win.carbonSavingPercent.toFixed(0)}% Savings
+                      {win.carbonSavingPercent.toFixed(0)}% forecast-peak comparison
                     </span>
                     <span style={{ fontSize: '10px', color: 'var(--purple)', fontWeight: 'bold' }}>
                       Rank #{idx + 1} (Score: {score})

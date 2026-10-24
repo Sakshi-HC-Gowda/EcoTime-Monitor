@@ -26,8 +26,8 @@ export function WindowCard({ window, onSchedule }: Props) {
           <span className="text-sm font-mono font-bold text-white uppercase">{window.id}</span>
         </div>
 
-        <span className="px-3 py-1 rounded-full text-xs font-bold bg-teal-500/15 text-teal-300 border border-teal-500/20 shadow-inner">
-          -{Math.round(window.carbonSavingPercent)}% Carbon
+        <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-teal-500/10 text-teal-400 border border-teal-500/20">
+          {Math.round(window.carbonSavingPercent)}% forecast-peak comparison
         </span>
       </div>
 
@@ -44,10 +44,20 @@ export function WindowCard({ window, onSchedule }: Props) {
           <span className="font-semibold text-white block">{window.duration} Minutes</span>
         </div>
 
+        {window.remainingCapacity !== undefined && (
+          <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05]">
+            <span className="text-slate-400 block text-xs mb-1">Scheduled Workload</span>
+            <span className="font-semibold text-white block">
+              {window.scheduledActivityCount ?? 0} activities · {window.scheduledDuration ?? 0} min
+            </span>
+            <span className="mt-1 block text-xs text-teal-300">{window.remainingCapacity} min capacity remaining</span>
+          </div>
+        )}
+
         <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05]">
           <span className="text-slate-400 block text-xs mb-1">Avg / Min Carbon</span>
           <span className="font-bold text-teal-300 block text-lg">
-            {Math.round(window.avgCarbonIntensity)} <span className="text-sm text-teal-500 font-medium">/ {minCarbon}</span> <span className="text-[11px] font-normal text-slate-500 ml-0.5">gCO₂</span>
+            {Math.round(window.avgCarbonIntensity)} / {minCarbon} <span className="text-[10px] font-normal text-slate-400">gCO2e/kWh</span>
           </span>
         </div>
 

@@ -1,14 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { X, ChevronDown } from 'lucide-react';
 import type { ActivityType, CreateTaskRequest } from '@/types/domain';
 import { useZone } from '@/app/ZoneProvider';
 import { Button } from '@/components/ui/Button';
-import { useGreenWindows } from '@/features/carbon/hooks/useCarbon';
+import { useCarbon, useGreenWindows } from '@/features/carbon/hooks/useCarbon';
+import { useSimulationConfig } from '@/features/optimization/hooks/useOptimization';
 import {
   formatRecommendedTime,
-  getEstimatedCarbonImpact,
   getEstimatedEcoScore,
-  getEstimatedEnergyKwh,
   getRecommendationText,
   getRecommendedStartTimeIso,
 } from '@/features/activities/utils/activityMetrics';
@@ -16,7 +15,7 @@ import {
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (task: CreateTaskRequest) => void;
+  onSubmit: (task: CreateTaskRequest, idempotencyKey: string) => Promise<void>;
 }
 
 const ACTIVITY_TYPES: { value: ActivityType; label: string }[] = [
@@ -45,46 +44,76 @@ const numInputClass =
 export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
   const { selectedZone } = useZone();
   const { data: greenWindows = [] } = useGreenWindows(selectedZone, 180, 0, isOpen);
+  const { data: carbon } = useCarbon(selectedZone);
+  const { data: simulationConfig } = useSimulationConfig();
   const [name, setName] = useState('');
   const [activityType, setActivityType] = useState<ActivityType>('dataset-download');
   const [duration, setDuration] = useState(45);
-  const [powerDraw, setPowerDraw] = useState(350);
   const [priorityScore, setPriorityScore] = useState(50);
   const [flexibilityScore, setFlexibilityScore] = useState(80);
+  const [earliestStart, setEarliestStart] = useState('');
+  const [deadline, setDeadline] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const submittedRef = useRef(false);
+
+  useEffect(() => {
+    if (isOpen) submittedRef.current = false;
+  }, [isOpen]);
 
   const estimateDraft = {
     duration: Number(duration),
-    powerDraw: Number(powerDraw),
     priorityScore: Number(priorityScore),
     flexibilityScore: Number(flexibilityScore),
-    createdAt: new Date().toISOString(),
+    ...(earliestStart ? { earliestStart: new Date(earliestStart).toISOString() } : {}),
+    ...(deadline ? { deadline: new Date(deadline).toISOString() } : {}),
   };
 
-  const estimatedEnergy = getEstimatedEnergyKwh(estimateDraft);
-  const estimatedCarbon = getEstimatedCarbonImpact(estimateDraft);
-  const estimatedEcoScore = getEstimatedEcoScore(estimateDraft);
-  const recommendation = getRecommendationText(estimateDraft);
+  const estimatedEcoScore = getEstimatedEcoScore(
+    estimateDraft,
+    carbon?.current.carbonIntensity,
+    simulationConfig?.baselineIntensity ?? 380,
+  );
+  const recommendation = getRecommendationText({});
   const recommendedStart = formatRecommendedTime(getRecommendedStartTimeIso(estimateDraft, greenWindows));
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-
-    onSubmit({
+    if (
+      earliestStart
+      && deadline
+      && new Date(earliestStart).getTime() >= new Date(deadline).getTime()
+    ) return;
+    if (submittedRef.current) return;
+    submittedRef.current = true;
+    setSubmitting(true);
+    setSubmitError('');
+    try {
+      await onSubmit({
       name,
       type: 'flexible',
       activityType,
       duration: Number(duration),
-      powerDraw: Number(powerDraw),
       priorityScore: Number(priorityScore),
       flexibilityScore: Number(flexibilityScore),
       zone: selectedZone ?? undefined,
-    } satisfies CreateTaskRequest);
+      ...(earliestStart ? { earliestStart: new Date(earliestStart).toISOString() } : {}),
+      ...(deadline ? { deadline: new Date(deadline).toISOString() } : {}),
+      } satisfies CreateTaskRequest, crypto.randomUUID());
 
-    setName('');
-    onClose();
+      setName('');
+      setEarliestStart('');
+      setDeadline('');
+      onClose();
+    } catch (error) {
+      submittedRef.current = false;
+      setSubmitError(error instanceof Error ? error.message : 'Could not register the activity.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -147,7 +176,7 @@ export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
               </div>
 
               <div>
-                <FieldLabel>Duration (min)</FieldLabel>
+                <FieldLabel>Estimated Duration (min)</FieldLabel>
                 <input
                   type="number"
                   min="1"
@@ -162,20 +191,8 @@ export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
             {/* Divider */}
             <div className="border-t border-white/[0.05]" />
 
-            {/* Power + Priority + Flexibility */}
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <FieldLabel>Power Draw (W)</FieldLabel>
-                <input
-                  type="number"
-                  min="10"
-                  max="10000"
-                  value={powerDraw}
-                  onChange={(e) => setPowerDraw(Number(e.target.value))}
-                  className={numInputClass}
-                />
-              </div>
-
+            {/* Priority + Flexibility */}
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <FieldLabel>Priority (0–100)</FieldLabel>
                 <input
@@ -201,29 +218,66 @@ export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
               </div>
             </div>
 
-            <div className="rounded-xl border border-green-500/20 bg-green-500/[0.05] p-4">
-              <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.08em] text-green-400">Estimated Values</p>
-              <div className="grid grid-cols-2 gap-2 text-xs text-slate-200">
-                <p>Estimated Power: <span className="font-semibold text-white">{Number(powerDraw).toFixed(0)} W</span></p>
-                <p>Estimated Energy: <span className="font-semibold text-white">{estimatedEnergy.toFixed(2)} kWh</span></p>
-                <p>Carbon Impact: <span className="font-semibold text-white">{estimatedCarbon.toFixed(0)} gCO2</span></p>
-                <p>EcoScore: <span className="font-semibold text-white">{estimatedEcoScore.toFixed(1)} / 100</span></p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <FieldLabel>Not before (optional)</FieldLabel>
+                <input
+                  type="datetime-local"
+                  value={earliestStart}
+                  onChange={(e) => setEarliestStart(e.target.value)}
+                  className={inputClass}
+                />
               </div>
+              <div>
+                <FieldLabel>Deadline (optional)</FieldLabel>
+                <input
+                  type="datetime-local"
+                  value={deadline}
+                  min={earliestStart || undefined}
+                  onChange={(e) => setDeadline(e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+            </div>
+            {earliestStart && deadline && new Date(earliestStart) >= new Date(deadline) && (
+              <p className="text-xs text-red-300">Deadline must be later than the permitted start.</p>
+            )}
+
+            <div className="rounded-xl border border-green-500/20 bg-green-500/[0.05] p-4">
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.08em] text-green-400">Estimates</p>
+              <p className="text-xs text-slate-200">
+                Estimated duration: <span className="font-semibold text-white">{Number(duration)} min</span>
+              </p>
+              <p className="mt-1 text-xs text-slate-300">
+                Enter a duration estimate. Power uses a workload-class assumption, not a measurement. Transfer duration is never inferred from file size.
+              </p>
+              <p className="mt-1 text-xs text-slate-200">
+                EcoScore preview: <span className="font-semibold text-white">
+                  {estimatedEcoScore === null ? 'Unavailable until carbon data is available' : `${estimatedEcoScore.toFixed(1)} / 100`}
+                </span>
+              </p>
               <p className="mt-2 text-xs text-slate-300">
-                Recommendation: <span className="font-semibold text-white">{recommendation}</span>
-                {' '}at{' '}
+                Suggested action (estimate): <span className="font-semibold text-white">{recommendation}</span>
+                {' · Potential window: '}
                 <span className="font-semibold text-white">{recommendedStart}</span>
               </p>
+              {carbon && (
+                <p className="mt-1 text-[11px] text-slate-400">
+                  Carbon intensity is {carbon.isSimulated ? 'simulated' : 'provider-reported'} and expressed in gCO2e/kWh.
+                </p>
+              )}
             </div>
           </div>
+
+          {submitError && <p role="alert" className="px-6 pb-3 text-xs font-medium text-rose-300">{submitError}</p>}
 
           {/* Footer */}
           <div className="flex justify-end gap-2.5 px-6 py-4 border-t border-white/[0.07] bg-white/[0.01]">
             <Button type="button" variant="ghost" size="sm" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" size="sm">
-              Register Activity
+            <Button type="submit" size="sm" disabled={submitting}>
+              {submitting ? 'Registering…' : 'Register Activity'}
             </Button>
           </div>
         </form>

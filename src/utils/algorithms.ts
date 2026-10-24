@@ -4,30 +4,13 @@
  * Do NOT redefine Task or GreenWindow here — use domain.ts instead.
  */
 import type { Task, GreenWindow } from '../types/domain';
+import {
+  calculateCarbonScore,
+  calculateEcoScore,
+  calculateSavingsGrams,
+} from './carbonMetrics';
 export type { Task, GreenWindow } from '../types/domain';
-
-
-/**
- * Calculates the EcoScore for a task based on:
- * - CarbonScore (0-100, where 100 is cleanest/lowest intensity)
- * - FlexibilityScore (0-100, where 100 is highly delayable)
- * - PriorityScore (0-100, where 100 is highest importance to run now)
- * 
- * Formula: EcoScore = 0.5 * CarbonScore + 0.3 * FlexibilityScore + 0.2 * PriorityScore
- * 
- * Purpose: Determines whether a task should:
- * - Execute immediately (high priority or clean grid)
- * - Be delayed (low priority, flexible, dirty grid)
- * - Be scheduled automatically (moderate grid, flexible)
- */
-export function calculateEcoScore(
-  carbonScore: number,
-  flexibilityScore: number,
-  priorityScore: number
-): number {
-  const score = 0.5 * carbonScore + 0.3 * flexibilityScore + 0.2 * priorityScore;
-  return Math.round(score * 10) / 10;
-}
+export { calculateEcoScore };
 
 /**
  * Evaluates the action recommendation for a task based on its parameters and current carbon score.
@@ -42,10 +25,11 @@ export function getRecommendation(
   recommendation: 'Execute Now' | 'Delay Execution' | 'Schedule Automatically' | 'Pause Activity' | 'Resume Activity';
   reason: string;
 } {
-  // CarbonScore mapping: 100 is cleanest (0 or minimum intensity), 0 is dirtiest (peak intensity)
-  const range = Math.max(50, peakIntensity - baselineIntensity * 0.5); // ensure no division by zero
-  const carbonDiff = peakIntensity - currentCarbonIntensity;
-  const carbonScore = Math.max(0, Math.min(100, Math.round((carbonDiff / range) * 100)));
+  const carbonScore = calculateCarbonScore(
+    currentCarbonIntensity,
+    baselineIntensity,
+    peakIntensity,
+  );
 
   const score = calculateEcoScore(carbonScore, task.flexibilityScore, task.priorityScore);
 
@@ -63,7 +47,7 @@ export function getRecommendation(
     return {
       score,
       recommendation: task.status === 'paused' ? 'Resume Activity' : 'Execute Now',
-      reason: `Grid is highly clean (${currentCarbonIntensity} g/kWh). Favorable time to run.`
+      reason: `Grid is highly clean (${currentCarbonIntensity} gCO2e/kWh). Favorable time to run.`
     };
   } else if (carbonScore <= 30) {
     // Very dirty grid
@@ -77,7 +61,7 @@ export function getRecommendation(
       return {
         score,
         recommendation: task.status === 'running' ? 'Pause Activity' : 'Delay Execution',
-        reason: `Grid intensity is high (${currentCarbonIntensity} g/kWh). Deferring to save emissions.`
+        reason: `Grid intensity is high (${currentCarbonIntensity} gCO2e/kWh). Deferring to save emissions.`
       };
     }
   } else {
@@ -86,7 +70,7 @@ export function getRecommendation(
       return {
         score,
         recommendation: 'Execute Now',
-        reason: `Grid carbon intensity is moderate (${currentCarbonIntensity} g/kWh). Executive priority requires execution.`
+        reason: `Grid carbon intensity is moderate (${currentCarbonIntensity} gCO2e/kWh). Executive priority requires execution.`
       };
     } else {
       return {
@@ -178,7 +162,7 @@ export function scheduleGreedy(
 /**
  * 0/1 Knapsack Optimization Algorithm:
  * - Inputs: A single Green Window, its duration as capacity, and a list of flexible tasks.
- * - Value: Carbon savings in grams of CO2 = (duration / 60) * (powerDraw / 1000) * (baselineIntensity - windowIntensity)
+ * - Value: Estimated baseline emissions minus recommended emissions (gCO2e)
  * - Constraint: Sum of task durations <= Window duration
  */
 export function optimizeKnapsack(
@@ -199,12 +183,14 @@ export function optimizeKnapsack(
     return { selectedTasks: [], totalSavedCo2: 0 };
   }
 
-  // Calculate carbon savings in grams of CO2 for each task if scheduled in this window
+  // Calculate estimated carbon emissions savings for each task in this window.
   const getTaskSavingsGrams = (t: Task) => {
-    const hours = t.duration / 60;
-    const kW = t.powerDraw / 1000;
-    const deltaIntensity = Math.max(0, baselineIntensity - window.avgCarbonIntensity);
-    return hours * kW * deltaIntensity;
+    return calculateSavingsGrams(
+      t.duration,
+      t.powerDraw,
+      baselineIntensity,
+      window.avgCarbonIntensity,
+    );
   };
 
   // DP table: dp[i][w] holds the maximum savings (scaled by 100 to make integer for grid)

@@ -18,7 +18,7 @@ export function RegionComparison() {
           <Tooltip
             contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px' }}
           />
-          <Bar dataKey="intensity" name="Carbon Intensity (gCO2/kWh)" fill="#3b82f6" radius={[0, 6, 6, 0]} />
+          <Bar dataKey="intensity" name="Carbon Intensity (gCO2e/kWh)" fill="#3b82f6" radius={[0, 6, 6, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>

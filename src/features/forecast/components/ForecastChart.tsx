@@ -39,7 +39,7 @@ export function ForecastChart({ forecast }: Props) {
           />
           <Area type="monotone" dataKey="confidenceUpper" name="Upper Confidence Limit" stroke="transparent" fill="url(#bandGradient)" />
           <Area type="monotone" dataKey="confidenceLower" name="Lower Confidence Limit" stroke="transparent" fill="transparent" />
-          <Area type="monotone" dataKey="intensity" name="ML Predicted Carbon (gCO2/kWh)" stroke="#a855f7" strokeWidth={3} fill="url(#foreGradient)" />
+          <Area type="monotone" dataKey="intensity" name="ML Predicted Carbon (gCO2e/kWh)" stroke="#a855f7" strokeWidth={3} fill="url(#foreGradient)" />
         </AreaChart>
       </ResponsiveContainer>
     </div>

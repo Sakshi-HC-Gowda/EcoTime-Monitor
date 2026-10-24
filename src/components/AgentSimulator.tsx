@@ -2,6 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, Trash2, Plus, Terminal, Layers, Award, Clock } from 'lucide-react';
 import { optimizeKnapsack, getRecommendation } from '../utils/algorithms';
 import type { Task, GreenWindow, ActivityType } from '../types/domain';
+import {
+  calculateSavingsGrams,
+  estimateWorkloadPowerWatts,
+} from '@/utils/carbonMetrics';
 
 
 interface AgentSimulatorProps {
@@ -46,7 +50,6 @@ export const AgentSimulator: React.FC<AgentSimulatorProps> = ({
   const [taskType, setTaskType] = useState<'flexible' | 'non-flexible'>('flexible');
   const [activityType, setActivityType] = useState<ActivityType>('batch-processing');
   const [duration, setDuration] = useState(30);
-  const [powerDraw, setPowerDraw] = useState(150);
   const [priority, setPriority] = useState(50);
   const [flexibility, setFlexibility] = useState(70);
 
@@ -69,7 +72,9 @@ export const AgentSimulator: React.FC<AgentSimulatorProps> = ({
       type: taskType,
       activityType,
       duration,
-      powerDraw,
+      powerDraw: estimateWorkloadPowerWatts(activityType),
+      durationBasis: 'estimated_not_measured',
+      powerDrawBasis: 'estimated_not_metered',
       priorityScore: priority,
       flexibilityScore: taskType === 'non-flexible' ? 0 : flexibility,
     });
@@ -85,7 +90,6 @@ export const AgentSimulator: React.FC<AgentSimulatorProps> = ({
       setTaskType('flexible');
       setActivityType('cloud-backup');
       setDuration(120);
-      setPowerDraw(350);
       setPriority(40);
       setFlexibility(90);
     } else if (preset === 'upload') {
@@ -93,7 +97,6 @@ export const AgentSimulator: React.FC<AgentSimulatorProps> = ({
       setTaskType('flexible');
       setActivityType('dataset-download');
       setDuration(45);
-      setPowerDraw(120);
       setPriority(60);
       setFlexibility(75);
     } else if (preset === 'cicd') {
@@ -101,7 +104,6 @@ export const AgentSimulator: React.FC<AgentSimulatorProps> = ({
       setTaskType('flexible');
       setActivityType('ci-cd-pipeline');
       setDuration(25);
-      setPowerDraw(450);
       setPriority(75);
       setFlexibility(60);
     } else if (preset === 'call') {
@@ -109,7 +111,6 @@ export const AgentSimulator: React.FC<AgentSimulatorProps> = ({
       setTaskType('non-flexible');
       setActivityType('batch-processing');
       setDuration(60);
-      setPowerDraw(85);
       setPriority(90);
       setFlexibility(0);
     }
@@ -136,9 +137,12 @@ export const AgentSimulator: React.FC<AgentSimulatorProps> = ({
       if (t.duration <= greedyRemaining) {
         greedySelected.push(t);
         greedyRemaining -= t.duration;
-        const hours = t.duration / 60;
-        const kW = t.powerDraw / 1000;
-        const savingsGrams = hours * kW * Math.max(0, baselineIntensity - activeWindow.avgCarbonIntensity);
+        const savingsGrams = calculateSavingsGrams(
+          t.duration,
+          t.powerDraw,
+          baselineIntensity,
+          activeWindow.avgCarbonIntensity,
+        );
         greedySavedCo2 += savingsGrams;
       }
     });
@@ -276,7 +280,7 @@ export const AgentSimulator: React.FC<AgentSimulatorProps> = ({
               </div>
 
               <div className="input-group">
-                <label>Duration (mins)</label>
+                <label>Estimated duration (mins)</label>
                 <input 
                   type="number" 
                   min="5" 
@@ -286,16 +290,10 @@ export const AgentSimulator: React.FC<AgentSimulatorProps> = ({
                 />
               </div>
 
-              <div className="input-group">
-                <label>Power Draw (Watts)</label>
-                <input 
-                  type="number" 
-                  min="10" 
-                  max="2000" 
-                  value={powerDraw}
-                  onChange={(e) => setPowerDraw(Number(e.target.value))}
-                />
-              </div>
+              <p className="input-group">
+                <label>Assumed power</label>
+                <span>{estimateWorkloadPowerWatts(activityType)} W · workload-class estimate, not measured</span>
+              </p>
             </div>
 
             <div className="task-form-grid" style={{ marginTop: '12px' }}>
@@ -411,7 +409,7 @@ export const AgentSimulator: React.FC<AgentSimulatorProps> = ({
                           </span>
                         </div>
                         <div className="task-meta-detail">
-                          Duration: {task.duration} min | Power: {task.powerDraw}W
+                          Estimated duration: {task.duration} min | Assumed power: {task.powerDraw}W
                         </div>
                       </div>
 
@@ -508,42 +506,44 @@ export const AgentSimulator: React.FC<AgentSimulatorProps> = ({
             {comparison && comparison.window ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div style={{ fontSize: '12px', background: 'rgba(168,85,247,0.02)', padding: '10px', borderRadius: '6px', border: '1px solid var(--purple-border)', color: 'var(--text-secondary)' }}>
-                  <strong>Next window capacity:</strong> {comparison.window.duration} minutes at {comparison.window.avgCarbonIntensity} gCO₂e/kWh average intensity (Savings: ~{comparison.window.carbonSavingPercent.toFixed(0)}% vs baseline).
+                  <strong>Next window capacity:</strong> {comparison.window.duration} minutes at {comparison.window.avgCarbonIntensity} gCO₂e/kWh average intensity ({comparison.window.carbonSavingPercent.toFixed(0)}% lower intensity than forecast peak).
                 </div>
 
                 <div className="compare-badges">
                   <div className="compare-badge knapsack">
                     <span className="compare-badge-title">0/1 Knapsack (Optimal)</span>
-                    <span className="compare-badge-value" style={{ color: 'var(--green)' }}>
-                      {comparison.knapsack.savings.toFixed(1)}g CO₂
+                    <span className="compare-badge-value" style={{ color: comparison.knapsack.savings < 0 ? 'var(--amber)' : 'var(--green)' }}>
+                      {comparison.knapsack.savings.toFixed(1)} gCO₂e
                     </span>
                     <span className="compare-badge-desc">
-                      Selected {comparison.knapsack.tasks.length} task(s)
+                      {comparison.knapsack.savings < 0
+                        ? 'Estimated emissions above baseline'
+                        : comparison.knapsack.savings === 0
+                          ? 'No estimated emissions difference'
+                          : 'Estimated emissions savings'}
+                      {' · '}Selected {comparison.knapsack.tasks.length} task(s)
                     </span>
                   </div>
 
                   <div className="compare-badge greedy">
                     <span className="compare-badge-title">Greedy Algorithm</span>
-                    <span className="compare-badge-value" style={{ color: 'var(--text-secondary)' }}>
-                      {comparison.greedy.savings.toFixed(1)}g CO₂
+                    <span className="compare-badge-value" style={{ color: comparison.greedy.savings < 0 ? 'var(--amber)' : 'var(--text-secondary)' }}>
+                      {comparison.greedy.savings.toFixed(1)} gCO₂e
                     </span>
                     <span className="compare-badge-desc">
-                      Selected {comparison.greedy.tasks.length} task(s)
+                      {comparison.greedy.savings < 0
+                        ? 'Estimated emissions above baseline'
+                        : comparison.greedy.savings === 0
+                          ? 'No estimated emissions difference'
+                          : 'Estimated emissions savings'}
+                      {' · '}Selected {comparison.greedy.tasks.length} task(s)
                     </span>
                   </div>
                 </div>
 
                 {/* Mathematical explanation */}
                 <div style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: '1.4', padding: '6px' }}>
-                  {comparison.knapsack.savings > comparison.greedy.savings ? (
-                    <span style={{ color: 'var(--green)' }}>
-                      🏆 <strong>Knapsack is {((comparison.knapsack.savings - comparison.greedy.savings) / Math.max(1, comparison.greedy.savings) * 100).toFixed(0)}% more efficient!</strong> Unlike the greedy method which fills based on size, Knapsack solves the mathematical 0/1 optimization problem to fit the highest-value combo in the {comparison.window.duration} min slot.
-                    </span>
-                  ) : (
-                    <span>
-                      💡 Knapsack and Greedy selected equivalent packages due to limited queue density. Add more tasks of varying durations (e.g., 20m, 40m, 60m) to see the Knapsack benefit.
-                    </span>
-                  )}
+                  Both values estimate baseline emissions minus recommended-window emissions using assumed workload power and estimated task duration. Negative values mean estimated emissions are higher than baseline.
                 </div>
 
                 {/* Selected tasks display */}

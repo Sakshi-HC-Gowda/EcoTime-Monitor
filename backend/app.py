@@ -24,6 +24,7 @@ from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
+from werkzeug.exceptions import RequestEntityTooLarge
 from extensions import db
 
 # Load backend/.env regardless of the directory used to start Flask.
@@ -84,6 +85,10 @@ def create_app(config_name: str | None = None) -> Flask:
         valid_database_prefixes = ("postgresql://", "postgresql+psycopg2://")
     if not database_url.startswith(valid_database_prefixes):
         raise RuntimeError("DATABASE_URL must use a PostgreSQL URL outside testing.")
+    if database_url.startswith("postgresql://"):
+        database_url = database_url.replace(
+            "postgresql://", "postgresql+psycopg2://", 1
+        )
 
     app.config.update(
         SECRET_KEY=secret_key,
@@ -92,6 +97,7 @@ def create_app(config_name: str | None = None) -> Flask:
         TESTING=config_name == "testing",
         SQLALCHEMY_DATABASE_URI=database_url,
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        MAX_CONTENT_LENGTH=101 * 1024 * 1024,
         SQLALCHEMY_ENGINE_OPTIONS={
             "pool_pre_ping": True,
             "pool_recycle": 1800,
@@ -99,7 +105,31 @@ def create_app(config_name: str | None = None) -> Flask:
         DATABASE_AVAILABLE=False,
     )
 
-    JWTManager(app)
+    jwt = JWTManager(app)
+
+    @jwt.expired_token_loader
+    def expired_token(_jwt_header, _jwt_payload):
+        return jsonify({
+            "success": False,
+            "error": "Authentication token has expired",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }), 401
+
+    @jwt.invalid_token_loader
+    def invalid_token(_reason):
+        return jsonify({
+            "success": False,
+            "error": "Authentication token is invalid",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }), 401
+
+    @jwt.unauthorized_loader
+    def missing_token(_reason):
+        return jsonify({
+            "success": False,
+            "error": "Authentication required",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }), 401
     app.config["JWT_TOKEN_LOCATION"] = ["headers"]
     app.config["JWT_HEADER_NAME"] = "Authorization"
     app.config["JWT_HEADER_TYPE"] = "Bearer"
@@ -120,13 +150,18 @@ def create_app(config_name: str | None = None) -> Flask:
             OrganizationMember,
             Role,
             SimulationConfig,
+            EcoPointTransaction,
+            SustainabilityScore,
+            Badge,
             User,
+            UploadRegistration,
         )
         try:
             # Flask-SQLAlchemy delegates to SQLAlchemy's safe table check:
             # create_all() creates only absent tables and never drops data.
             db.create_all()
             _ensure_organization_ownership_schema()
+            _migrate_legacy_idle_activities()
             db.session.execute(text("SELECT 1"))
             db.session.commit()
             app.config["DATABASE_AVAILABLE"] = True
@@ -147,11 +182,11 @@ def create_app(config_name: str | None = None) -> Flask:
                 "http://127.0.0.1:5173",
             ],
             "methods": ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization"],
+            "allow_headers": ["Content-Type", "Authorization", "Idempotency-Key"],
         }
     })
 
-    # -----------------------------------------------------------------------
+       # -----------------------------------------------------------------------
     # Blueprint Registration
     # -----------------------------------------------------------------------
     from routes.auth import auth_bp
@@ -161,16 +196,25 @@ def create_app(config_name: str | None = None) -> Flask:
     from routes.forecast import forecast_bp
     from routes.organizations import organizations_bp
     from routes.upload import upload_bp
+    from routes.ecopoints import ecopoints_bp
+    from routes.badges import badges_bp
+    from routes.leaderboard import leaderboard_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api")
     app.register_blueprint(carbon_bp, url_prefix="/api")
     app.register_blueprint(activities_bp, url_prefix="/api")
     app.register_blueprint(optimizer_bp, url_prefix="/api")
     app.register_blueprint(forecast_bp, url_prefix="/api")
+    app.register_blueprint(ecopoints_bp, url_prefix="/api")
+    app.register_blueprint(badges_bp, url_prefix="/api")
+    app.register_blueprint(leaderboard_bp, url_prefix="/api")
     app.register_blueprint(organizations_bp, url_prefix="/api")
     app.register_blueprint(upload_bp, url_prefix="/api")
 
-    logger.info("Blueprints registered: auth, carbon, activities, optimizer, forecast, organizations, upload")
+    logger.info(
+        "Blueprints registered: carbon, activities, optimizer, forecast, "
+        "ecopoints, badges, leaderboard, organizations, upload"
+    )
 
     # -----------------------------------------------------------------------
     # Health Check & Root
@@ -208,6 +252,8 @@ def create_app(config_name: str | None = None) -> Flask:
                 "activities": "/api/activities",
                 "scheduler": "/api/scheduler",
                 "upload": "/api/upload",
+                "upload_status": "/api/uploads/<id>",
+                "upload_history": "/api/activities/<id>/uploads",
                 "eco_score": "/api/eco-score",
                 "forecast": "/api/forecast",
                 "forecast_info": "/api/forecast/info",
@@ -229,6 +275,14 @@ def create_app(config_name: str | None = None) -> Flask:
             "detail": str(error),
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }), 400
+
+    @app.errorhandler(RequestEntityTooLarge)
+    def request_too_large(_error):
+        return jsonify({
+            "success": False,
+            "error": "Upload request exceeds the 100 MiB limit",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }), 413
 
     @app.errorhandler(404)
     def not_found(error):
@@ -259,12 +313,50 @@ def create_app(config_name: str | None = None) -> Flask:
 
 
 def _ensure_organization_ownership_schema() -> None:
-    """Add tenant ownership columns without guessing ownership for legacy rows."""
+    """Add tenant and scheduling-bound columns without guessing legacy ownership."""
     if db.engine.dialect.name != "postgresql":
         return
 
     db.session.execute(text(
         "ALTER TABLE activities ADD COLUMN IF NOT EXISTS organization_id INTEGER"
+    ))
+    db.session.execute(text(
+        "ALTER TABLE activities ADD COLUMN IF NOT EXISTS earliest_start TIMESTAMP WITH TIME ZONE"
+    ))
+    db.session.execute(text(
+        "ALTER TABLE activities ADD COLUMN IF NOT EXISTS scheduled_start_time TIMESTAMP WITH TIME ZONE"
+    ))
+    db.session.execute(text(
+        "ALTER TABLE activities ADD COLUMN IF NOT EXISTS expected_end_time TIMESTAMP WITH TIME ZONE"
+    ))
+    db.session.execute(text(
+        "ALTER TABLE upload_registrations ADD COLUMN IF NOT EXISTS scheduled_end_time TIMESTAMP WITH TIME ZONE"
+    ))
+    db.session.execute(text(
+        "ALTER TABLE activities ADD COLUMN IF NOT EXISTS execution_start_time TIMESTAMP WITH TIME ZONE"
+    ))
+    db.session.execute(text(
+        "ALTER TABLE activities ADD COLUMN IF NOT EXISTS deadline TIMESTAMP WITH TIME ZONE"
+    ))
+    db.session.execute(text(
+        "ALTER TABLE activities ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(128)"
+    ))
+    db.session.execute(text(
+        "ALTER TABLE activities ADD COLUMN IF NOT EXISTS request_fingerprint VARCHAR(64)"
+    ))
+    db.session.execute(text(
+        "ALTER TABLE upload_registrations ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(128)"
+    ))
+    db.session.execute(text(
+        "ALTER TABLE upload_registrations ADD COLUMN IF NOT EXISTS request_fingerprint VARCHAR(64)"
+    ))
+    db.session.execute(text(
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_activities_org_idempotency_key "
+        "ON activities (organization_id, idempotency_key)"
+    ))
+    db.session.execute(text(
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_uploads_org_idempotency_key "
+        "ON upload_registrations (organization_id, idempotency_key)"
     ))
     db.session.execute(text(
         "ALTER TABLE analytics_recommendations "
@@ -311,6 +403,31 @@ def _ensure_organization_ownership_schema() -> None:
         db.session.execute(text(
             "ALTER TABLE activities ALTER COLUMN organization_id SET NOT NULL"
         ))
+
+
+def _migrate_legacy_idle_activities() -> None:
+    """Move activities created by older versions into the Pending lifecycle state."""
+    from models.activity import Activity
+    from models.activity_history import ActivityHistory
+
+    legacy_activities = Activity.query.filter_by(status="idle").with_for_update().all()
+    if not legacy_activities:
+        return
+
+    now = datetime.now(timezone.utc)
+    for activity in legacy_activities:
+        previous_updated_at = activity.updated_at
+        if previous_updated_at and previous_updated_at.tzinfo is None:
+            previous_updated_at = previous_updated_at.replace(tzinfo=timezone.utc)
+        db.session.add(ActivityHistory(
+            activity_id=activity.id,
+            previous_status="idle",
+            new_status="pending",
+            execution_time=(now - previous_updated_at).total_seconds() if previous_updated_at else None,
+        ))
+        activity.status = "pending"
+        activity.updated_at = now
+    logger.info("Migrated %d legacy idle activities to pending", len(legacy_activities))
 
 
 # ---------------------------------------------------------------------------

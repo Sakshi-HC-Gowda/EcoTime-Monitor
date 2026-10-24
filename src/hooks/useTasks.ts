@@ -14,6 +14,7 @@
 import { useState, useCallback } from 'react';
 import { scheduleGreedy, optimizeKnapsack } from '../utils/algorithms';
 import type { Task, GreenWindow } from '../types/domain';
+import { estimateWorkloadPowerWatts } from '../utils/carbonMetrics';
 
 // ---------------------------------------------------------------------------
 // Default tasks seeded on first load
@@ -28,7 +29,9 @@ export const DEFAULT_TASKS: Task[] = [
     flexibilityScore: 85,
     priorityScore: 35,
     duration: 90,
-    powerDraw: 350,
+    powerDraw: estimateWorkloadPowerWatts('cloud-backup'),
+    durationBasis: 'estimated_not_measured',
+    powerDrawBasis: 'estimated_not_metered',
     status: 'delayed',
     progress: 0,
     createdAt: new Date().toISOString(),
@@ -42,7 +45,9 @@ export const DEFAULT_TASKS: Task[] = [
     flexibilityScore: 70,
     priorityScore: 50,
     duration: 40,
-    powerDraw: 220,
+    powerDraw: estimateWorkloadPowerWatts('software-update'),
+    durationBasis: 'estimated_not_measured',
+    powerDrawBasis: 'estimated_not_metered',
     status: 'delayed',
     progress: 0,
     createdAt: new Date().toISOString(),
@@ -56,7 +61,9 @@ export const DEFAULT_TASKS: Task[] = [
     flexibilityScore: 55,
     priorityScore: 75,
     duration: 25,
-    powerDraw: 480,
+    powerDraw: estimateWorkloadPowerWatts('ci-cd-pipeline'),
+    durationBasis: 'estimated_not_measured',
+    powerDrawBasis: 'estimated_not_metered',
     status: 'delayed',
     progress: 0,
     createdAt: new Date().toISOString(),
@@ -70,7 +77,9 @@ export const DEFAULT_TASKS: Task[] = [
     flexibilityScore: 0,
     priorityScore: 90,
     duration: 120,
-    powerDraw: 95,
+    powerDraw: estimateWorkloadPowerWatts('batch-processing'),
+    durationBasis: 'estimated_not_measured',
+    powerDrawBasis: 'estimated_not_metered',
     status: 'running',
     progress: 0,
     createdAt: new Date().toISOString(),
@@ -189,7 +198,7 @@ export function useTasks(): UseTasksResult {
           });
           addLog(
             `DeviceAgent: Knapsack Optimization executed — ${result.selectedTasks.length} task(s) selected, ` +
-              `${result.totalSavedCo2.toFixed(1)}g CO₂ savings in ${activeWindow.duration}min window.`
+              `${Math.abs(result.totalSavedCo2).toFixed(1)} gCO₂e ${result.totalSavedCo2 < 0 ? 'higher emissions' : 'estimated savings'} in ${activeWindow.duration}min window.`
           );
           return updated;
         });

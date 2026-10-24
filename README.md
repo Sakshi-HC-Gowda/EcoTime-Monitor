@@ -1,431 +1,295 @@
-# 🌱 EcoTime – Intelligent Carbon-Aware Digital Activity Optimizer
+# EcoTime — Carbon-Aware Activity Recommendations
 
-> **A Full-Stack Platform for Sustainable Digital Workload Scheduling using Machine Learning and Carbon-Aware Optimization**
+EcoTime is a React/TypeScript frontend and Flask API for viewing grid carbon
+intensity, estimating workload energy and emissions, and recommending times for
+flexible workloads. Recommendations are planning output: except for the local
+file-upload lifecycle described below, EcoTime does not execute the workload.
+Energy and emissions are estimates, not device measurements or verified
+environmental savings.
 
-![React](https://img.shields.io/badge/React-19-blue?logo=react)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue?logo=typescript)
-![Python](https://img.shields.io/badge/Python-3.11-green?logo=python)
-![Flask](https://img.shields.io/badge/Flask-Backend-black?logo=flask)
-![SQLite](https://img.shields.io/badge/Database-SQLite-blue)
-![Machine Learning](https://img.shields.io/badge/Machine%20Learning-scikit--learn-orange)
-![Algorithms](https://img.shields.io/badge/Algorithms-Greedy%20%7C%200%2F1%20Knapsack-success)
+## Implemented capabilities
 
----
+- Authenticated, organization-scoped activity registration and history.
+- Electricity Maps carbon data when configured, with explicitly labeled
+  simulated carbon data under the supported fallback conditions.
+- Provider, simulation, or trained-model forecast output, with invalid or
+  unavailable forecast errors surfaced to recommendation workflows.
+- Forecast-derived Green Windows and Greedy/0/1 Knapsack recommendations.
+- Persisted, organization-scoped local file uploads with manual scheduling and
+  execution controls.
 
-# 📖 Overview
+## Activity registration
 
-EcoTime is an intelligent carbon-aware scheduling platform that helps reduce the environmental impact of flexible digital workloads.
+`POST /api/activities` accepts a JSON object with:
 
-Instead of executing workloads immediately, EcoTime forecasts future electricity carbon intensity, identifies low-carbon **Green Windows**, and recommends environmentally optimal execution times.
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `name` | Yes | Non-empty activity name, at most 255 characters. |
+| `type` | Yes | `flexible` or `non-flexible`; only flexible work can be moved by the optimizer. |
+| `duration` | Yes | Estimated duration in minutes; must be finite and greater than zero. |
+| `activityType` | No | `file-upload`, `cloud-backup`, `software-update`, `dataset-download`, `ci-cd-pipeline`, or `batch-processing`. Defaults to `batch-processing`. |
+| `powerDraw` | No | Estimated power in watts. If omitted, the backend uses the workload-class estimates below. |
+| `priorityScore` | No | Integer from 0 to 100. Defaults to 30 (or a named workload profile default). |
+| `flexibilityScore` | No | Integer from 0 to 100. Defaults to 80 (or a named workload profile default). |
+| `earliestStart` | No | ISO timestamp; the activity cannot be scheduled before it. |
+| `deadline` | No | ISO timestamp; the complete activity must finish by it. |
 
-The platform combines:
+Default power values are assumptions, not user-supplied measurements:
 
-- Machine Learning-based Carbon Forecasting
-- Green Window Detection
-- Intelligent Workload Scheduling
-- Sustainability Analytics
-- Real-time Carbon Monitoring
-- Carbon Savings Estimation
+| Activity type | Assumed power |
+| --- | ---: |
+| File upload | 120 W |
+| Cloud backup | 120 W |
+| Software update | 80 W |
+| Dataset download | 200 W |
+| CI/CD pipeline | 450 W |
+| Batch processing | 350 W |
 
----
+`Idempotency-Key` is an optional request header for safe retries. Repeating the
+same key and request replays the created activity; reusing that key with a
+different request returns a conflict.
 
-# 🚀 Problem Statement
+## What actually executes
 
-Modern digital workloads such as cloud backups, software updates, AI model training, CI/CD pipelines, and large file transfers are typically executed without considering fluctuations in electricity carbon intensity. This leads to avoidable carbon emissions and inefficient energy utilization.
+The activity categories describe workload classes; they are not all connected
+to workload executors:
 
-EcoTime addresses this challenge by enabling **carbon-aware scheduling**, allowing flexible workloads to execute during periods of lower carbon intensity while maintaining operational efficiency.
+- **File upload:** implemented lifecycle. A selected CSV, JSON, TXT, ZIP, or
+  supported checkpoint/binary file (up to 100 MiB) is validated, staged in
+  organization-scoped local storage, and can be finalized as a stored file.
+  This is not a cloud upload, remote transfer, model run, or automatic scheduler.
+- **Cloud backup, software update, dataset download, CI/CD pipeline, and batch
+  processing:** registration, estimates, analytics, and recommendations only.
+  The application has no corresponding workload executor.
 
----
+Generic optimizer endpoints return recommendations and record them; they do
+not transition activity rows into an executed state. Upload scheduling is also
+a recommendation until a user manually triggers execution. The UI labels power
+as assumed and duration, energy, and emissions as estimates. Transfer time is
+not inferred from file size.
 
-# ✨ Key Features
+## Frontend-to-backend flow
 
-## 🌍 Carbon Intelligence
+1. The user authenticates. API requests send a JWT authorization header; the
+   server resolves the user and organization from persisted identity data.
+2. The activity form submits the registration fields above. The backend
+   validates and stores the activity, initially with `idle` status.
+3. Carbon and forecast views call authenticated `/api/carbon`, `/api/windows`,
+   and `/api/forecast` endpoints and display their data-source labels.
+4. The user requests recommendations. The backend reloads requested activity
+   metrics from the authenticated user's organization rather than trusting
+   client-supplied metrics, validates forecast/time bounds, schedules eligible
+   work, and stores recommendation records.
+5. For a file upload, the frontend posts the file and activity ID to
+   `/api/upload`; metadata and staged content are persisted. The user may
+   request `/api/uploads/<id>/schedule`, then explicitly call
+   `/api/uploads/<id>/execute` when due, or confirm a run-now operation.
+   Successful execution finalizes the local file and persists `completed`.
 
-- Real-time Carbon Intensity Monitoring
-- Historical Carbon Analysis
-- Carbon Forecast Visualization
-- Sustainability Dashboard
+Other upload states include `pending`, `scheduled`, `running`, and `failed`.
+Failed storage operations are not reported as completed; retry is supported
+when staged content remains available. A completed upload can be downloaded
+only by an authenticated member of its owning organization.
 
----
+## Carbon data, forecast, and Green Windows
 
-## 🤖 Machine Learning Forecasting
+The backend uses Electricity Maps when an API key is configured. Without a
+provider key, its supported carbon service returns simulated data labeled with
+`source="simulation"` and `isSimulated=true`. If a live carbon request fails,
+the service may return a clearly labeled simulated fallback with an `error`
+field. Carbon endpoints preserve source and observation metadata.
 
-- Historical Carbon Data Processing
-- Feature Engineering Pipeline
-- Automatic Model Selection
-- Future Carbon Intensity Prediction
+Fallback does not imply that every downstream operation can proceed:
+recommendation scheduling rejects error-marked fallback data, and forecast
+workflows return an unavailable error when their required inputs are invalid
+or unavailable. A live current reading does not make a missing provider
+forecast available. When a trained model is present, the forecast endpoint can
+use that model; without one, it uses the available carbon forecast. Training
+data generation is synthetic and generated from the repository's zone
+simulation functions. A trained model or simulated result is not a measured
+future grid value.
 
-Supported Models
+Green Windows are contiguous forecast periods in the forecast's cleanest
+relative band. The detection threshold is derived from the forecast minimum
+and range (the configured `GREEN_WINDOW_THRESHOLD_RATIO`, currently 0.35);
+when there is no lower-carbon range, detection returns no Green Windows.
+Ranking scores compare windows with forecast conditions and are not measured
+emissions savings.
 
-- Linear Regression
-- Random Forest Regressor
-- XGBoost Regressor
+## Scheduling behavior and constraints
 
-The system automatically selects the best-performing model using **TimeSeriesSplit Cross Validation**.
+The authenticated optimizer routes (`POST /api/recommendations` and its
+`/api/scheduler` alias) support `greedy` and `knapsack` modes. They accept
+organization-owned activity IDs, a method, baseline intensity, zone, and an
+optional permitted interval. Stored activity measurements and bounds are
+authoritative.
 
----
+Only flexible, non-urgent (priority below 80), inactive activities with valid
+duration can be moved. A candidate window must:
 
-## 🟢 Green Window Detection
+- be inside the requested permitted interval;
+- start no earlier than the activity's `earliestStart`;
+- fit the complete activity duration before its deadline;
+- have enough capacity for the activity; and
+- provide a non-overlapping slot when competing activities are placed.
 
-Automatically identifies low-carbon execution periods by analyzing forecasted carbon intensity.
+Greedy orders eligible work by estimated duration × power and assigns it to
+ranked windows with available capacity. Knapsack uses window duration as
+capacity and estimated carbon savings weighted by priority and flexibility as
+value. Both modes share eligibility, feasibility, and final placement checks.
+If no feasible window exists, the response explains why and does not invent a
+start time. A scheduled recommendation is not an automatic execution.
 
-Displays:
+## Units and calculation conventions
 
-- Recommended Time Windows
-- Window Score
-- Average Carbon Intensity
-- Window Duration
+All API and display calculations use the following units:
 
----
-
-## 📋 Activity Management
-
-Register flexible digital workloads including:
-
-- File Upload
-- Cloud Backup
-- Dataset Download
-- Software Update
-- Batch Processing
-- CI/CD Pipeline
-
-Each activity stores:
-
-- Duration
-- Power Consumption
-- Priority Score
-- Flexibility Score
-- Estimated EcoScore
-- Carbon Impact
-- Recommended Execution Time
-
----
-
-## ⚡ Carbon-Aware Optimization
-
-Two optimization strategies are implemented.
-
-### Greedy Scheduler
-
-Prioritizes workloads using:
-
-```
-Priority = Duration × Power Draw
-```
-
-Fast scheduling suitable for real-time recommendations.
-
----
-
-### 0/1 Knapsack Optimizer
-
-Treats
-
-- Green Window Duration → Capacity
-- Task Duration → Weight
-- Carbon Savings × Priority × Flexibility → Value
-
-Finds the optimal workload combination maximizing carbon savings.
-
----
-
-## 📁 File Upload Workflow
-
-Supports
-
-- Native File Picker
-- Upload Progress Tracking
-- Backend Storage
-- Upload Metadata
-- Activity Lifecycle
-- Scheduled Upload Queue
-
-Uploaded files are stored inside
-
-```
-backend/uploads/
-```
-
----
-
-## 📊 Sustainability Analytics
-
-Provides
-
-- Estimated CO₂ Savings
-- Energy Consumption
-- EcoScore
-- Carbon Reduction Metrics
-
----
-
-# 🔄 System Workflow
+- duration: minutes;
+- estimated power: watts (`W`);
+- energy: kilowatt-hours (`kWh`);
+- carbon intensity: grams of carbon-dioxide equivalent per kilowatt-hour
+  (`gCO2e/kWh`);
+- estimated emissions and savings: grams of carbon-dioxide equivalent
+  (`gCO2e`).
 
 ```text
-User
-   │
-   ▼
-Register Activity
-   │
-   ▼
-Carbon Service
-(Electricity Maps API / Simulation)
-   │
-   ▼
-Historical Carbon Data
-   │
-   ▼
-Preprocessing
-   │
-   ▼
-Feature Engineering
-   │
-   ▼
-Machine Learning Forecast
-   │
-   ▼
-Green Window Detection
-   │
-   ▼
-Greedy / Knapsack Optimization
-   │
-   ▼
-Optimized Execution Recommendation
-   │
-   ▼
-Estimated CO₂ Savings
+Energy (kWh) = estimated power (W) × estimated duration (min) / 60000
+Emissions (gCO2e) = estimated energy (kWh) × carbon intensity (gCO2e/kWh)
+Savings (gCO2e) = baseline emissions - recommended emissions
+CarbonScore = clamp(0, 100, (peak - current) / max(50, peak - 0.5 × baseline) × 100)
+EcoScore = 0.5 × CarbonScore + 0.3 × FlexibilityScore + 0.2 × PriorityScore
 ```
 
----
+The EcoScore inputs and result are on a 0–100 scale; the result is rounded to
+one decimal place. Energy, emissions, and savings calculations round to four
+decimal places; the reduction percentage rounds to two. Savings are signed:
+they are negative if recommended emissions exceed baseline emissions.
+Baseline and recommendation use the same estimated activity energy with their
+respective carbon intensities. These calculations do not measure physical
+device energy or establish actual emissions reductions.
 
-# 🛠 Technology Stack
+## Environment setup
 
-## Frontend
+Requirements: Python 3.11 (the tested project runtime), Node.js/npm, and
+PostgreSQL for non-test backend operation.
 
-- React.js
-- TypeScript
-- Vite
-- Tailwind CSS
-- Recharts
+### Backend
 
----
+From the repository root, create and activate a virtual environment, then
+install dependencies:
 
-## Backend
-
-- Flask
-- Python
-- REST APIs
-- SQLite
-
----
-
-## Machine Learning
-
-- scikit-learn
-- XGBoost
-- Pandas
-- NumPy
-- Joblib
-
----
-
-## Optimization
-
-- Greedy Algorithm
-- 0/1 Knapsack Algorithm
-
----
-
-## Version Control
-
-- Git
-- GitHub
-
----
-
-# 🤖 Machine Learning Pipeline
-
-The forecasting module follows this pipeline.
-
-```text
-Historical Carbon Data
-        │
-        ▼
-Preprocessing
-        │
-        ▼
-Feature Engineering
-        │
-        ▼
-Train 3 Regression Models
-
- • Linear Regression
- • Random Forest
- • XGBoost
-
-        │
-        ▼
-TimeSeriesSplit Cross Validation
-        │
-        ▼
-Model Evaluation
-
- MAE
- RMSE
- R² Score
-
-        │
-        ▼
-Best Model Selected
-        │
-        ▼
-Future Carbon Forecast
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r backend\requirements.txt
 ```
 
----
+Copy `backend/.env.example` to `backend/.env`. Set `DATABASE_URL` to a
+PostgreSQL database and replace the `SECRET_KEY` placeholder with a locally
+generated secret. Optionally set `ELECTRICITY_MAPS_API_KEY`; the key is used by
+the backend only. `DEFAULT_ZONE`, `LOW_CARBON_THRESHOLD`, and `PORT` have
+documented defaults in the example file. Do not commit `.env` files or put
+provider keys in frontend variables.
 
-# ⚙ Optimization Pipeline
+Start the backend from its directory:
 
-```text
-Forecasted Carbon Intensity
-            │
-            ▼
-Green Window Detection
-            │
-            ▼
-Flexible Activities
-            │
-            ▼
-Greedy Scheduler
-      OR
-0/1 Knapsack Optimizer
-            │
-            ▼
-Recommended Schedule
-            │
-            ▼
-Estimated Carbon Savings
-```
-
----
-
-# 📂 Project Structure
-
-```text
-EcoTime/
-│
-├── backend/
-│   ├── forecast/
-│   ├── optimization/
-│   ├── routes/
-│   ├── services/
-│   ├── models/
-│   ├── uploads/
-│   └── app.py
-│
-├── src/
-│   ├── pages/
-│   ├── features/
-│   ├── components/
-│   ├── hooks/
-│   ├── services/
-│   └── types/
-│
-├── package.json
-├── requirements.txt
-└── README.md
-```
-
----
-
-# 🚀 Installation
-
-## Clone Repository
-
-```bash
-git clone https://github.com/<your-username>/EcoTime-Monitor.git
-
-cd EcoTime-Monitor
-```
-
----
-
-## Backend Setup
-
-```bash
+```powershell
 cd backend
-
-python -m venv .venv
-
-pip install -r requirements.txt
-
 python app.py
 ```
 
----
+Outside testing, application startup requires a PostgreSQL URL; SQLite is
+accepted only for testing. The PostgreSQL database must already exist and the
+configured database user must be able to create/alter the application's
+schema. Set `FLASK_ENV=production` in production and configure a strong,
+locally generated `SECRET_KEY`.
 
-## Frontend Setup
+### Frontend
 
-```bash
-npm install
+From the repository root, install the lockfile dependencies and start Vite:
 
+```powershell
+npm ci
 npm run dev
 ```
 
----
+The frontend defaults to `http://localhost:5000/api`. To override it, copy
+`.env.example` to `.env.local` and set `VITE_API_BASE`. Vite variables are
+client-visible; do not put secrets in them.
 
-# 📈 Results
+## Database and schema safety
 
-EcoTime successfully demonstrates:
+SQLAlchemy uses PostgreSQL in development/production and an in-memory SQLite
+database by default for tests. Startup calls `db.create_all()` and a
+PostgreSQL-specific additive schema helper. The helper adds supported columns,
+indexes and ownership constraints and does not drop tables or reset data. It is
+not a versioned migration system and does not infer ownership for legacy rows
+with missing organization IDs. Review the helper and take a database backup
+before deploying schema changes to an existing database; resolve legacy
+unowned data deliberately rather than assigning tenants speculatively.
 
-- Carbon-aware scheduling of digital workloads
-- Machine Learning-based carbon forecasting
-- Green Window identification
-- Intelligent workload optimization
-- Real-time sustainability analytics
-- Estimated CO₂ savings for flexible workloads
+Uploaded files are stored locally beneath `backend/uploads/org-<organization
+id>/`. This is local application storage, not object storage or a production
+retention/backup service.
 
----
+## Verification and evaluation evidence
 
-# 🔮 Future Enhancements
+Automated tests use deterministic fixtures/mocks; they do not require a live
+Electricity Maps request. From the repository root:
 
-- AI-powered RAG Sustainability Assistant
-- Automatic Background Scheduler
-- Enterprise EcoScore Dashboard
-- CI/CD Integration
-- Cloud Deployment
-- Carbon Credit Reporting
-- Multi-user Authentication
-- Mobile Application
+```powershell
+python -m pytest -q
+npm run build
+git diff --check
+```
 
----
+Verified for the reviewed implementation: **97 backend tests passed**;
+`npm run build` passed (TypeScript build and Vite production bundle); and
+`git diff --check` passed. The frontend build emits a Vite warning that one
+minified bundle exceeds 500 kB. No browser/manual end-to-end test, live carbon
+provider integration test, or production PostgreSQL migration test is claimed.
 
-# 👥 Contributors
+| Evaluation scenario | Automated evidence | Verified result |
+| --- | --- | --- |
+| Flexible upload scheduling and completion | Separate optimizer schedule and upload lifecycle tests | Schedule recommendation and local upload completion are tested separately; a single end-to-end carbon-to-upload test is not present. |
+| Urgent/inflexible activity | Greedy and Knapsack tests | Not selected for delay. |
+| No feasible Green Window | Green Window and optimizer tests | No recommendation is fabricated; explanation is returned. |
+| Carbon/forecast failure | Mocked carbon and forecast tests | Fallback provenance is retained where supported; invalid/unavailable forecast prevents recommendations. |
+| Competing activities | Greedy and Knapsack capacity/placement tests | Capacity and non-overlap constraints are verified. |
+| Cross-organization requests | Activity, optimizer, upload and organization-isolation tests | Foreign-organization access is rejected. |
+
+Known limits: non-upload workload types have no executor; scheduled work is
+not run by a background worker; local uploads require user-triggered execution;
+training data is simulated; carbon history can be simulated/scaled; and
+automated tests do not establish real-world energy or carbon savings.
+
+## Contributors
 
 - **Sakshi H C**
 - **Nayana**
 - **Nikitha**
 - **Prathiksha**
 
----
+## Project layout
 
-# 📜 License
+```text
+backend/
+  forecast/       Forecast training and prediction
+  models/         SQLAlchemy models, including activities and uploads
+  optimization/   Shared calculations, EcoScore, ranking and schedulers
+  routes/         Authenticated Flask API routes
+  services/       Carbon, activity, optimizer and upload workflows
+  tests/          Deterministic backend tests
+src/
+  features/       React feature components and hooks
+  pages/          Application pages
+  services/       API clients
+docs/diagrams/    Architecture and data-flow diagrams
+```
 
-This project was developed as part of the **Bachelor of Engineering (Computer Science & Engineering) Major Project**.
+## Project acknowledgement
 
----
-
-# 🙏 Acknowledgements
-
-- Electricity Maps API
-- React
-- Flask
-- scikit-learn
-- XGBoost
-- Tailwind CSS
-- Recharts
-- Open Source Community
-
----
-
-⭐ **If you found this project useful, consider giving it a Star on GitHub!**
+This project was developed as a Bachelor of Engineering (Computer Science &
+Engineering) major project by Sakshi H C and project team members. The
+implementation uses React, Flask, Electricity Maps (when configured),
+scikit-learn, XGBoost, Tailwind CSS, and Recharts.

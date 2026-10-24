@@ -92,8 +92,16 @@ def test_company_isolation_for_activity_and_optimizer_apis(client):
     )
     assert activity_a.status_code == 201
     assert activity_b.status_code == 201
-    activity_a_id = activity_a.get_json()["data"]["id"]
+    activity_a_data = activity_a.get_json()["data"]
+    activity_a_id = activity_a_data["id"]
     activity_b_id = activity_b.get_json()["data"]["id"]
+    assert activity_a_data["durationUnit"] == "minutes"
+    assert activity_a_data["powerDrawUnit"] == "W"
+    assert activity_a_data["estimatedEnergyConsumption"] == 0.05
+    assert activity_a_data["estimatedEnergyUnit"] == "kWh"
+    assert activity_a_data["estimatedEnergyBasis"] == (
+        "estimated_power_watts_times_estimated_duration_minutes"
+    )
 
     company_a_list = client.get("/api/activities", headers=auth_header(token_a))
     assert company_a_list.status_code == 200
@@ -147,6 +155,28 @@ def test_company_isolation_for_activity_and_optimizer_apis(client):
 
     assert client.get("/api/activities").status_code == 401
     assert client.get("/api/users/me").status_code == 401
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"baselineIntensity": -1},
+        {"baselineIntensity": float("nan")},
+        {"baselineIntensity": True},
+        {"lowCarbonThreshold": float("inf")},
+        {"lowCarbonThreshold": -1},
+    ],
+)
+def test_simulation_config_rejects_invalid_carbon_intensities(client, payload):
+    admin = register(client, "config-admin@example.com", "Config Org")
+
+    response = client.post(
+        "/api/config/simulation",
+        headers=auth_header(admin["token"]),
+        json=payload,
+    )
+
+    assert response.status_code == 400
 
 
 def test_activity_ownership_is_server_derived(client, app):

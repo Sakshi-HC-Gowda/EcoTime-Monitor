@@ -1,5 +1,16 @@
 import { apiClient } from './apiClient';
-import type { Task, CreateTaskRequest, UpdateTaskRequest, PaginatedResponse, ApiResponse } from '../types/domain';
+import type { Task, CreateTaskRequest, UpdateTaskRequest, PaginatedResponse, ApiResponse, SchedulingRecommendation } from '../types/domain';
+
+export interface ActivityScheduleResult {
+  scheduled: boolean;
+  activity?: Task;
+  recommendation: SchedulingRecommendation | null;
+}
+
+export interface ActivityExecutionResult {
+  activity: Task;
+  executionMode: 'simulated';
+}
 
 export const activitiesService = {
   async getTasks(page: number = 1, pageSize: number = 50, status?: string): Promise<ApiResponse<PaginatedResponse<Task>>> {
@@ -16,10 +27,11 @@ export const activitiesService = {
     return apiClient.request<Task>(`/activities/${id}`);
   },
 
-  async createTask(task: CreateTaskRequest): Promise<ApiResponse<Task>> {
+  async createTask(task: CreateTaskRequest, idempotencyKey?: string): Promise<ApiResponse<Task>> {
     return apiClient.request<Task>('/activities', {
       method: 'POST',
       body: JSON.stringify(task),
+      headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
     });
   },
 
@@ -27,6 +39,18 @@ export const activitiesService = {
     return apiClient.request<Task>(`/activities/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(update),
+    });
+  },
+
+  async scheduleTask(id: string): Promise<ApiResponse<ActivityScheduleResult>> {
+    return apiClient.request<ActivityScheduleResult>(`/activities/${encodeURIComponent(id)}/schedule`, {
+      method: 'POST',
+    });
+  },
+
+  async runTask(id: string): Promise<ApiResponse<ActivityExecutionResult>> {
+    return apiClient.request<ActivityExecutionResult>(`/activities/${encodeURIComponent(id)}/run`, {
+      method: 'POST',
     });
   },
 

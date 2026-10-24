@@ -52,6 +52,7 @@ const NAV_SECTIONS: { label: string; items: NavItemDef[] }[] = [
     items: [
       { label: 'Activities', href: '/activities', icon: Zap, color: 'text-amber-400' },
       { label: 'Green Windows', href: '/windows', icon: Wind, color: 'text-teal-400' },
+      { label: 'Scheduler', href: '/scheduler', icon: CalendarClock, color: 'text-blue-400' },
     ],
   },
   {
@@ -88,23 +89,23 @@ const INITIAL_NOTIFICATIONS: NotificationItem[] = [
   {
     id: '1',
     title: 'Optimal Green Window Active',
-    message: 'Grid carbon intensity in IN-SO dropped to 142 gCO₂/kWh. Ideal for batch jobs.',
+    message: 'Simulated grid carbon intensity in IN-SO dropped to 142 gCO2e/kWh. Ideal for batch jobs.',
     time: '5m ago',
     unread: true,
     type: 'green',
   },
   {
     id: '2',
-    title: 'AI Recommendation Ready',
-    message: 'Delay training job by 2 hours to achieve 42% carbon emission reduction.',
+    title: 'Workload estimate notice',
+    message: 'Power and duration inputs are estimates; carbon data may be simulated.',
     time: '25m ago',
     unread: true,
     type: 'purple',
   },
   {
     id: '3',
-    title: 'Weekly Carbon Summary',
-    message: 'You saved 4.82 kg CO₂ this week across 14 scheduled workloads.',
+    title: 'Carbon estimate notice',
+    message: 'Estimated emissions savings are calculated only against a stated baseline and recommendation.',
     time: '2h ago',
     unread: false,
     type: 'green',
@@ -269,7 +270,7 @@ export function AppLayout() {
   return (
     <div className="flex h-screen bg-[#070c13] text-slate-100 overflow-hidden font-sans">
 
-      {/* â”€â”€ Desktop Sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* Desktop Sidebar */}
       <aside
         className={`hidden md:flex flex-col flex-shrink-0 bg-[#080e1a] border-r border-white/[0.06] relative z-20 transition-[width] duration-300 ${collapsed ? 'sidebar-collapsed' : 'sidebar-expanded'
           }`}
@@ -402,22 +403,22 @@ export function AppLayout() {
             {/* Live Telemetry Date/Location */}
             <div className="hidden lg:flex items-center gap-3 text-xs text-slate-400 border-r border-white/[0.06] pr-4">
               <span className="font-semibold text-slate-200">{todayFormatted}</span>
-              <span className="text-slate-600"></span>
+              <span className="text-slate-600">|</span>
               <span className="text-slate-400">Karnataka, India ({selectedZone})</span>
             </div>
             <div className="hidden xl:flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[11px] text-slate-300">
               <span className="font-semibold text-white">{user?.firstName ?? 'Member'}</span>
-              <span className="text-slate-500"></span>
+              <span className="text-slate-500">|</span>
               <span>{user?.organization?.name ?? 'Organization'}</span>
             </div>
-            {/*<button
+            <button
               type="button"
               onClick={handleLogout}
               className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-medium text-slate-200 transition hover:border-white/20 hover:bg-white/10"
             >
               <LogOut className="h-3.5 w-3.5" />
               Sign out
-            </button>*/}
+            </button>
 
             {/* Live Monitoring Badge */}
             <div className="hidden sm:flex items-center gap-2 h-9 px-3.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px] font-bold shadow-sm">

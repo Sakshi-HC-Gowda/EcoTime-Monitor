@@ -38,14 +38,14 @@ export function GreenWindowsList({ windows }: GreenWindowsListProps) {
                   <span className="text-slate-500 font-normal">· {win.duration} min</span>
                 </p>
                 <p className="text-[11px] text-slate-500 mt-0.5">
-                  Avg {Math.round(win.avgCarbonIntensity)} gCO₂/kWh
+                  Avg {Math.round(win.avgCarbonIntensity)} gCO₂e/kWh
                 </p>
               </div>
             </div>
             <div className="text-right flex-shrink-0">
               <p className="text-[13px] font-bold text-teal-300 flex items-center gap-1 justify-end">
                 <Wind className="w-3 h-3" />
-                -{Math.round(win.carbonSavingPercent)}%
+                {Math.round(win.carbonSavingPercent)}% forecast-peak comparison
               </p>
               <p className="text-[10px] text-slate-500">{win.id}</p>
             </div>

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -97,22 +98,74 @@ class ForecastPredictor:
             List of {datetime, carbonIntensity, isML} dicts,
             one entry per hour for horizon_hours.
         """
-        # Import here to avoid circular import at module level
-        from services.carbon_service import generate_simulated_data
-
         if not history:
-            # Get enough history for lag features (need 24+ hours)
-            sim = generate_simulated_data(zone_id, offset_hours=0)
-            history = sim["history"][-24:]
+            if self.is_trained():
+                raise ValueError("A trained forecast requires observed history data")
 
         if not self.is_trained():
             return self._simulation_forecast(zone_id, horizon_hours)
 
-        try:
-            return self._ml_forecast(history, zone_id, horizon_hours)
-        except Exception as exc:
-            logger.error("ML prediction failed: %s — falling back to simulation", exc)
-            return self._simulation_forecast(zone_id, horizon_hours)
+        self._validate_history(history)
+        predictions = self._ml_forecast(history, zone_id, horizon_hours)
+        self._validate_forecast(predictions, horizon_hours)
+        return predictions
+
+    @staticmethod
+    def _validate_history(history: list[dict]) -> None:
+        if len(history) < 24:
+            raise ValueError("A trained forecast requires at least 24 hourly history points")
+
+        previous: datetime | None = None
+        for point in history:
+            if not isinstance(point, dict):
+                raise ValueError("Forecast history contains an invalid point")
+            try:
+                raw_intensity = point["carbonIntensity"]
+                if isinstance(raw_intensity, bool):
+                    raise ValueError("boolean intensity is invalid")
+                intensity = float(raw_intensity)
+                timestamp = datetime.fromisoformat(
+                    str(point["datetime"]).replace("Z", "+00:00")
+                )
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ValueError("Forecast history contains an invalid point") from exc
+            if not math.isfinite(intensity) or intensity < 0:
+                raise ValueError("Forecast history contains an invalid intensity")
+            if timestamp.tzinfo is None:
+                raise ValueError("Forecast history timestamps must include a timezone")
+            timestamp = timestamp.astimezone(timezone.utc)
+            if previous is not None:
+                elapsed_seconds = (timestamp - previous).total_seconds()
+                if abs(elapsed_seconds - 3600) > 60:
+                    raise ValueError("Forecast history must be hourly and strictly increasing")
+            previous = timestamp
+
+    @staticmethod
+    def _validate_forecast(forecast: list[dict], horizon_hours: int) -> None:
+        if len(forecast) != horizon_hours:
+            raise ValueError("Forecast model returned an incomplete horizon")
+        previous: datetime | None = None
+        for point in forecast:
+            try:
+                raw_intensity = point["carbonIntensity"]
+                if isinstance(raw_intensity, bool):
+                    raise ValueError("boolean intensity is invalid")
+                intensity = float(raw_intensity)
+                timestamp = datetime.fromisoformat(
+                    str(point["datetime"]).replace("Z", "+00:00")
+                )
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ValueError("Forecast model returned an invalid point") from exc
+            if not math.isfinite(intensity) or intensity < 0:
+                raise ValueError("Forecast model returned an invalid intensity")
+            if timestamp.tzinfo is None:
+                raise ValueError("Forecast model timestamps must include a timezone")
+            timestamp = timestamp.astimezone(timezone.utc)
+            if previous is not None:
+                elapsed_seconds = (timestamp - previous).total_seconds()
+                if abs(elapsed_seconds - 3600) > 60:
+                    raise ValueError("Forecast model timestamps must be hourly and strictly increasing")
+            previous = timestamp
 
     def _ml_forecast(
         self,
@@ -124,8 +177,6 @@ class ForecastPredictor:
         Recursive one-step-ahead ML prediction over horizon_hours.
         Each predicted value is appended to the rolling history window.
         """
-        from services.carbon_service import generate_simulated_data
-
         # Build a rolling buffer (need 24+ points for lag features)
         buffer = list(history)
         predictions = []
@@ -134,20 +185,18 @@ class ForecastPredictor:
         for h in range(1, horizon_hours + 1):
             target_dt = now + timedelta(hours=h)
 
-            try:
-                feature_row = build_inference_features(
-                    recent_history=buffer[-48:],  # Use last 48 points max
-                    target_datetime=target_dt,
-                    zone_id=zone_id,
-                )
-                # Align feature columns to what the model was trained on
-                feature_row = feature_row.reindex(columns=self._feature_names, fill_value=0)
-                predicted_intensity = float(self._model.predict(feature_row)[0])
-                predicted_intensity = max(5.0, round(predicted_intensity))
-            except Exception as exc:
-                logger.warning("Step %d prediction failed: %s — using simulation", h, exc)
-                sim = generate_simulated_data(zone_id, offset_hours=h)
-                predicted_intensity = sim["current"]["carbonIntensity"]
+            feature_row = build_inference_features(
+                recent_history=buffer[-48:],  # Use last 48 points max
+                target_datetime=target_dt,
+                zone_id=zone_id,
+            )
+            feature_row = feature_row.reindex(columns=self._feature_names)
+            if feature_row.isna().any().any():
+                raise ValueError(f"Forecast feature row {h} contains missing values")
+            predicted_intensity = float(self._model.predict(feature_row)[0])
+            if not math.isfinite(predicted_intensity) or predicted_intensity < 0:
+                raise ValueError(f"Forecast model returned an invalid value at step {h}")
+            predicted_intensity = round(predicted_intensity)
 
             predictions.append({
                 "datetime": target_dt.isoformat(),

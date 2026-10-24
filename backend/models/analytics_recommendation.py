@@ -27,8 +27,8 @@ class AnalyticsRecommendation(db.Model):
     )
     text = db.Column(db.Text, nullable=False)
     reason = db.Column(db.Text, nullable=False)
-    expected_carbon_saving = db.Column(db.Float, nullable=True)
-    expected_energy_saving = db.Column(db.Float, nullable=True)
+    expected_carbon_saving = db.Column(db.Float, nullable=True)  # Estimated gCO2e
+    expected_energy_saving = db.Column(db.Float, nullable=True)  # kWh; null if unchanged
     status = db.Column(db.String(32), nullable=False)
     created_at = db.Column(
         db.DateTime(timezone=True),
@@ -44,7 +44,9 @@ class AnalyticsRecommendation(db.Model):
             "text": self.text,
             "reason": self.reason,
             "expectedCarbonSaving": self.expected_carbon_saving,
+            "expectedCarbonSavingUnit": "gCO2e",
             "expectedEnergySaving": self.expected_energy_saving,
+            "expectedEnergySavingUnit": "kWh",
             "status": self.status,
             "timestamp": self.created_at.isoformat(),
         }

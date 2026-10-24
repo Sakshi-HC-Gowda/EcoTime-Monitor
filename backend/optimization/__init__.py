@@ -6,7 +6,14 @@ Contains all carbon-aware scheduling algorithms.
 from .eco_score import calculate_eco_score, get_recommendation
 from .window_ranking import rank_windows, calculate_window_score
 from .greedy_scheduler import schedule_greedy
-from .carbon_calculator import calculate_savings_grams, calculate_total_savings
+from .carbon_calculator import (
+    calculate_energy_kwh,
+    calculate_emissions_grams,
+    calculate_emissions_comparison,
+    calculate_savings_from_emissions,
+    calculate_savings_grams,
+    calculate_total_savings,
+)
 
 __all__ = [
     "calculate_eco_score",
@@ -14,6 +21,10 @@ __all__ = [
     "rank_windows",
     "calculate_window_score",
     "schedule_greedy",
+    "calculate_energy_kwh",
+    "calculate_emissions_grams",
+    "calculate_emissions_comparison",
+    "calculate_savings_from_emissions",
     "calculate_savings_grams",
     "calculate_total_savings",
 ]

@@ -50,9 +50,10 @@ export function BeforeAfter({ result }: BeforeAfterProps) {
             </div>
           </div>
           <div>
-            <div className="text-xs text-slate-400 mb-1">Total Carbon Saved</div>
-            <div className="text-lg font-bold text-green-400 flex items-center gap-2">
-              <Leaf className="w-4 h-4" /> {result.totalSavedCo2.toFixed(1)} gCO2
+            <div className="text-xs text-slate-400 mb-1">Estimated net emissions difference</div>
+            <div className={`text-lg font-bold ${result.totalSavedCo2 < 0 ? 'text-amber-400' : 'text-green-400'} flex items-center gap-2`}>
+              <Leaf className="w-4 h-4" /> {Math.abs(result.totalSavedCo2).toFixed(2)} gCO2e
+              {result.totalSavedCo2 < 0 ? ' higher emissions' : ' estimated savings'}
             </div>
           </div>
         </div>

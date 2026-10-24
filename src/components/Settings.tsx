@@ -11,7 +11,7 @@ interface SettingsProps {
   onThresholdChange: (threshold: number) => void;
   onBaselineChange: (baseline: number) => void;
   onResetStatistics: () => void;
-  isSimulated: boolean;
+  isSimulated: boolean | null;
 }
 
 export const Settings: React.FC<SettingsProps> = ({
@@ -60,8 +60,8 @@ export const Settings: React.FC<SettingsProps> = ({
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-            EcoTime can communicate with the live Electricity Maps API to fetch real, current carbon intensity data.
-            If left empty, the platform operates in <strong>Simulation Mode</strong> using high-fidelity mathematical models.
+            This legacy API-key preference is stored locally. Backend live-data credentials are configured server-side,
+            and the status below reflects the carbon data source actually returned by the backend.
           </p>
 
           <div className="input-group">
@@ -77,19 +77,26 @@ export const Settings: React.FC<SettingsProps> = ({
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', borderRadius: '8px', background: isSimulated ? 'var(--amber-glow)' : 'var(--green-glow)', border: isSimulated ? '1px solid var(--amber-border)' : '1px solid var(--green-border)' }}>
-            {isSimulated ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', borderRadius: '8px', background: isSimulated === false ? 'var(--green-glow)' : 'var(--amber-glow)', border: isSimulated === false ? '1px solid var(--green-border)' : '1px solid var(--amber-border)' }}>
+            {isSimulated === true ? (
               <>
                 <AlertTriangle size={18} style={{ color: 'var(--amber)' }} />
                 <span style={{ fontSize: '12px', color: 'var(--text-primary)' }}>
-                  <strong>Simulation Mode Active:</strong> Running off regional generation cycle models. No API Key required.
+                  <strong>Simulated carbon data:</strong> Regional generation cycle estimates are in use.
+                </span>
+              </>
+            ) : isSimulated === false ? (
+              <>
+                <CheckCircle2 size={18} style={{ color: 'var(--green)' }} />
+                <span style={{ fontSize: '12px', color: 'var(--text-primary)' }}>
+                  <strong>Provider-reported carbon data:</strong> The backend returned live grid data.
                 </span>
               </>
             ) : (
               <>
-                <CheckCircle2 size={18} style={{ color: 'var(--green)' }} />
+                <AlertTriangle size={18} style={{ color: 'var(--amber)' }} />
                 <span style={{ fontSize: '12px', color: 'var(--text-primary)' }}>
-                  <strong>Live Connection Ready:</strong> Electricity Maps API endpoints enabled. Running off real-world grid data.
+                  <strong>Carbon data unavailable:</strong> Live or simulated data source could not be confirmed.
                 </span>
               </>
             )}
@@ -128,11 +135,11 @@ export const Settings: React.FC<SettingsProps> = ({
             </div>
             <div>
               <span style={{ color: 'var(--text-muted)' }}>Jitter / Noise Factor:</span><br />
-              <strong>±{currentZone.noise} g/kWh</strong>
+              <strong>±{currentZone.noise} gCO₂e/kWh</strong>
             </div>
             <div>
               <span style={{ color: 'var(--text-muted)' }}>Daily Variance Amplitude:</span><br />
-              <strong>{currentZone.amplitude} g/kWh</strong>
+              <strong>{currentZone.amplitude} gCO₂e/kWh</strong>
             </div>
           </div>
         </div>
@@ -164,7 +171,7 @@ export const Settings: React.FC<SettingsProps> = ({
           <div className="input-group">
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <label>Baseline Grid Intensity: <strong>{baselineIntensity} gCO₂e/kWh</strong></label>
-              <span style={{ fontSize: '11px', color: 'var(--rose)', fontWeight: 'bold' }}>Dirty Peak reference</span>
+              <span style={{ fontSize: '11px', color: 'var(--rose)', fontWeight: 'bold' }}>Comparison assumption</span>
             </div>
             <input
               type="range"
@@ -175,7 +182,7 @@ export const Settings: React.FC<SettingsProps> = ({
               onChange={(e) => onBaselineChange(Number(e.target.value))}
             />
             <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-              Used to calculate relative carbon savings. Represents the average carbon intensity of standard computing peak grid (e.g. running jobs immediately with no carbon awareness).
+              This prefilled reference is used for comparison, not a live grid measurement. Keep the provided default unless you have a documented baseline.
             </p>
           </div>
 

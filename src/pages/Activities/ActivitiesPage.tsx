@@ -108,6 +108,7 @@ export function ActivitiesPage() {
         return next;
       });
       schedulingIdsRef.current.delete(activity.id);
+      void refetch();
     }
   };
 
@@ -117,9 +118,15 @@ export function ActivitiesPage() {
     setExecutingIds((current) => new Set(current).add(activity.id));
     setExecutionMessages((current) => ({ ...current, [activity.id]: '' }));
     try {
+      if (activity.status === 'pending' || activity.status === 'idle') {
+        const schedRes = await scheduleMutation.mutateAsync(activity.id);
+        if (!schedRes.scheduled || !schedRes.activity) {
+          throw new Error(schedRes.recommendation?.reason || 'No feasible Green Window available to schedule and run this activity.');
+        }
+      }
       await runMutation.mutateAsync(activity.id);
     } catch (error) {
-      setExecutionMessages((current) => ({ ...current, [activity.id]: error instanceof Error ? error.message : 'Could not start the simulated run' }));
+      setExecutionMessages((current) => ({ ...current, [activity.id]: error instanceof Error ? error.message : 'Could not start the run' }));
     } finally {
       executingIdsRef.current.delete(activity.id);
       setExecutingIds((current) => {
@@ -127,6 +134,7 @@ export function ActivitiesPage() {
         next.delete(activity.id);
         return next;
       });
+      void refetch();
     }
   };
 
@@ -200,18 +208,10 @@ export function ActivitiesPage() {
     activity: Task,
     upload: UploadRegistration,
     runNow: boolean,
-    recommendationReason?: string,
   ) => {
     if (activeUploadsRef.current.has(upload.id)) return;
     activeUploadsRef.current.add(upload.id);
-    setUploadState(activity.id, {
-      progress: 0,
-      status: 'running',
-      upload,
-      ...((recommendationReason || upload.recommendationReason)
-        ? { recommendationReason: recommendationReason || upload.recommendationReason || undefined }
-        : {}),
-    });
+    setExecutingIds((current) => new Set(current).add(activity.id));
     try {
       const response = await uploadService.execute(upload.id, runNow);
       if (!response.success || !response.data) {
@@ -245,28 +245,61 @@ export function ActivitiesPage() {
       });
     } finally {
       activeUploadsRef.current.delete(upload.id);
+      setExecutingIds((current) => {
+        const next = new Set(current);
+        next.delete(activity.id);
+        return next;
+      });
       void refetch();
     }
   };
 
   const scheduleRegistered = async (activity: Task, upload: UploadRegistration) => {
-    const response = await uploadService.schedule(upload.id);
-    if (!response.success || !response.data) {
+    if (schedulingIdsRef.current.has(activity.id)) return;
+    schedulingIdsRef.current.add(activity.id);
+    setSchedulingIds((current) => new Set(current).add(activity.id));
+    setScheduleMessages((current) => ({ ...current, [activity.id]: '' }));
+    setSchedulingErrors((current) => ({ ...current, [activity.id]: '' }));
+    try {
+      const response = await uploadService.schedule(upload.id);
+      if (!response.success || !response.data) {
+        setUploadState(activity.id, {
+          progress: 0,
+          status: upload.status,
+          upload,
+          message: response.error || 'No permitted recommendation is available.',
+        });
+        setSchedulingErrors((current) => ({
+          ...current,
+          [activity.id]: response.error || 'No permitted recommendation is available.',
+        }));
+        return;
+      }
+      const scheduleData = response.data;
       setUploadState(activity.id, {
         progress: 0,
-        status: upload.status,
-        upload,
-        message: response.error || 'No permitted recommendation is available.',
+        status: 'scheduled',
+        upload: scheduleData.upload,
+        recommendationReason: scheduleData.recommendation.reason,
       });
-      return;
+      setScheduleMessages((current) => ({
+        ...current,
+        [activity.id]: scheduleData.recommendation.reason,
+      }));
+    } catch (error) {
+      setSchedulingErrors((current) => ({
+        ...current,
+        [activity.id]: error instanceof Error ? error.message : 'Scheduling failed',
+      }));
+    } finally {
+      setSchedulingIds((current) => {
+        const next = new Set(current);
+        next.delete(activity.id);
+        return next;
+      });
+      schedulingIdsRef.current.delete(activity.id);
+      void refetch();
     }
-    setUploadState(activity.id, {
-      progress: 0,
-      status: 'scheduled',
-      upload: response.data.upload,
-      recommendationReason: response.data.recommendation.reason,
-    });
-    void refetch();
   };
 
   const runRegisteredNow = async (activity: Task, upload: UploadRegistration) => {

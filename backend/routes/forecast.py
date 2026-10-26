@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from flask import Blueprint, request, jsonify
 from auth_utils import require_auth, require_organization_admin
 
@@ -55,30 +55,66 @@ def get_forecast():
     """
     raw_zone = request.args.get("zone", "US-CA")
     zone = raw_zone.strip() if isinstance(raw_zone, str) else ""
-    hours = request.args.get("hours", 24, type=int)
-    hours = max(1, min(hours, 48))  # Clamp to [1, 48]
-
-    logger.info("GET /api/forecast zone=%s hours=%d", zone, hours)
-
     try:
         if not zone:
             raise ValueError("A non-empty grid zone is required")
-        carbon = get_carbon_data(zone_id=zone, offset_hours=0)
+
+        raw_hours = request.args.get("hours", 24)
+        try:
+            hours = int(raw_hours)
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"Invalid forecast horizon: {raw_hours!r} (must be an integer between 1 and 48)"
+            )
+        if hours < 1 or hours > 48:
+            raise ValueError(
+                f"Unsupported forecast horizon: {hours} hours requested (must be between 1 and 48)"
+            )
+
+        logger.info("GET /api/forecast zone=%s hours=%d", zone, hours)
+
+        carbon = get_carbon_data(zone_id=zone, offset_hours=0, forecast_hours=hours)
         predictor = get_predictor()
-        if carbon.get("error"):
+        # _simulation_fallback() sets an informational "error" key on valid
+        # simulated data explaining *why* the live API was unavailable.
+        # Only reject if the data is NOT a usable simulated fallback.
+        if carbon.get("error") and not carbon.get("isSimulated"):
             raise RuntimeError(carbon["error"])
-        if predictor.is_trained():
+        history = carbon.get("history", [])
+        if (
+            predictor.is_trained()
+            and not carbon.get("isSimulated")
+            and len(history) >= 24
+        ):
             forecast_points = predictor.predict(
                 zone_id=zone,
                 horizon_hours=hours,
-                history=carbon.get("history", []),
+                history=history,
             )
             forecast_source = "ml_model"
         else:
-            forecast_points = carbon.get("forecast", [])[:hours]
-            predictor._validate_forecast(forecast_points, len(forecast_points))
+            forecast_points = list(carbon.get("forecast", []))
             if not forecast_points:
                 raise ValueError("No forecast points are available")
+
+            # If simulated fallback data has fewer points than requested horizon,
+            # generate additional clearly simulated hourly points using the zone simulation logic.
+            if carbon.get("isSimulated") and len(forecast_points) < hours:
+                from services.carbon_service import GRID_ZONES, _DEFAULT_ZONE_ID, _get_simulated_intensity
+                zone_config = GRID_ZONES.get(zone, GRID_ZONES[_DEFAULT_ZONE_ID])
+                last_dt = datetime.fromisoformat(
+                    str(forecast_points[-1]["datetime"]).replace("Z", "+00:00")
+                )
+                needed = hours - len(forecast_points)
+                for step in range(1, needed + 1):
+                    next_dt = last_dt + timedelta(hours=step)
+                    forecast_points.append({
+                        "datetime": next_dt.isoformat(),
+                        "carbonIntensity": _get_simulated_intensity(zone_config, next_dt),
+                    })
+
+            forecast_points = forecast_points[:hours]
+            predictor._validate_forecast(forecast_points, len(forecast_points))
             if len(forecast_points) < hours:
                 raise ValueError(
                     f"Only {len(forecast_points)} forecast points are available; {hours} requested"
@@ -98,6 +134,7 @@ def get_forecast():
         "data": {
             "zone": zone,
             "forecast": forecast_points,
+            "isSimulated": carbon.get("isSimulated", False),
             "source": carbon.get("source"),
             "forecastSource": forecast_source,
             "observedAt": carbon.get("observedAt"),

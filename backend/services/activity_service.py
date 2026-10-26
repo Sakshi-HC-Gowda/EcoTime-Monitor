@@ -420,7 +420,8 @@ def create_activity(
                 return None, "Idempotency-Key was already used for a different activity request", False
             return existing.to_dict(), None, True
 
-    task_id = f"task-{datetime.now(timezone.utc).timestamp():.6f}"
+    import uuid
+    task_id = f"task-{datetime.now(timezone.utc).timestamp():.6f}-{uuid.uuid4().hex[:8]}"
 
     activity = Activity(
         id=task_id,
@@ -500,11 +501,14 @@ def list_activities(
         query = query.filter_by(status=status_filter)
 
     total = query.count()
-    status_counts = dict(
-        db.session.query(Activity.status, func.count(Activity.id))
-        .filter_by(organization_id=organization_id)
-        .group_by(Activity.status)
-        .all()
+    status_counts = {status: 0 for status in VALID_STATUSES}
+    status_counts.update(
+        dict(
+            db.session.query(Activity.status, func.count(Activity.id))
+            .filter_by(organization_id=organization_id)
+            .group_by(Activity.status)
+            .all()
+        )
     )
     items = (
         query.order_by(Activity.created_at.desc())

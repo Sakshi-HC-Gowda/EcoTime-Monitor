@@ -202,7 +202,10 @@ def recommend_schedule(
     if zone_id not in GRID_ZONES:
         raise ValueError(f"Unsupported grid zone '{zone_id}'.")
     carbon = get_carbon_data(zone_id=zone_id, offset_hours=0)
-    if carbon.get("error"):
+    # _simulation_fallback() sets an informational "error" key on valid
+    # simulated data explaining *why* the live API was unavailable.
+    # Only reject if the data is NOT a usable simulated fallback.
+    if carbon.get("error") and not carbon.get("isSimulated"):
         raise RecommendationDataUnavailable(str(carbon["error"]))
     if not isinstance(carbon.get("current"), dict) or _parse_datetime(
         carbon["current"].get("datetime")
@@ -215,7 +218,11 @@ def recommend_schedule(
 
     predictor = get_predictor()
     history = carbon.get("history", [])
-    if predictor.is_trained() and len(history) >= 24:
+    if (
+        predictor.is_trained()
+        and not carbon.get("isSimulated")
+        and len(history) >= 24
+    ):
         try:
             predictor._validate_history(history)
             forecast = _valid_forecast(

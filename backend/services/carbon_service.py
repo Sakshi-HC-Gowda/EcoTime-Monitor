@@ -11,6 +11,7 @@ Also detects Green Windows from forecast data.
 from __future__ import annotations
 
 import math
+import time
 import os
 import logging
 from datetime import datetime, timedelta, timezone
@@ -212,16 +213,21 @@ def _get_simulated_intensity(zone: dict, dt: datetime) -> int:
     return max(5, round(intensity))
 
 
-def generate_simulated_data(zone_id: str, offset_hours: float = 0.0) -> dict:
+def generate_simulated_data(
+    zone_id: str,
+    offset_hours: float = 0.0,
+    forecast_hours: int = 24,
+) -> dict:
     """
     Generate a full simulated CarbonResponse for a zone.
 
     Args:
         zone_id: Grid zone identifier (e.g. 'IN', 'US-CA')
         offset_hours: Simulated time offset in hours from now
+        forecast_hours: Forecast horizon in hours (default: 24)
 
     Returns:
-        CarbonResponse dict with current, history (12h), and forecast (24h)
+        CarbonResponse dict with current, history (12h), and forecast (forecast_hours)
     """
     zone = GRID_ZONES.get(zone_id, GRID_ZONES[_DEFAULT_ZONE_ID])
     now = datetime.now(timezone.utc) + timedelta(hours=offset_hours)
@@ -241,7 +247,8 @@ def generate_simulated_data(zone_id: str, offset_hours: float = 0.0) -> dict:
         })
 
     forecast = []
-    for i in range(24):
+    num_forecast = max(1, int(forecast_hours))
+    for i in range(num_forecast):
         fore_time = now + timedelta(hours=i)
         forecast.append({
             "datetime": fore_time.isoformat(),
@@ -267,6 +274,13 @@ def generate_simulated_data(zone_id: str, offset_hours: float = 0.0) -> dict:
 
 _EMAPS_BASE = "https://api.electricitymap.org/v3"
 
+# Negative-result cache: avoid repeated API calls when the service is down.
+# Maps zone_id -> monotonic timestamp of last API/network failure.
+# Only API errors (HTTP failures, timeouts, network errors) are cached;
+# unexpected programming errors are not.
+_NEGATIVE_CACHE_TTL = 120  # seconds
+_last_api_failure: dict[str, float] = {}
+
 
 def get_electricity_maps_api_key() -> str | None:
     """Return the Electricity Maps API key from environment, if configured."""
@@ -278,7 +292,22 @@ def _fetch_live_data(zone_id: str, api_key: str) -> dict | None:
     """
     Fetch live carbon data from Electricity Maps API.
     Returns None on any error (caller falls back to simulation).
+
+    A per-zone negative-result cache suppresses repeated API calls for
+    _NEGATIVE_CACHE_TTL seconds after an API or network failure.
     """
+    # Check negative cache before any network I/O
+    last_fail = _last_api_failure.get(zone_id, 0)
+    elapsed = time.monotonic() - last_fail
+    if last_fail and elapsed < _NEGATIVE_CACHE_TTL:
+        logger.debug(
+            "Skipping Electricity Maps API for zone %s "
+            "(negative cache, %.0fs remaining)",
+            zone_id,
+            _NEGATIVE_CACHE_TTL - elapsed,
+        )
+        return None
+
     headers = {"auth-token": api_key}
     timeout = 8
 
@@ -296,6 +325,7 @@ def _fetch_live_data(zone_id: str, api_key: str) -> dict | None:
                 latest_res.status_code,
                 latest_res.text[:300],
             )
+            _last_api_failure[zone_id] = time.monotonic()
             return None
 
         latest_data = latest_res.json()
@@ -393,15 +423,21 @@ def _fetch_live_data(zone_id: str, api_key: str) -> dict | None:
 
     except requests.RequestException as e:
         logger.error("Electricity Maps network error for zone %s: %s", zone_id, e)
+        _last_api_failure[zone_id] = time.monotonic()
         return None
     except Exception as e:
         logger.error("Electricity Maps API error for zone %s: %s", zone_id, e)
         return None
 
 
-def _simulation_fallback(zone_id: str, offset_hours: float, reason: str) -> dict:
+def _simulation_fallback(
+    zone_id: str,
+    offset_hours: float,
+    reason: str,
+    forecast_hours: int = 24,
+) -> dict:
     """Return simulated carbon data with an explanatory error field."""
-    data = generate_simulated_data(zone_id, offset_hours)
+    data = generate_simulated_data(zone_id, offset_hours, forecast_hours=forecast_hours)
     data["error"] = reason
     return data
 
@@ -566,6 +602,7 @@ def get_carbon_data(
     zone_id: str,
     api_key: str | None = None,
     offset_hours: float = 0.0,
+    forecast_hours: int = 24,
 ) -> dict:
     """
     Main entry point for obtaining carbon data.
@@ -591,10 +628,11 @@ def get_carbon_data(
                 zone,
                 offset_hours,
                 "Live Electricity Maps data unavailable; returned explicitly simulated data.",
+                forecast_hours=forecast_hours,
             )
 
         logger.info("No ELECTRICITY_MAPS_API_KEY configured — using simulation for zone %s", zone)
-        return generate_simulated_data(zone, offset_hours)
+        return generate_simulated_data(zone, offset_hours, forecast_hours=forecast_hours)
 
     except Exception as e:
         logger.exception("Unexpected error fetching carbon data for zone %s", zone)
@@ -602,6 +640,7 @@ def get_carbon_data(
             zone,
             offset_hours,
             f"Carbon data service error: {e}. Using simulated fallback.",
+            forecast_hours=forecast_hours,
         )
 
 

@@ -6,6 +6,7 @@ import pytest
 
 from app import create_app
 from extensions import db
+from models.activity import Activity
 from services import optimizer_service
 
 

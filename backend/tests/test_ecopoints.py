@@ -22,7 +22,7 @@ from config.scoring_rules import SCORING_RULES, get_points
 
 @pytest.fixture
 def app():
-    app = create_app()
+    app = create_app("testing")
 
     app.config.update(
         TESTING=True,
@@ -42,6 +42,7 @@ def activity(app):
     with app.app_context():
         activity = Activity(
             id="test-activity-001",
+            organization_id=1,
             name="Test Green Activity",
             type="flexible",
             activity_type="file-upload",

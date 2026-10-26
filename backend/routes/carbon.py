@@ -113,10 +113,21 @@ def get_windows():
         if not zone:
             raise ValueError("A non-empty grid zone is required")
         carbon = get_carbon_data(zone_id=zone, offset_hours=offset)
-        if carbon.get("error"):
+
+        # _simulation_fallback() sets an informational "error" key on valid
+        # simulated data explaining *why* the live API was unavailable.
+        # Only reject if the data is NOT a usable simulated fallback.
+        if carbon.get("error") and not carbon.get("isSimulated"):
             raise RuntimeError(carbon["error"])
+
+        forecast = carbon.get("forecast", [])
+        if not forecast:
+            raise RuntimeError(
+                "No forecast data available for green window detection"
+            )
+
         raw_windows = detect_green_windows(
-            forecast=carbon.get("forecast", []),
+            forecast=forecast,
             current_datetime=carbon["current"]["datetime"],
             threshold=threshold,
         )
@@ -149,6 +160,7 @@ def get_windows():
         "success": True,
         "data": ranked,
         "count": len(ranked),
+        "isSimulated": carbon.get("isSimulated", False),
         "source": carbon.get("source"),
         "observedAt": carbon.get("observedAt"),
         "forecastSource": carbon.get("forecastSource"),

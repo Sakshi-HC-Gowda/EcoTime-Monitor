@@ -56,7 +56,7 @@ export function ActivityCard({
   carbonIntensity,
   carbonIsSimulated,
   baselineIntensity = 380,
-  onUpdateStatus,
+  onUpdateStatus: _onUpdateStatus,
   onRunNow,
   onScheduleUpload,
   onChooseFile,
@@ -112,17 +112,18 @@ export function ActivityCard({
   };
 
   const handleRunNow = () => {
-    if (isFileUpload && onRunNow) {
-      onRunNow(activity);
-      return;
+    if (isFileUpload) {
+      onRunNow?.(activity);
+    } else {
+      onRunActivity?.(activity);
     }
-    onUpdateStatus(activity.id, 'running');
   };
 
   const handleSchedule = () => {
-    if (isFileUpload && onScheduleUpload) {
-      onScheduleUpload(activity);
-      return;
+    if (isFileUpload) {
+      onScheduleUpload?.(activity);
+    } else {
+      onScheduleActivity?.(activity);
     }
   };
 
@@ -325,48 +326,48 @@ export function ActivityCard({
           </button>
         )}
 
-        {isFileUpload && upload && ['pending', 'scheduled', 'failed'].includes(uploadStatus) && (
-          <button
-            onClick={handleRunNow}
-            disabled={uploadStatus === 'registering' || uploadStatus === 'running'}
-            className="ds-control flex flex-1 items-center justify-center gap-1.5 bg-green-500/80 text-[12px] font-bold text-white shadow-sm shadow-green-500/20 hover:bg-green-500 disabled:opacity-50"
-          >
-            <Play className="h-3 w-3" /> Run Now (stores file only)
-          </button>
-        )}
-
         {isFileUpload && upload && ['pending', 'failed'].includes(uploadStatus) && (
           <button
             onClick={handleSchedule}
-            disabled={uploadStatus === 'registering' || uploadStatus === 'running'}
+            disabled={uploadStatus === 'registering' || uploadStatus === 'running' || scheduling}
             className="ds-control flex flex-1 items-center justify-center gap-1.5 border border-white/[0.07] bg-white/[0.04] text-[12px] font-semibold text-slate-300 hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <Calendar className="h-3 w-3" /> Schedule upload
+            <Calendar className="h-3 w-3" /> {scheduling ? 'Finding a window…' : 'Schedule upload'}
+          </button>
+        )}
+
+        {isFileUpload && upload && ['pending', 'scheduled', 'failed'].includes(uploadStatus) && (
+          <button
+            onClick={handleRunNow}
+            disabled={uploadStatus === 'registering' || uploadStatus === 'running' || executing}
+            className="ds-control flex flex-1 items-center justify-center gap-1.5 bg-green-500/80 text-[12px] font-bold text-white shadow-sm shadow-green-500/20 hover:bg-green-500 disabled:opacity-50"
+          >
+            <Play className="h-3 w-3" /> {executing ? 'Starting…' : 'Run Now'}
           </button>
         )}
 
         {!isFileUpload && ['idle', 'pending', 'paused', 'delayed'].includes(activity.status) && (
           <button
-            onClick={() => onScheduleActivity?.(activity)}
-            disabled={scheduling}
+            onClick={handleSchedule}
+            disabled={scheduling || executing}
             className="ds-control flex flex-1 items-center justify-center gap-1.5 border border-green-500/20 bg-green-500/10 text-[12px] font-semibold text-green-200 hover:bg-green-500/20 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Calendar className="h-3 w-3" /> {scheduling ? 'Finding a window…' : 'Schedule activity'}
           </button>
         )}
 
-        {!isFileUpload && activity.status === 'scheduled' && (
+        {!isFileUpload && ['idle', 'pending', 'scheduled'].includes(activity.status) && (
           <button
-            onClick={() => onRunActivity?.(activity)}
-            disabled={executing}
+            onClick={handleRunNow}
+            disabled={executing || scheduling}
             className="ds-control flex flex-1 items-center justify-center gap-1.5 bg-green-500/80 text-[12px] font-bold text-white shadow-sm shadow-green-500/20 hover:bg-green-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <Play className="h-3 w-3" /> {executing ? 'Starting simulated run…' : 'Run Now (simulated)'}
+            <Play className="h-3 w-3" /> {executing ? 'Starting…' : 'Run Now'}
           </button>
         )}
 
         {!isFileUpload && activity.status === 'running' && (
-          <span className="flex-1 text-center text-xs text-green-300">Simulated execution is running.</span>
+          <span className="flex-1 text-center text-xs text-green-300">Execution is in progress.</span>
         )}
 
         <button

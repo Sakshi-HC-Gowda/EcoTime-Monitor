@@ -192,7 +192,6 @@ export function DashboardPage() {
             </div>
             <span>Live Monitoring</span>
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-            <span className="text-slate-400 font-normal">Grid: {selectedZone}</span>
           </div>
         </div>
       </div>

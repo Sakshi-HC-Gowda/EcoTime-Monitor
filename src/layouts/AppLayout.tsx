@@ -8,7 +8,6 @@ import {
   TrendingUp,
   Zap,
   Brain,
-  CalendarClock,
   Leaf,
   Settings,
   ChevronRight,
@@ -52,7 +51,7 @@ const NAV_SECTIONS: { label: string; items: NavItemDef[] }[] = [
     items: [
       { label: 'Activities', href: '/activities', icon: Zap, color: 'text-amber-400' },
       { label: 'Green Windows', href: '/windows', icon: Wind, color: 'text-teal-400' },
-      { label: 'Scheduler', href: '/scheduler', icon: CalendarClock, color: 'text-blue-400' },
+      //{ label: 'Scheduler', href: '/scheduler', icon: CalendarClock, color: 'text-blue-400' },
     ],
   },
   {
@@ -411,14 +410,7 @@ export function AppLayout() {
               <span className="text-slate-500">|</span>
               <span>{user?.organization?.name ?? 'Organization'}</span>
             </div>
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-medium text-slate-200 transition hover:border-white/20 hover:bg-white/10"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-              Sign out
-            </button>
+            
 
             {/* Live Monitoring Badge */}
             <div className="hidden sm:flex items-center gap-2 h-9 px-3.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px] font-bold shadow-sm">
@@ -427,7 +419,6 @@ export function AppLayout() {
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
               </span>
               <span>Live Monitoring</span>
-              <span className="text-slate-400 font-medium">| Grid: {selectedZone}</span>
             </div>
 
             {/* Notifications Bell Button */}
@@ -584,6 +575,14 @@ export function AppLayout() {
                 )}
               </AnimatePresence>
             </div>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-medium text-slate-200 transition hover:border-white/20 hover:bg-white/10"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              Sign out
+            </button>
 
           </div>
         </header>

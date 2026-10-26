@@ -177,7 +177,6 @@ export function LoginPage() {
               <input
                 id="login-password"
                 type="password"
-                placeholder="Password"
                 autoComplete="current-password"
                 placeholder="Enter your password"
                 value={password}
@@ -282,7 +281,6 @@ export function LoginPage() {
               <input
                 id="register-password"
                 type="password"
-D                placeholder="Password"
                 autoComplete="new-password"
                 placeholder="Create a password"
                 value={password}

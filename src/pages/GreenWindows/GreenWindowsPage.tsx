@@ -44,7 +44,7 @@ export function GreenWindowsPage() {
   }
 
   const handleSchedule = (win: GreenWindow) => {
-    navigate('/scheduler', { state: { targetWindow: win } });
+    navigate('/activities', { state: { targetWindow: win, targetZone: selectedZone } });
   };
 
   return (

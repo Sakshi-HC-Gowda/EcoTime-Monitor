@@ -7,6 +7,11 @@ export interface ActivityScheduleResult {
   recommendation: SchedulingRecommendation | null;
 }
 
+export interface ActivityScheduleRequest {
+  windowId: string;
+  zone: string;
+}
+
 export interface ActivityExecutionResult {
   activity: Task;
   executionMode: 'simulated';
@@ -42,9 +47,10 @@ export const activitiesService = {
     });
   },
 
-  async scheduleTask(id: string): Promise<ApiResponse<ActivityScheduleResult>> {
+  async scheduleTask(id: string, request?: ActivityScheduleRequest): Promise<ApiResponse<ActivityScheduleResult>> {
     return apiClient.request<ActivityScheduleResult>(`/activities/${encodeURIComponent(id)}/schedule`, {
       method: 'POST',
+      ...(request ? { body: JSON.stringify(request) } : {}),
     });
   },
 

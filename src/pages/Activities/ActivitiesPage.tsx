@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Plus, Filter } from 'lucide-react';
 import { useActivitiesQuery, useActivityMutations } from '@/features/activities/hooks/useActivitiesQuery';
 import { useCarbon } from '@/features/carbon/hooks/useCarbon';
@@ -10,13 +11,14 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ActivityCard } from '@/features/activities/components/ActivityCard';
 import { CreateActivityModal } from '@/features/activities/components/CreateActivityModal';
+import { GlassCard } from '@/components/ui/GlassCard';
 import {
   registerUpload,
   uploadService,
   type UploadRegistration,
   type UploadStatus,
 } from '@/services/uploadService';
-import type { Task } from '@/types/domain';
+import type { GreenWindow, Task } from '@/types/domain';
 
 type TabStatus = 'all' | 'pending' | 'scheduled' | 'running' | 'completed';
 
@@ -46,8 +48,31 @@ const ALLOWED_EXTENSIONS = new Set([
   '.csv', '.json', '.txt', '.zip', '.bin', '.pt', '.pth', '.ckpt', '.safetensors',
 ]);
 
+function isGreenWindow(value: unknown): value is GreenWindow {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<GreenWindow>;
+  return (
+    typeof candidate.id === 'string'
+    && typeof candidate.startTime === 'string'
+    && typeof candidate.duration === 'number'
+    && Number.isFinite(candidate.duration)
+    && typeof candidate.avgCarbonIntensity === 'number'
+    && Number.isFinite(candidate.avgCarbonIntensity)
+  );
+}
+
 export function ActivitiesPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const navigationState = location.state as { targetWindow?: unknown; targetZone?: unknown } | null;
   const { selectedZone } = useZone();
+  const selectedWindow = isGreenWindow(navigationState?.targetWindow)
+    && typeof navigationState?.targetZone === 'string'
+    ? navigationState.targetWindow
+    : null;
+  const selectedWindowZone = selectedWindow && typeof navigationState?.targetZone === 'string'
+    ? navigationState.targetZone
+    : null;
   const { data: carbon } = useCarbon(selectedZone);
   const { data: simulationConfig } = useSimulationConfig();
   const [activeTab, setActiveTab] = useState<TabStatus>('all');
@@ -87,7 +112,12 @@ export function ActivitiesPage() {
     setScheduleMessages((current) => ({ ...current, [activity.id]: '' }));
     setSchedulingErrors((current) => ({ ...current, [activity.id]: '' }));
     try {
-      const response = await scheduleMutation.mutateAsync(activity.id);
+      const response = await scheduleMutation.mutateAsync({
+        id: activity.id,
+        request: selectedWindow && selectedWindowZone
+          ? { windowId: selectedWindow.id, zone: selectedWindowZone }
+          : undefined,
+      });
       if (!response.scheduled || !response.activity) {
         setScheduleMessages((current) => ({
           ...current,
@@ -112,6 +142,10 @@ export function ActivitiesPage() {
     }
   };
 
+  const clearSelectedWindow = () => {
+    navigate('/activities', { replace: true, state: null });
+  };
+
   const runActivityNow = async (activity: Task) => {
     if (executingIdsRef.current.has(activity.id)) return;
     executingIdsRef.current.add(activity.id);
@@ -119,7 +153,9 @@ export function ActivitiesPage() {
     setExecutionMessages((current) => ({ ...current, [activity.id]: '' }));
     try {
       if (activity.status === 'pending' || activity.status === 'idle') {
-        const schedRes = await scheduleMutation.mutateAsync(activity.id);
+        const schedRes = await scheduleMutation.mutateAsync({
+          id: activity.id,
+        });
         if (!schedRes.scheduled || !schedRes.activity) {
           throw new Error(schedRes.recommendation?.reason || 'No feasible Green Window available to schedule and run this activity.');
         }
@@ -447,6 +483,26 @@ export function ActivitiesPage() {
 
   return (
   <div className="page-shell page-stack activities-page">
+      {selectedWindow && selectedWindowZone && (
+        <GlassCard className="border-teal-500/20 bg-teal-500/[0.05]">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-teal-300">Selected Green Window</p>
+              <p className="mt-1 text-sm font-semibold text-white">{selectedWindow.id}</p>
+              <p className="mt-1 text-xs text-slate-300">
+                {selectedWindowZone} · {new Date(selectedWindow.startTime).toLocaleString()} · {selectedWindow.duration} minutes
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={clearSelectedWindow}
+              className="ds-control self-start text-xs font-semibold text-slate-300 hover:text-white md:self-auto"
+            >
+              Clear selected window
+            </button>
+          </div>
+        </GlassCard>
+      )}
       <input
         ref={fileInputRef}
         type="file"

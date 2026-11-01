@@ -253,6 +253,24 @@ def schedule():
 @require_auth
 def schedule_activity(activity_id: str):
     """Get a real optimizer recommendation and persist it only when feasible."""
+    data = request.get_json(silent=True)
+    if data is None:
+        data = {}
+    if not isinstance(data, dict):
+        return jsonify({"success": False, "error": "Request body must be a JSON object", "timestamp": _now_iso()}), 400
+    selected_window_id = data.get("windowId")
+    requested_zone = data.get("zone")
+    if selected_window_id is not None and (
+        not isinstance(selected_window_id, str) or not selected_window_id.strip()
+    ):
+        return jsonify({"success": False, "error": "Field 'windowId' must be a non-empty string", "timestamp": _now_iso()}), 400
+    if requested_zone is not None and (
+        not isinstance(requested_zone, str) or not requested_zone.strip()
+    ):
+        return jsonify({"success": False, "error": "Field 'zone' must be a non-empty string", "timestamp": _now_iso()}), 400
+    if selected_window_id is not None and requested_zone is None:
+        return jsonify({"success": False, "error": "Field 'zone' is required when selecting a Green Window", "timestamp": _now_iso()}), 400
+
     activity = Activity.query.filter_by(
         id=activity_id,
         organization_id=request.user.organization_id,
@@ -265,13 +283,15 @@ def schedule_activity(activity_id: str):
         return jsonify({"success": False, "error": f"Activity cannot be scheduled while {activity.status}", "timestamp": _now_iso()}), 409
 
     config = _get_simulation_config()
+    zone = requested_zone.strip() if requested_zone else config.zone
     try:
         result = recommend_schedule(
             tasks=[activity.to_dict()],
             permitted_window=None,
             method="greedy",
             baseline_intensity=config.baseline_intensity,
-            zone_id=config.zone,
+            zone_id=zone,
+            permitted_window_id=selected_window_id.strip() if selected_window_id else None,
         )
     except RecommendationDataUnavailable as exc:
         return jsonify({"success": False, "error": str(exc), "timestamp": _now_iso()}), 503
@@ -322,7 +342,7 @@ def schedule_activity(activity_id: str):
     reservations = Activity.query.filter(
         Activity.organization_id == request.user.organization_id,
         Activity.assigned_window_id == recommendation["windowId"],
-        Activity.status == "scheduled",
+        Activity.status.in_(["scheduled", "running"]),
         Activity.id != activity.id,
     ).order_by(Activity.scheduled_start_time.asc()).all()
     duration = timedelta(minutes=activity.duration)

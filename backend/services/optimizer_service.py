@@ -190,6 +190,7 @@ def recommend_schedule(
     method: str,
     baseline_intensity: float = DEFAULT_BASELINE_INTENSITY,
     zone_id: str = "US-CA",
+    permitted_window_id: str | None = None,
 ) -> dict:
     """Connect verified carbon/forecast data to existing window and scheduling algorithms."""
     calculate_emissions_grams(0.0, baseline_intensity)
@@ -267,6 +268,16 @@ def recommend_schedule(
     for window in detected_windows:
         window["id"] = f"{zone_id}:{window['id']}"
     windows = rank_windows(detected_windows)
+    if permitted_window_id is not None:
+        selected_window = next(
+            (window for window in windows if str(window.get("id")) == permitted_window_id),
+            None,
+        )
+        if selected_window is None:
+            raise ValueError("The selected Green Window is not valid for the requested zone.")
+        permitted_start = _parse_datetime(selected_window.get("startTime"))
+        permitted_end = _window_end(selected_window)
+        windows = [selected_window]
     bounded_windows = []
     for window in windows:
         start = _parse_datetime(window.get("startTime"))

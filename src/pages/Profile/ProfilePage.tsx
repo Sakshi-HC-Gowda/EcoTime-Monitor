@@ -14,6 +14,7 @@ import {
   Globe,
 } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useZone } from '@/app/ZoneProvider';
 
@@ -131,22 +132,26 @@ export function ProfilePage() {
 
             {/* Quick Actions */}
             <div className="flex sm:flex-col gap-2 w-full sm:w-auto mt-2 sm:mt-0">
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="xs"
+                className="flex-1 sm:flex-none"
                 onClick={() => navigate('/organization')}
-                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white/[0.06] hover:bg-white/[0.1] text-slate-200 border border-white/[0.1] transition-colors"
+                iconLeft={<Users />}
               >
-                <Users className="h-3.5 w-3.5 text-slate-400" />
-                <span>Organization</span>
-              </button>
-              <button
+                Organization
+              </Button>
+              <Button
                 type="button"
+                variant="secondary"
+                size="xs"
+                className="flex-1 sm:flex-none"
                 onClick={() => navigate('/settings')}
-                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white/[0.06] hover:bg-white/[0.1] text-slate-200 border border-white/[0.1] transition-colors"
+                iconLeft={<Settings />}
               >
-                <Settings className="h-3.5 w-3.5 text-slate-400" />
-                <span>Settings</span>
-              </button>
+                Settings
+              </Button>
             </div>
           </div>
         </GlassCard>
@@ -201,14 +206,16 @@ export function ProfilePage() {
                   <p className="text-[11px] text-slate-400">Tenant membership & role</p>
                 </div>
               </div>
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="xs"
+                className="text-emerald-400 hover:text-emerald-300"
                 onClick={() => navigate('/organization')}
-                className="text-[11px] text-emerald-400 hover:text-emerald-300 font-semibold inline-flex items-center gap-1 transition-colors"
+                iconRight={<ExternalLink />}
               >
-                <span>View</span>
-                <ExternalLink size={12} />
-              </button>
+                View
+              </Button>
             </div>
 
             <div className="space-y-3 text-xs">
@@ -303,14 +310,15 @@ export function ProfilePage() {
             <p className="text-xs font-semibold text-white">Need to switch accounts or end session?</p>
             <p className="text-[11px] text-slate-400">Signing out will clear local authentication tokens.</p>
           </div>
-          <button
+          <Button
             type="button"
+            variant="danger"
+            size="sm"
             onClick={handleSignOut}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/20 transition-all hover:border-rose-500/30"
+            iconLeft={<LogOut />}
           >
-            <LogOut size={15} />
-            <span>Sign Out of EcoTime</span>
-          </button>
+            Sign Out of EcoTime
+          </Button>
         </GlassCard>
       </div>
     </div>

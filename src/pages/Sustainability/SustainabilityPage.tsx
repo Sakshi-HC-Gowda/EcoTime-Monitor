@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 
 import { GlassCard } from '@/components/ui/GlassCard';
+import { Button } from '@/components/ui/Button';
 import {apiClient} from '@/services/api';
 
 import type{
@@ -121,7 +122,7 @@ export function SustainabilityPage() {
   const longestStreak = score?.longestStreak ?? 0;
 
   return (
-    <div className="page-shell page-stack max-w-[1650px] mx-auto">
+    <div className="page-shell page-stack">
 
       {/* Header */}
       <div>
@@ -132,7 +133,7 @@ export function SustainabilityPage() {
             Impact Tracker
           </span>
         </h1>
-        <p className="page-header-subtitle">Estimated emissions metrics are not available until supported activity measurements and baselines are recorded.</p>
+        <p className="page-header-subtitle">Your sustainability insights will appear here once activity measurements and carbon baselines are available.</p>
       </div>
 
       {/* Placeholder metric cards */}
@@ -372,18 +373,20 @@ export function SustainabilityPage() {
 
 
               {score?.organizationId && (
-                <button
+                <Button
                   type="button"
+                  variant="outline"
+                  size="sm"
+                  className="border-green-500/20 bg-green-500/10 text-green-400 hover:bg-green-500/20 hover:text-green-300"
                   onClick={handleLeaderboardOptIn}
                   disabled={optInLoading}
-                  className="px-4 py-2 rounded-lg border border-green-500/20 bg-green-500/10 text-green-400 hover:bg-green-500/20 transition disabled:opacity-50"
                 >
                   {optInLoading
                     ? 'Updating...'
                     : leaderboardOptIn
                       ? 'Opt Out'
                       : 'Opt In'}
-                </button>
+                </Button>
               )}
 
             </div>

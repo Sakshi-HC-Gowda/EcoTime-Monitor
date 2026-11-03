@@ -244,9 +244,9 @@ p {
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--border-glass);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-card);
   box-shadow: var(--shadow-md);
-  padding: 24px;
+  padding: var(--card-padding-md);
   transition: transform var(--transition-normal), border-color var(--transition-normal), box-shadow var(--transition-normal);
 }
 
@@ -644,13 +644,14 @@ p {
 .input-group select {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--border-glass);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
+  min-height: 2.75rem;
   padding: 10px 12px;
   color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: 14px;
   outline: none;
-  transition: border-color var(--transition-fast);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 select option {
@@ -668,26 +669,37 @@ select option {
   background: var(--bg-tertiary);
   color: var(--text-primary);
   border: 1px solid var(--border-glass);
-  border-radius: var(--radius-xl);
-  padding: 0 24px;
-  font-size: 16px;
+  border-radius: var(--radius-control);
+  padding: 0 1.25rem;
+  font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  transition: all var(--transition-normal);
-  height: 48px;
+  gap: 0.5rem;
+  transition: color var(--duration-fast), background-color var(--duration-fast), border-color var(--duration-fast), box-shadow var(--duration-fast), filter var(--duration-fast);
+  height: 2.75rem;
 }
 
 .btn:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.08);
 }
 
+.btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg-dark), 0 0 0 4px var(--green-border);
+}
+
 .btn:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
+}
+
+.btn svg {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
 }
 
 .btn-primary {
@@ -1428,10 +1440,29 @@ select option {
 }
 
 .ds-control {
-  min-height: 3rem;
-  padding-inline: 1rem;
   border-radius: var(--radius-control);
-  transition: color var(--duration-fast), background-color var(--duration-fast), border-color var(--duration-fast), box-shadow var(--duration-fast), transform var(--duration-fast);
+  font-weight: 600;
+  cursor: pointer;
+  transition: color var(--duration-fast), background-color var(--duration-fast), border-color var(--duration-fast), box-shadow var(--duration-fast), transform var(--duration-fast), filter var(--duration-fast);
+}
+
+.ds-input {
+  min-height: 2.75rem;
+  width: 100%;
+  padding: 0.625rem 1rem;
+  border-radius: var(--radius-control);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-glass);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color var(--duration-fast), box-shadow var(--duration-fast);
+}
+
+.ds-input:focus {
+  border-color: var(--green-border);
+  box-shadow: 0 0 0 2px var(--green-glow);
 }
 
 /* ─── Shimmer skeleton ────────────────────────────────────────────────────── */
@@ -1476,22 +1507,27 @@ select option {
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  border-radius: 11px;
+  border-radius: var(--radius-control);
   font-size: 13px;
   font-weight: 600;
   color: var(--text-muted);
   white-space: nowrap;
   cursor: pointer;
   background: transparent;
-  border: none;
-  transition: all 0.15s ease;
-  min-height: 40px;
+  border: 1px solid transparent;
+  transition: color var(--duration-fast), background-color var(--duration-fast), border-color var(--duration-fast), box-shadow var(--duration-fast);
+  min-height: 2.5rem;
   user-select: none;
 }
 
 .segment-tab:hover {
   color: var(--text-secondary);
   background: rgba(255, 255, 255, 0.03);
+}
+
+.segment-tab:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg-dark), 0 0 0 4px var(--green-border);
 }
 
 .segment-tab.active {
@@ -1546,23 +1582,23 @@ select option {
 }
 
 .metric-accent-blue {
-  border-left: 2px solid var(--blue);
+  border-left: 3px solid var(--blue);
 }
 
 .metric-accent-amber {
-  border-left: 2px solid var(--amber);
+  border-left: 3px solid var(--amber);
 }
 
 .metric-accent-rose {
-  border-left: 2px solid var(--rose);
+  border-left: 3px solid var(--rose);
 }
 
 .metric-accent-purple {
-  border-left: 2px solid var(--purple);
+  border-left: 3px solid var(--purple);
 }
 
 .metric-accent-teal {
-  border-left: 2px solid var(--teal);
+  border-left: 3px solid var(--teal);
 }
 
 /* ─── Thin topbar divider ────────────────────────────────────────────────── */

@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { activitiesService } from '@/services/activitiesService';
+import { activitiesService, type ActivityScheduleRequest } from '@/services/activitiesService';
 import type { CreateTaskRequest, UpdateTaskRequest } from '@/types/domain';
 
 export function useActivitiesQuery(page: number = 1, pageSize: number = 50, status?: string) {
@@ -39,12 +39,15 @@ export function useActivityMutations() {
   });
 
   const scheduleMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const response = await activitiesService.scheduleTask(id);
+    mutationFn: async ({ id, request }: { id: string; request?: ActivityScheduleRequest }) => {
+      const response = await activitiesService.scheduleTask(id, request);
       if (!response.success || !response.data) throw new Error(response.error || 'Scheduling failed');
       return response.data;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['activities'] }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['activities'] });
+      void queryClient.invalidateQueries({ queryKey: ['windows'] });
+    },
   });
 
   const runMutation = useMutation({

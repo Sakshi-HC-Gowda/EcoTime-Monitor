@@ -9,6 +9,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import type { GreenWindow, SchedulingRequest, Task } from '@/types/domain';
+import { getGreenWindowLabelById } from '@/features/windows/utils/windowLabels';
 
 type OptimizationMethod = SchedulingRequest['method'];
 
@@ -61,7 +62,7 @@ export function OptimizationPage() {
 
   if (activitiesLoading) {
     return (
-      <div className="page-shell page-stack max-w-[1650px] mx-auto">
+      <div className="page-shell page-stack">
         <LoadingSkeleton count={3} height="h-40" />
       </div>
     );
@@ -155,7 +156,7 @@ export function OptimizationPage() {
   );
 
   return (
-    <div className="page-shell page-stack max-w-[1650px] mx-auto">
+    <div className="page-shell page-stack">
       <div className="page-header">
         <div>
           <h1 className="page-header-title heading-row">
@@ -176,17 +177,14 @@ export function OptimizationPage() {
             <h3 className="text-base font-bold text-white mb-4 flex items-center gap-2">
               <Cpu className="w-5 h-5 text-blue-400" /> Algorithm
             </h3>
-            <div className="grid grid-cols-2 gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-1">
+            <div className="segment-control w-full">
               {(['greedy', 'knapsack'] as OptimizationMethod[]).map((item) => (
                 <button
                   key={item}
                   type="button"
                   onClick={() => setMethod(item)}
-                  className={`ds-control h-10 text-sm font-semibold capitalize transition ${
-                    method === item
-                      ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20'
-                      : 'text-slate-400 hover:bg-white/[0.05] hover:text-white'
-                  }`}
+                  className={`segment-tab flex-1 capitalize ${method === item ? 'active' : ''}`}
+                  aria-pressed={method === item}
                 >
                   {item}
                 </button>
@@ -196,7 +194,12 @@ export function OptimizationPage() {
             <div className="mt-5 space-y-3 text-sm">
               <SummaryRow label="Algorithm Used" value={result?.method ?? method} />
               <SummaryRow label="Schedulable Activities" value={tasks.length} />
-              <SummaryRow label="Green Window Used" value={usedWindows.map((window) => window.id).join(', ') || 'None'} />
+              <SummaryRow
+                label="Green Window Used"
+                value={usedWindows
+                  .map((window) => getGreenWindowLabelById(optimization?.windows ?? [], window.id) ?? 'Green Window')
+                  .join(', ') || 'None'}
+              />
               <SummaryRow
                 label="Carbon data"
                 value={optimization
@@ -247,10 +250,10 @@ export function OptimizationPage() {
           {!schedulingEnabled && (
             <EmptyState
               icon={Activity}
-              title={tasks.length === 0 ? 'No pending activities' : 'No Green Windows available'}
+              title={tasks.length === 0 ? 'No pending activities to optimize' : 'No Green Windows available'}
               description={
                 tasks.length === 0
-                  ? 'Create or leave activities in pending status before running the scheduler.'
+                  ? 'Create a new activity or return an eligible activity to Pending status to run the optimizer.'
                   : 'The backend did not return a Green Window for the selected zone yet.'
               }
               accentColor="blue"

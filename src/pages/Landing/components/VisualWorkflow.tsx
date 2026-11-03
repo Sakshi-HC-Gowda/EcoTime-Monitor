@@ -1,96 +1,87 @@
-import { motion } from 'framer-motion';
-import { Radio, BarChart2, CalendarClock, CheckCircle } from 'lucide-react';
+import { useState } from 'react';
+import { Play } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 
-const workflowSteps = [
-  {
-    id: 1,
-    title: 'Detect the Problem',
-    icon: Radio,
-    metric: 'High',
-    label: 'Dirty grid periods',
-    color: 'from-blue-500/20 to-cyan-500/10',
-    iconColor: 'text-blue-400',
-  },
-  {
-    id: 2,
-    title: 'Identify Better Hours',
-    icon: BarChart2,
-    metric: '36h',
-    label: 'Planning visibility',
-    color: 'from-purple-500/20 to-pink-500/10',
-    iconColor: 'text-purple-400',
-  },
-  {
-    id: 3,
-    title: 'Schedule Flexible Work',
-    icon: CalendarClock,
-    metric: 'Smart',
-    label: 'Deadline-aware timing',
-    color: 'from-amber-500/20 to-orange-500/10',
-    iconColor: 'text-amber-400',
-  },
-  {
-    id: 4,
-    title: 'Measure the Benefit',
-    icon: CheckCircle,
-    metric: '34%',
-    label: 'Average reduction',
-    color: 'from-green-500/20 to-emerald-500/10',
-    iconColor: 'text-green-400',
-  },
+const workflowOutline = [
+  'Monitor grid carbon intensity',
+  'Forecast cleaner electricity periods',
+  'Discover Green Windows',
+  'Schedule an activity into a selected window',
+  'Review carbon-saving results',
 ];
 
 export function VisualWorkflow() {
+  const [showFallback, setShowFallback] = useState(false);
+
   return (
     <section id="workflow" className="landing-section relative z-10 border-t border-white/[0.06] bg-slate-950/40">
       <div className="landing-container">
-        <div className="mx-auto mb-12 max-w-3xl text-center md:mb-16">
-          <p className="section-eyebrow text-emerald-400">Solution</p>
-          <h2 className="section-title text-balance">Turn carbon volatility into an operational advantage.</h2>
+        <div className="mx-auto mb-10 max-w-3xl text-center md:mb-12">
+          <p className="section-eyebrow text-emerald-400">Workflow</p>
+          <h2 className="section-title text-balance">How EcoTime Works</h2>
           <p className="mt-4 text-base leading-8 text-slate-400 md:text-lg">
-            EcoTime helps teams avoid high-carbon hours without turning scheduling into manual coordination work.
+            EcoTime uses carbon-intensity data and forecasts to find lower-carbon Green Windows,
+            then helps you schedule flexible work into those windows and review estimated savings.
           </p>
         </div>
 
-        <div className="relative">
-          <div className="absolute left-[8%] right-[8%] top-[72px] hidden h-px bg-white/[0.06] lg:block" />
-          <div className="absolute left-[8%] right-[8%] top-[72px] hidden h-px overflow-hidden lg:block">
-            <motion.div
-              className="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-green-500"
-              initial={{ width: '0%' }}
-              whileInView={{ width: '100%' }}
-              viewport={{ once: true }}
-              transition={{ duration: 1.2, ease: 'easeInOut' }}
+        <ol className="mx-auto mb-10 grid max-w-4xl gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          {workflowOutline.map((step, index) => (
+            <li
+              key={step}
+              className="ds-card ds-card-pad-sm text-left"
+            >
+              <span className="label-text text-emerald-400">Step {index + 1}</span>
+              <p className="mt-2 text-sm font-semibold leading-6 text-white">{step}</p>
+            </li>
+          ))}
+        </ol>
+
+        <div className="ds-card mx-auto max-w-5xl overflow-hidden border-white/[0.08] bg-[#0b1220]/90 shadow-lg shadow-black/30">
+          <div className="relative aspect-video w-full bg-[#070c16]">
+            <div
+              className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(16,185,129,0.16),transparent_42%),radial-gradient(circle_at_80%_80%,rgba(20,184,166,0.12),transparent_46%)]"
+              aria-hidden="true"
             />
+
+            {!showFallback ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
+                <Button
+                  type="button"
+                  size="icon"
+                  className="h-16 w-16 rounded-full shadow-lg shadow-emerald-500/20"
+                  aria-label="Play EcoTime product demonstration"
+                  onClick={() => setShowFallback(true)}
+                >
+                  <Play className="h-7 w-7 fill-white" />
+                </Button>
+                <p className="max-w-md text-sm text-slate-300">
+                  Product walkthrough player. A recorded demo video has not been added to this project yet.
+                </p>
+              </div>
+            ) : (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
+                <p className="max-w-lg text-sm leading-6 text-slate-300">
+                  No demo video file is available in the repository. When a local video asset is added,
+                  this panel can host it with native playback controls.
+                </p>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setShowFallback(false)}
+                >
+                  Back to player
+                </Button>
+              </div>
+            )}
           </div>
 
-          <div className="card-grid card-grid-sm-2 card-grid-lg-4 relative z-10 lg:gap-[var(--space-8)]">
-            {workflowSteps.map((step, idx) => {
-              const Icon = step.icon;
-              return (
-                <motion.div
-                  key={step.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.4, delay: idx * 0.1 }}
-                  className="ds-card ds-card-hover group relative flex h-full flex-col items-center bg-slate-900/50 p-6 text-center backdrop-blur-xl"
-                >
-                  <div
-                    className={`ds-icon-box mb-6 h-16 w-16 bg-gradient-to-br transition-transform duration-[var(--duration-normal)] group-hover:scale-105 ${step.color}`}
-                  >
-                    <Icon className={`h-7 w-7 ${step.iconColor}`} />
-                  </div>
-
-                  <h3 className="mb-4 text-base font-bold leading-snug text-white md:text-lg">{step.title}</h3>
-
-                  <div className="ds-card ds-card-pad-sm mt-auto w-full">
-                    <div className={`mb-1 text-2xl font-black ${step.iconColor}`}>{step.metric}</div>
-                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">{step.label}</div>
-                  </div>
-                </motion.div>
-              );
-            })}
+          <div className="flex flex-col gap-2 border-t border-white/[0.06] bg-white/[0.02] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs font-medium text-slate-400">
+              Native video controls will appear here after a demo file is provided.
+            </p>
+            <span className="ds-badge border-white/[0.08] text-slate-400">Video pending</span>
           </div>
         </div>
       </div>

@@ -41,13 +41,13 @@ export function MetricCard({
       <div className="flex h-full flex-col justify-between gap-4 p-0.5">
         <div className="flex items-start justify-between">
           <div
-            className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 border shadow-md transition-transform duration-200 ${
+            className={`ds-icon-box shadow-md transition-transform duration-200 ${
               onClick ? 'group-hover:scale-105' : ''
             } ${iconBg} ${iconColor}`}
           >
-            <Icon size={20} />
+            <Icon className="ds-icon-lg" />
           </div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{title}</p>
+          <p className="label-text">{title}</p>
         </div>
 
         <div className="min-w-0">

@@ -18,7 +18,7 @@ export function ModelInfoCard({ info, onTrain, isTraining }: Props) {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Cpu className="w-5 h-5 text-purple-400" />
-          <h3 className="text-base font-bold text-white">ML Model Metadata</h3>
+          <h3 className="card-title">ML Model Metadata</h3>
         </div>
         <Button
           onClick={onTrain}
@@ -32,24 +32,24 @@ export function ModelInfoCard({ info, onTrain, isTraining }: Props) {
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
-        <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+        <div className="card-inset">
           <span className="text-slate-400 block">Model Engine</span>
           <span className="text-sm font-bold text-white mt-1 block">{modelName}</span>
         </div>
 
-        <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+        <div className="card-inset">
           <span className="text-slate-400 block">Status</span>
           <span className="text-sm font-bold text-green-400 mt-1 flex items-center gap-1">
             <CheckCircle2 className="w-3.5 h-3.5" /> {isTrained ? 'Trained' : 'Untrained'}
           </span>
         </div>
 
-        <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+        <div className="card-inset">
           <span className="text-slate-400 block">Features Ingested</span>
           <span className="text-sm font-bold text-white mt-1 block">14 Telemetry Vectors</span>
         </div>
 
-        <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+        <div className="card-inset">
           <span className="text-slate-400 block">R² Score</span>
           <span className="text-sm font-bold text-purple-300 mt-1 block">0.942</span>
         </div>

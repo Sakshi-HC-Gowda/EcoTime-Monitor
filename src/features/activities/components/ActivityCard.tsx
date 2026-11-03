@@ -2,6 +2,7 @@ import { Clock, Zap, Play, Trash2, Calendar, Sparkles, UploadCloud } from 'lucid
 import type { Task } from '@/types/domain';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { Button } from '@/components/ui/Button';
 import {
   getEstimatedCarbonImpact,
   getEstimatedEcoScore,
@@ -12,6 +13,7 @@ import { uploadService, type UploadRegistration } from '@/services/uploadService
 
 interface Props {
   activity: Task;
+  assignedWindowLabel?: string;
   carbonIntensity?: number;
   carbonIsSimulated?: boolean;
   baselineIntensity?: number;
@@ -53,10 +55,10 @@ const statusAccent: Record<string, string> = {
 
 export function ActivityCard({
   activity,
+  assignedWindowLabel,
   carbonIntensity,
   carbonIsSimulated,
   baselineIntensity = 380,
-  onUpdateStatus: _onUpdateStatus,
   onRunNow,
   onScheduleUpload,
   onChooseFile,
@@ -100,16 +102,20 @@ export function ActivityCard({
               ? 'Upload pending'
               : 'No file registered';
 
-  const formatUploadTime = (value?: string) => {
+  const formatActivityTime = (value?: string) => {
     if (!value) return 'Not available';
     return new Intl.DateTimeFormat(undefined, {
-      day: '2-digit',
       month: 'short',
-      year: 'numeric',
+      day: 'numeric',
       hour: 'numeric',
       minute: '2-digit',
     }).format(new Date(value));
   };
+
+  const categoryLabel = activity.activityType
+    .split('-')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 
   const handleRunNow = () => {
     if (isFileUpload) {
@@ -133,19 +139,30 @@ export function ActivityCard({
       className={`relative flex flex-col overflow-hidden border-t-2 ${topBorderClass}`}
       padding="none"
     >
-      <div className="flex items-start justify-between p-[var(--card-padding-md)] pb-5">
+      <div className="flex items-start justify-between gap-3 p-[var(--card-padding-md)] pb-4">
         <div className="min-w-0 pr-3">
-          <span className="label-text font-mono">{activity.activityType}</span>
-          <h3 className="mt-0.5 text-[15px] font-bold leading-tight text-white">{activity.name}</h3>
+          <span className="label-text">{categoryLabel}</span>
+          <h3 className="mt-1 break-words text-[15px] font-bold leading-tight text-white">{activity.name}</h3>
         </div>
         <StatusBadge status={activity.status} />
       </div>
 
       {activity.status === 'scheduled' && activity.scheduledStartTime && (
         <div className="mx-[var(--card-padding-md)] mb-4 rounded-xl border border-amber-500/20 bg-amber-500/[0.05] p-3 text-xs">
-          <p className="font-semibold text-amber-200">Scheduled for {formatUploadTime(activity.scheduledStartTime)}</p>
-          {activity.scheduledEndTime && <p className="mt-1 text-amber-100/80">Expected end {formatUploadTime(activity.scheduledEndTime)}</p>}
-          {activity.assignedWindowId && <p className="mt-1 text-slate-400">Green Window {activity.assignedWindowId}</p>}
+          <p className="mb-2 font-semibold uppercase tracking-wide text-amber-200">Scheduling information</p>
+          <dl className="grid gap-1.5 sm:grid-cols-2">
+            <div>
+              <dt className="text-amber-100/60">Scheduled start</dt>
+              <dd className="font-semibold text-amber-100">{formatActivityTime(activity.scheduledStartTime)}</dd>
+            </div>
+            <div>
+              <dt className="text-amber-100/60">Expected completion</dt>
+              <dd className="font-semibold text-amber-100">{formatActivityTime(activity.scheduledEndTime)}</dd>
+            </div>
+          </dl>
+          {activity.assignedWindowId && (
+            <p className="mt-2 break-words text-slate-300">{assignedWindowLabel ?? 'Green Window'}</p>
+          )}
           {schedulingReason && <p className="mt-1 text-slate-300">{schedulingReason}</p>}
           {!isFileUpload && <p className="mt-1 text-slate-400">Click Run Now to start a simulated workload run.</p>}
         </div>
@@ -161,36 +178,38 @@ export function ActivityCard({
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3 px-[var(--card-padding-md)] pb-5">
-        <div className="ds-card p-2.5">
-          <span className="label-text mb-1 block">Assumed Power</span>
-          <span className="flex items-center gap-1.5 text-xs font-semibold text-white">
+      <div className="px-[var(--card-padding-md)] pb-5">
+        <p className="label-text mb-2">Activity metrics</p>
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+        <div className="ds-card min-w-0 p-2.5">
+          <span className="label-text mb-1 block truncate">Assumed power</span>
+          <span className="flex items-center gap-1.5 text-sm font-semibold text-white">
             <Clock className="h-3 w-3 flex-shrink-0 text-amber-400" />
             {estimatedPower.toFixed(0)} W
           </span>
         </div>
 
-        <div className="ds-card p-2.5">
-          <span className="label-text mb-1 block">Estimated Duration</span>
-          <span className="flex items-center gap-1.5 text-xs font-semibold text-white">
+        <div className="ds-card min-w-0 p-2.5">
+          <span className="label-text mb-1 block truncate">Estimated duration</span>
+          <span className="flex items-center gap-1.5 text-sm font-semibold text-white">
             <Clock className="h-3 w-3 flex-shrink-0 text-cyan-400" />
             {activity.duration} min
           </span>
         </div>
 
-        <div className="ds-card p-2.5">
-          <span className="label-text mb-1 block">Estimated Energy</span>
-          <span className="flex items-center gap-1.5 text-xs font-bold text-amber-300">
+        <div className="ds-card min-w-0 p-2.5">
+          <span className="label-text mb-1 block truncate">Estimated energy</span>
+          <span className="flex items-center gap-1.5 text-sm font-bold text-amber-300">
             <Zap className="h-3 w-3 flex-shrink-0 text-amber-400" />
             {estimatedEnergy.toFixed(2)} kWh
           </span>
         </div>
 
-        <div className="ds-card p-2.5">
-          <span className="label-text mb-1 block">
-            Estimated Emissions {carbonIntensity === undefined ? '' : '(current grid)'}
+        <div className="ds-card min-w-0 p-2.5">
+          <span className="label-text mb-1 block truncate">
+            Estimated emissions
           </span>
-          <span className={`text-xs font-bold ${isHighCarbon ? 'text-rose-300' : 'text-green-300'}`}>
+          <span className={`text-sm font-bold ${isHighCarbon ? 'text-rose-300' : 'text-green-300'}`}>
             {estimatedCarbonImpact === null ? 'Unavailable without carbon intensity' : `${estimatedCarbonImpact.toFixed(2)} gCO2e`}
           </span>
           {estimatedCarbonImpact !== null && (
@@ -200,7 +219,7 @@ export function ActivityCard({
           )}
         </div>
 
-        <div className="ds-card col-span-2 p-2.5">
+        <div className="ds-card col-span-2 p-2.5 sm:col-span-4">
           <div className="mb-1 flex items-center justify-between gap-3">
             <span className="label-text block">EcoScore</span>
             <span className="text-xs font-bold text-cyan-300">
@@ -218,6 +237,7 @@ export function ActivityCard({
             {ecoScore === null ? 'Waiting for valid carbon data' : recommendation}
           </span>
         </div>
+      </div>
       </div>
 
       {showUploadStatus && (
@@ -248,14 +268,16 @@ export function ActivityCard({
                 <p className="break-words text-xs font-semibold text-white">Selected: {selectedFile.name}</p>
                 <p className="mt-1 text-xs text-slate-400">{(selectedFile.size / (1024 * 1024)).toFixed(2)} MiB</p>
                 <p className="mt-1 text-xs text-slate-400">The file will be stored; its contents are not executed.</p>
-                <button
+                <Button
                   type="button"
+                  size="xs"
+                  fullWidth
+                  className="mt-3"
                   onClick={onUploadSelected}
                   disabled={uploadStatus === 'registering' || uploadStatus === 'running'}
-                  className="ds-control mt-3 w-full bg-green-500/80 text-xs font-bold text-white hover:bg-green-500 disabled:opacity-50"
                 >
                   Upload file
-                </button>
+                </Button>
               </div>
             )}
 
@@ -269,7 +291,7 @@ export function ActivityCard({
                 </p>
                 {upload?.scheduledStartTime && (
                   <p className="text-slate-400">
-                    Scheduled for {formatUploadTime(upload.scheduledStartTime)}
+                    Scheduled for {formatActivityTime(upload.scheduledStartTime)}
                   </p>
                 )}
               </div>
@@ -285,14 +307,16 @@ export function ActivityCard({
               <div className="mt-3 rounded-lg border border-green-500/20 bg-green-500/[0.05] p-3">
                 <p className="mb-3 text-xs font-bold text-green-300">Upload completed and stored. File contents were not executed.</p>
                 <UploadMeta label="File Name" value={upload.filename} />
-                <UploadMeta label="Completed At" value={formatUploadTime(upload.uploadedAt ?? undefined)} />
-                <button
+                <UploadMeta label="Completed At" value={formatActivityTime(upload.uploadedAt ?? undefined)} />
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="xs"
+                  className="mt-2 text-cyan-300 hover:text-cyan-200"
                   onClick={() => void uploadService.download(upload)}
-                  className="mt-2 text-xs font-semibold text-cyan-300 hover:text-cyan-200"
                 >
                   Download uploaded file
-                </button>
+                </Button>
               </div>
             )}
             {uploadState?.message && (
@@ -317,70 +341,89 @@ export function ActivityCard({
 
       <div className="flex items-center gap-2.5 border-t border-white/[0.04] bg-white/[0.01] px-[var(--card-padding-md)] py-4">
         {isFileUpload && !upload && ['idle', 'pending', 'scheduled', 'failed'].includes(activity.status) && (
-          <button
+          <Button
+            type="button"
+            size="xs"
+            className="flex-1"
             onClick={() => onChooseFile?.(activity)}
             disabled={uploadStatus === 'registering' || uploadStatus === 'running'}
-            className="ds-control flex flex-1 items-center justify-center gap-1.5 bg-green-500/80 text-[12px] font-bold text-white shadow-sm shadow-green-500/20 hover:bg-green-500"
+            iconLeft={<UploadCloud />}
           >
-            <UploadCloud className="h-3 w-3" /> Choose file
-          </button>
+            Choose file
+          </Button>
         )}
 
         {isFileUpload && upload && ['pending', 'failed'].includes(uploadStatus) && (
-          <button
+          <Button
+            type="button"
+            variant="secondary"
+            size="xs"
+            className="flex-1"
             onClick={handleSchedule}
             disabled={uploadStatus === 'registering' || uploadStatus === 'running' || scheduling}
-            className="ds-control flex flex-1 items-center justify-center gap-1.5 border border-white/[0.07] bg-white/[0.04] text-[12px] font-semibold text-slate-300 hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+            iconLeft={<Calendar />}
           >
-            <Calendar className="h-3 w-3" /> {scheduling ? 'Finding a window…' : 'Schedule upload'}
-          </button>
+            {scheduling ? 'Finding a window…' : 'Schedule upload'}
+          </Button>
         )}
 
         {isFileUpload && upload && ['pending', 'scheduled', 'failed'].includes(uploadStatus) && (
-          <button
+          <Button
+            type="button"
+            size="xs"
+            className="flex-1"
             onClick={handleRunNow}
             disabled={uploadStatus === 'registering' || uploadStatus === 'running' || executing}
-            className="ds-control flex flex-1 items-center justify-center gap-1.5 bg-green-500/80 text-[12px] font-bold text-white shadow-sm shadow-green-500/20 hover:bg-green-500 disabled:opacity-50"
+            iconLeft={<Play />}
           >
-            <Play className="h-3 w-3" /> {executing ? 'Starting…' : 'Run Now'}
-          </button>
+            {executing ? 'Starting…' : 'Run Now'}
+          </Button>
         )}
 
         {!isFileUpload && ['idle', 'pending', 'paused', 'delayed'].includes(activity.status) && (
-          <button
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            className="flex-1 border-green-500/20 bg-green-500/10 text-green-200 hover:bg-green-500/20 hover:text-white"
             onClick={handleSchedule}
             disabled={scheduling || executing}
-            className="ds-control flex flex-1 items-center justify-center gap-1.5 border border-green-500/20 bg-green-500/10 text-[12px] font-semibold text-green-200 hover:bg-green-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+            iconLeft={<Calendar />}
           >
-            <Calendar className="h-3 w-3" /> {scheduling ? 'Finding a window…' : 'Schedule activity'}
-          </button>
+            {scheduling ? 'Finding a window…' : 'Schedule activity'}
+          </Button>
         )}
 
         {!isFileUpload && ['idle', 'pending', 'scheduled'].includes(activity.status) && (
-          <button
+          <Button
+            type="button"
+            size="xs"
+            className="flex-1"
             onClick={handleRunNow}
             disabled={executing || scheduling}
-            className="ds-control flex flex-1 items-center justify-center gap-1.5 bg-green-500/80 text-[12px] font-bold text-white shadow-sm shadow-green-500/20 hover:bg-green-500 disabled:cursor-not-allowed disabled:opacity-50"
+            iconLeft={<Play />}
           >
-            <Play className="h-3 w-3" /> {executing ? 'Starting…' : 'Run Now'}
-          </button>
+            {executing ? 'Starting…' : 'Run Now'}
+          </Button>
         )}
 
         {!isFileUpload && activity.status === 'running' && (
           <span className="flex-1 text-center text-xs text-green-300">Execution is in progress.</span>
         )}
 
-        <button
+        <Button
+          type="button"
+          variant="danger"
+          size="icon"
+          className="flex-shrink-0"
           onClick={() => onDelete(activity.id)}
           disabled={deleting}
-          className="ds-control flex h-10 w-10 flex-shrink-0 items-center justify-center border border-transparent text-rose-400 hover:border-rose-500/20 hover:bg-rose-500/10 hover:text-rose-300"
           title="Delete activity"
           aria-label={`Delete activity ${activity.name}`}
           aria-busy={deleting}
-          style={{ width: 40, height: 40, minHeight: 40, padding: 0 }}
         >
-          <Trash2 width={28} height={28} className="h-7 w-7" strokeWidth={2.5} />
-        </button>
+          <Trash2 />
+        </Button>
       </div>
     </GlassCard>
   );

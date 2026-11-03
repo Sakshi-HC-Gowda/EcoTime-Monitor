@@ -112,8 +112,10 @@ class ForecastPredictor:
 
     @staticmethod
     def _validate_history(history: list[dict]) -> None:
-        if len(history) < 24:
-            raise ValueError("A trained forecast requires at least 24 hourly history points")
+        # lag_24h is measured 24 hours before the last observation, so 25
+        # consecutive hourly points are required for a complete feature row.
+        if len(history) < 25:
+            raise ValueError("A trained forecast requires at least 25 hourly history points")
 
         previous: datetime | None = None
         for point in history:
@@ -177,13 +179,20 @@ class ForecastPredictor:
         Recursive one-step-ahead ML prediction over horizon_hours.
         Each predicted value is appended to the rolling history window.
         """
-        # Build a rolling buffer (need 24+ points for lag features)
+        # Build a rolling buffer (need 24+ points for lag features).
+        # Each step predicts the next hour after the last buffered timestamp —
+        # not wall-clock "now" — so provider-aligned extensions stay consecutive.
         buffer = list(history)
         predictions = []
-        now = datetime.now(timezone.utc)
+        last_hist = datetime.fromisoformat(
+            str(buffer[-1]["datetime"]).replace("Z", "+00:00")
+        )
+        if last_hist.tzinfo is None:
+            raise ValueError("Forecast history timestamps must include a timezone")
+        last_hist = last_hist.astimezone(timezone.utc)
 
         for h in range(1, horizon_hours + 1):
-            target_dt = now + timedelta(hours=h)
+            target_dt = last_hist + timedelta(hours=h)
 
             feature_row = build_inference_features(
                 recent_history=buffer[-48:],  # Use last 48 points max

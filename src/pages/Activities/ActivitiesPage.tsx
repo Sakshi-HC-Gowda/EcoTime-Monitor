@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Plus, Filter } from 'lucide-react';
 import { useActivitiesQuery, useActivityMutations } from '@/features/activities/hooks/useActivitiesQuery';
-import { useCarbon } from '@/features/carbon/hooks/useCarbon';
+import { useCarbon, useGreenWindows } from '@/features/carbon/hooks/useCarbon';
 import { useZone } from '@/app/ZoneProvider';
 import { useSimulationConfig } from '@/features/optimization/hooks/useOptimization';
 import { LoadingSkeleton } from '@/components/ui/LoadingSkeleton';
@@ -19,6 +19,7 @@ import {
   type UploadStatus,
 } from '@/services/uploadService';
 import type { GreenWindow, Task } from '@/types/domain';
+import { getGreenWindowLabelById } from '@/features/windows/utils/windowLabels';
 
 type TabStatus = 'all' | 'pending' | 'scheduled' | 'running' | 'completed';
 
@@ -74,6 +75,7 @@ export function ActivitiesPage() {
     ? navigationState.targetZone
     : null;
   const { data: carbon } = useCarbon(selectedZone);
+  const { data: currentWindows } = useGreenWindows(selectedWindowZone ?? selectedZone, 180);
   const { data: simulationConfig } = useSimulationConfig();
   const [activeTab, setActiveTab] = useState<TabStatus>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -488,18 +490,22 @@ export function ActivitiesPage() {
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-teal-300">Selected Green Window</p>
-              <p className="mt-1 text-sm font-semibold text-white">{selectedWindow.id}</p>
+              <p className="mt-1 text-sm font-semibold text-white">
+                {getGreenWindowLabelById(currentWindows ?? [], selectedWindow.id) ?? 'Green Window'}
+              </p>
               <p className="mt-1 text-xs text-slate-300">
                 {selectedWindowZone} · {new Date(selectedWindow.startTime).toLocaleString()} · {selectedWindow.duration} minutes
               </p>
             </div>
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="xs"
+              className="self-start md:self-auto"
               onClick={clearSelectedWindow}
-              className="ds-control self-start text-xs font-semibold text-slate-300 hover:text-white md:self-auto"
             >
               Clear selected window
-            </button>
+            </Button>
           </div>
         </GlassCard>
       )}
@@ -581,6 +587,7 @@ export function ActivitiesPage() {
               <ActivityCard
                 key={task.id}
                 activity={task}
+                assignedWindowLabel={getGreenWindowLabelById(currentWindows ?? [], task.assignedWindowId)}
                 carbonIntensity={carbon?.current.carbonIntensity}
                 carbonIsSimulated={carbon?.isSimulated}
                 baselineIntensity={simulationConfig?.baselineIntensity}

@@ -29,17 +29,17 @@ const ACTIVITY_TYPES: { value: ActivityType; label: string }[] = [
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
-    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-[0.08em] mb-1.5">
+    <label className="label-text block mb-1.5">
       {children}
     </label>
   );
 }
 
 const inputClass =
-  'w-full h-10 px-3 rounded-xl bg-slate-950/80 border border-white/[0.07] text-[13px] text-white font-medium focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500/40 transition-all placeholder:text-slate-700';
+  'ds-input placeholder:text-slate-700';
 
 const numInputClass =
-  'w-full h-10 px-3 rounded-xl bg-slate-950/80 border border-white/[0.07] text-[13px] text-white font-mono font-medium focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500/40 transition-all';
+  'ds-input font-mono';
 
 export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
   const { selectedZone } = useZone();
@@ -131,13 +131,15 @@ export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
             <h3 id="modal-title" className="text-[17px] font-bold text-white">Register Activity</h3>
             <p className="text-xs text-slate-500 mt-0.5">Schedule a new carbon-aware digital workload</p>
           </div>
-          <button
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
             onClick={onClose}
-            className="h-8 w-8 rounded-xl text-slate-500 hover:text-white hover:bg-white/[0.06] transition-all flex items-center justify-center border border-transparent hover:border-white/[0.08]"
             aria-label="Close modal"
           >
-            <X className="w-4 h-4" />
-          </button>
+            <X />
+          </Button>
         </div>
 
         {/* Form */}

@@ -81,8 +81,7 @@ export function LoginPage() {
     }
   };
 
-  const inputClassName =
-    'h-12 w-full rounded-xl border border-white/[0.08] bg-black/20 px-4 text-white outline-none transition-colors focus:border-green-500/50 focus:bg-black/40';
+  const inputClassName = 'ds-input bg-black/20';
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#070a13] px-6">
@@ -104,18 +103,15 @@ export function LoginPage() {
           </p>
         </div>
 
-        <div className="mb-6 flex rounded-xl border border-white/[0.08] bg-black/20 p-1">
+        <div className="segment-control mb-6 w-full">
           <button
             type="button"
             onClick={() => {
               setMode('login');
               setError('');
             }}
-            className={`flex-1 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors ${
-              mode === 'login'
-                ? 'bg-green-500 text-white shadow-md'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
+            className={`segment-tab flex-1 ${mode === 'login' ? 'active' : ''}`}
+            aria-pressed={mode === 'login'}
           >
             Login
           </button>
@@ -126,11 +122,8 @@ export function LoginPage() {
               setMode('register');
               setError('');
             }}
-            className={`flex-1 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors ${
-              mode === 'register'
-                ? 'bg-green-500 text-white shadow-md'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
+            className={`segment-tab flex-1 ${mode === 'register' ? 'active' : ''}`}
+            aria-pressed={mode === 'register'}
           >
             Register
           </button>

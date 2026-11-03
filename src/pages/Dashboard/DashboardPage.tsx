@@ -31,6 +31,7 @@ import { GreenWindowsList } from '@/features/carbon/components/GreenWindowsList'
 import { useActivitiesQuery } from '@/features/activities/hooks/useActivitiesQuery';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { MetricCard } from '@/components/ui/MetricCard';
+import { Button } from '@/components/ui/Button';
 import { LoadingSkeleton } from '@/components/ui/LoadingSkeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { StatusBadge } from '@/components/ui/StatusBadge';
@@ -71,7 +72,7 @@ export function DashboardPage() {
 
   if (carbonLoading || windowsLoading) {
     return (
-      <div className="page-shell page-stack p-6 space-y-6">
+      <div className="page-shell page-stack">
         <LoadingSkeleton count={1} height="h-24" />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <LoadingSkeleton count={4} height="h-32" />
@@ -83,7 +84,7 @@ export function DashboardPage() {
 
   if (carbonError || !carbon) {
     return (
-      <div className="page-shell p-6">
+      <div className="page-shell">
         <ErrorState onRetry={() => refetchCarbon()} />
       </div>
     );
@@ -144,7 +145,7 @@ export function DashboardPage() {
   });
 
   return (
-    <div className="page-shell page-stack" style={{ maxWidth: '1440px' }}>
+    <div className="page-shell page-stack">
       {/* ------------------------------------------------------------------ */}
       {/* Header                                                             */}
       {/* ------------------------------------------------------------------ */}
@@ -332,13 +333,15 @@ export function DashboardPage() {
               </div>
             </div>
 
-            <button
+            <Button
+              type="button"
+              size="sm"
+              className="flex-shrink-0 bg-emerald-500 from-emerald-500 to-emerald-500 text-slate-950 hover:bg-emerald-400 hover:brightness-100"
               onClick={() => navigate('/activities')}
-              className="px-5 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition-all shadow-lg shadow-emerald-500/25 flex items-center gap-2 flex-shrink-0 cursor-pointer"
+              iconLeft={<Plus />}
             >
-              <Plus size={16} />
-              <span>New Activity</span>
-            </button>
+              New Activity
+            </Button>
           </div>
 
           {/* Green Time Windows */}

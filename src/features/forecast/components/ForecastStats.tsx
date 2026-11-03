@@ -24,7 +24,7 @@ export function ForecastStats({ forecast }: Props) {
     : '19:00';
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+    <div className="card-grid card-grid-sm-3">
       <GlassCard className="border-green-500/20 bg-green-500/[0.02]">
         <div className="flex items-center justify-between">
           <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Lowest Carbon Window</span>

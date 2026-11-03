@@ -230,14 +230,14 @@ def test_simulated_data_with_insufficient_history_uses_simulation_fallback(mock_
 
 
 def test_normal_trained_model_validation():
-    """Preserve the trained model's 24-hour history requirement for normal trained-model predictions.
-    Validation must reject < 24 points, missing history, non-hourly intervals, and invalid intensities."""
+    """Preserve the trained model's history requirement for normal trained-model predictions.
+    Validation must reject short series, missing history, non-hourly intervals, and invalid intensities."""
     predictor = ForecastPredictor()
     predictor._model = MagicMock()  # Mark as trained
 
     base_time = datetime(2026, 10, 26, 12, 0, tzinfo=timezone.utc)
 
-    # 1. Fewer than 24 points (12 points) must raise ValueError
+    # 1. Fewer than 25 points must raise ValueError (lag_24h needs 25 hourly rows)
     history_12 = [
         {
             "datetime": (base_time - timedelta(hours=i)).isoformat(),
@@ -245,8 +245,18 @@ def test_normal_trained_model_validation():
         }
         for i in range(12, 0, -1)
     ]
-    with pytest.raises(ValueError, match="at least 24 hourly history points"):
+    with pytest.raises(ValueError, match="at least 25 hourly history points"):
         predictor.predict("US-CA", horizon_hours=24, history=history_12)
+
+    history_24 = [
+        {
+            "datetime": (base_time - timedelta(hours=i)).isoformat(),
+            "carbonIntensity": 500 + i,
+        }
+        for i in range(24, 0, -1)
+    ]
+    with pytest.raises(ValueError, match="at least 25 hourly history points"):
+        predictor.predict("US-CA", horizon_hours=24, history=history_24)
 
     # 2. None / empty history must raise ValueError when trained
     with pytest.raises(ValueError, match="requires observed history data"):
@@ -260,18 +270,18 @@ def test_normal_trained_model_validation():
             "datetime": (base_time - timedelta(hours=i)).isoformat(),
             "carbonIntensity": -50 if i == 1 else 500,
         }
-        for i in range(24, 0, -1)
+        for i in range(25, 0, -1)
     ]
     with pytest.raises(ValueError, match="invalid intensity"):
         predictor.predict("US-CA", horizon_hours=24, history=history_invalid_intensity)
 
-    # 4. 24 points with non-hourly timestamp gap
+    # 4. 25 points with non-hourly timestamp gap
     history_gap = [
         {
             "datetime": (base_time - timedelta(hours=i * 2)).isoformat(),
             "carbonIntensity": 500,
         }
-        for i in range(24, 0, -1)
+        for i in range(25, 0, -1)
     ]
     with pytest.raises(ValueError, match="hourly and strictly increasing"):
         predictor.predict("US-CA", horizon_hours=24, history=history_gap)
@@ -280,22 +290,22 @@ def test_normal_trained_model_validation():
 @patch("routes.forecast.get_predictor")
 @patch("routes.forecast.get_carbon_data")
 def test_successful_forecast_response_with_trained_model_and_24h_history(mock_carbon, mock_pred, client):
-    """When genuine live data provides >= 24 valid history points, the endpoint
-    successfully uses the trained ML predictor and returns forecastSource='ml_model'."""
+    """When genuine live data provides >= 25 valid history points and no provider
+    forecast, the endpoint uses the trained ML predictor and returns forecastSource='ml_model'."""
     token = register_user(client, email="trained_success@example.com")
     base_time = datetime(2026, 10, 26, 12, 0, tzinfo=timezone.utc)
 
-    history_24 = [
+    history_25 = [
         {
             "datetime": (base_time - timedelta(hours=i)).isoformat(),
             "carbonIntensity": 450 + i,
         }
-        for i in range(24, 0, -1)
+        for i in range(25, 0, -1)
     ]
     mock_carbon.return_value = {
         "zone": "US-CA",
         "current": {"datetime": base_time.isoformat(), "carbonIntensity": 450},
-        "history": history_24,
+        "history": history_25,
         "forecast": [],
         "isSimulated": False,
         "source": "electricity_maps_api",
@@ -336,13 +346,16 @@ def test_successful_forecast_response_with_trained_model_and_24h_history(mock_ca
     trained_pred.predict.assert_called_once_with(
         zone_id="US-CA",
         horizon_hours=24,
-        history=history_24,
+        history=history_25,
     )
 
 
-def test_end_to_end_successful_forecast_with_real_predictor_and_simulated_fallback(client):
+@patch("services.carbon_service._fetch_live_data", return_value=None)
+def test_end_to_end_successful_forecast_with_real_predictor_and_simulated_fallback(
+    _mock_live, client
+):
     """End-to-end test using the real loaded ForecastPredictor and live service fallback:
-    Electricity Maps 401 fallback triggers simulation data, and the Forecast route
+    Electricity Maps unavailability triggers simulation data, and the Forecast route
     successfully returns 200 without raising history validation errors."""
     token = register_user(client, email="e2e_forecast@example.com")
 
@@ -364,7 +377,8 @@ def test_end_to_end_successful_forecast_with_real_predictor_and_simulated_fallba
     assert data["model"]["is_trained"] is True
 
 
-def test_simulated_forecast_36_hours_live_fallback(client):
+@patch("services.carbon_service._fetch_live_data", return_value=None)
+def test_simulated_forecast_36_hours_live_fallback(_mock_live, client):
     """GET /api/forecast?zone=IN-SO&hours=36 must return 200 with 36 hourly forecast points
     when Electricity Maps fails and falls back to simulation."""
     token = register_user(client, email="hours36_live@example.com")
@@ -425,27 +439,268 @@ def test_invalid_or_unsupported_horizons_rejected(invalid_hours, client):
     assert "horizon" in body["error"].lower()
 
 
-@patch("routes.forecast.get_carbon_data")
-def test_live_data_does_not_fabricate_missing_points(mock_carbon, client):
-    """When non-simulated live data has fewer points than requested horizon,
-    it must return an error rather than fabricating fake live points."""
-    token = register_user(client, email="live_no_fake@example.com")
-    now = datetime.now(timezone.utc)
-    mock_carbon.return_value = {
-        "zone": "IN-SO",
-        "current": {"datetime": now.isoformat(), "carbonIntensity": 600},
-        "history": [{"datetime": (now - timedelta(hours=i)).isoformat(), "carbonIntensity": 600} for i in range(12)],
-        "forecast": [{"datetime": (now + timedelta(hours=i)).isoformat(), "carbonIntensity": 600} for i in range(24)],
+def _make_live_carbon(
+    zone="IN-SO",
+    history_hours=12,
+    forecast_hours=25,
+    start=None,
+):
+    now = start or datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    history = [
+        {
+            "datetime": (now - timedelta(hours=i)).isoformat(),
+            "carbonIntensity": 500 + i,
+        }
+        for i in range(history_hours, 0, -1)
+    ]
+    forecast = [
+        {
+            "datetime": (now + timedelta(hours=i)).isoformat(),
+            "carbonIntensity": 600 + i,
+        }
+        for i in range(forecast_hours)
+    ]
+    return {
+        "zone": zone,
+        "current": {"datetime": now.isoformat(), "carbonIntensity": 550},
+        "history": history,
+        "forecast": forecast,
         "isSimulated": False,
         "source": "electricity_maps_api",
+        "historySource": "simulation_scaled_from_api",
         "forecastSource": "electricity_maps_api",
         "observedAt": now.isoformat(),
     }
+
+
+def _trained_predictor_that_extends():
+    trained_pred = MagicMock()
+    trained_pred.is_trained.return_value = True
+    trained_pred._model_name = "RandomForest"
+    trained_pred._trained_at = "2026-08-24T17:40:44+00:00"
+    trained_pred._validate_history = ForecastPredictor._validate_history
+    trained_pred._validate_forecast = ForecastPredictor._validate_forecast
+
+    def fake_predict(zone_id, horizon_hours, history):
+        ForecastPredictor._validate_history(history)
+        last = datetime.fromisoformat(str(history[-1]["datetime"]).replace("Z", "+00:00"))
+        return [
+            {
+                "datetime": (last + timedelta(hours=h)).isoformat(),
+                "carbonIntensity": 900 + h,
+                "isML": True,
+            }
+            for h in range(1, horizon_hours + 1)
+        ]
+
+    trained_pred.predict.side_effect = fake_predict
+    return trained_pred
+
+
+@patch("routes.forecast.get_predictor")
+@patch("routes.forecast.get_carbon_data")
+def test_complete_36_hour_forecast_from_provider(mock_carbon, mock_pred, client):
+    """When the provider already has 36 valid future hours, return them all as live points."""
+    token = register_user(client, email="live_36_full@example.com")
+    mock_carbon.return_value = _make_live_carbon(forecast_hours=36)
+    mock_pred.return_value = _mock_untrained_predictor()
+    mock_pred.return_value._validate_forecast = ForecastPredictor._validate_forecast
+
+    resp = client.get("/api/forecast?zone=IN-SO&hours=36", headers=auth(token))
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    data = resp.get_json()["data"]
+    assert len(data["forecast"]) == 36
+    assert data["forecastSource"] == "electricity_maps_api"
+    assert data["isSimulated"] is False
+    prev = None
+    intensities = []
+    for point in data["forecast"]:
+        assert point["isML"] is False
+        intensities.append(point["carbonIntensity"])
+        cur = datetime.fromisoformat(point["datetime"].replace("Z", "+00:00"))
+        if prev is not None:
+            assert abs((cur - prev).total_seconds() - 3600) <= 60
+        prev = cur
+    assert len(set(intensities)) == 36
+
+
+@patch("routes.forecast.get_predictor")
+@patch("routes.forecast.get_carbon_data")
+def test_25_provider_points_extended_by_trained_model(mock_carbon, mock_pred, client):
+    """25 genuine Electricity Maps hours plus 11 model-generated hours must yield 36 points."""
+    token = register_user(client, email="live_25_extend@example.com")
+    carbon = _make_live_carbon(history_hours=12, forecast_hours=25)
+    mock_carbon.return_value = carbon
+    mock_pred.return_value = _trained_predictor_that_extends()
+
+    resp = client.get("/api/forecast?zone=IN-SO&hours=36", headers=auth(token))
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    data = resp.get_json()["data"]
+    forecast = data["forecast"]
+    assert len(forecast) == 36
+    assert data["forecastSource"] == "electricity_maps_api+ml_model"
+    assert data["isSimulated"] is False
+
+    provider_part = forecast[:25]
+    model_part = forecast[25:]
+    for point in provider_part:
+        assert point["isML"] is False
+        assert point["carbonIntensity"] < 900
+    for point in model_part:
+        assert point["isML"] is True
+        assert point["carbonIntensity"] >= 901
+
+    last_provider = carbon["forecast"][-1]["carbonIntensity"]
+    assert model_part[0]["carbonIntensity"] != last_provider
+
+    prev = None
+    for point in forecast:
+        cur = datetime.fromisoformat(point["datetime"].replace("Z", "+00:00"))
+        if prev is not None:
+            assert abs((cur - prev).total_seconds() - 3600) <= 60
+        prev = cur
+
+    mock_pred.return_value.predict.assert_called_once()
+    call_kwargs = mock_pred.return_value.predict.call_args.kwargs
+    assert call_kwargs["horizon_hours"] == 11
+    assert len(call_kwargs["history"]) == 25
+
+
+@patch("routes.forecast.get_predictor")
+@patch("routes.forecast.get_carbon_data")
+def test_historical_provider_point_is_not_returned_as_forecast(
+    mock_carbon, mock_pred, client
+):
+    """Provider observations before the live reading must not be relabeled as future data."""
+    token = register_user(client, email="live_historical_point@example.com")
+    carbon = _make_live_carbon(forecast_hours=25)
+    observed = datetime.fromisoformat(carbon["observedAt"])
+    carbon["forecast"][0]["datetime"] = (observed - timedelta(hours=1)).isoformat()
+    mock_carbon.return_value = carbon
+    mock_pred.return_value = _trained_predictor_that_extends()
+
+    resp = client.get("/api/forecast?zone=IN-SO&hours=36", headers=auth(token))
+
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    forecast = resp.get_json()["data"]["forecast"]
+    assert len(forecast) == 36
+    assert all(
+        datetime.fromisoformat(point["datetime"].replace("Z", "+00:00")) >= observed
+        for point in forecast
+    )
+    assert sum(point["isML"] for point in forecast) == 12
+
+
+@patch("routes.forecast.get_predictor")
+@patch("routes.forecast.get_carbon_data")
+def test_untrained_model_does_not_fabricate_missing_live_points(mock_carbon, mock_pred, client):
+    """Without a trained model, a short live provider forecast must error instead of padding."""
+    token = register_user(client, email="live_no_fake@example.com")
+    mock_carbon.return_value = _make_live_carbon(forecast_hours=25)
+    mock_pred.return_value = _mock_untrained_predictor()
+    mock_pred.return_value._validate_forecast = ForecastPredictor._validate_forecast
 
     resp = client.get("/api/forecast?zone=IN-SO&hours=36", headers=auth(token))
     assert resp.status_code == 503
     body = resp.get_json()
     assert body["success"] is False
-    assert "Only 24 forecast points are available; 36 requested" in body["error"]
+    assert "Only 25 forecast points are available; 36 requested" in body["error"]
 
+
+@patch("routes.forecast.get_predictor")
+@patch("routes.forecast.get_carbon_data")
+def test_insufficient_history_for_model_extension(mock_carbon, mock_pred, client):
+    """A trained model must not be used when there is no 24-hour consecutive input window."""
+    token = register_user(client, email="live_short_hist@example.com")
+    now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    mock_carbon.return_value = {
+        "zone": "IN-SO",
+        "current": {"datetime": now.isoformat(), "carbonIntensity": 550},
+        "history": [
+            {"datetime": (now - timedelta(hours=i)).isoformat(), "carbonIntensity": 500}
+            for i in range(3, 0, -1)
+        ],
+        "forecast": [
+            {"datetime": (now + timedelta(hours=i)).isoformat(), "carbonIntensity": 600 + i}
+            for i in range(8)
+        ],
+        "isSimulated": False,
+        "source": "electricity_maps_api",
+        "forecastSource": "electricity_maps_api",
+        "observedAt": now.isoformat(),
+    }
+    trained = _trained_predictor_that_extends()
+    mock_pred.return_value = trained
+
+    resp = client.get("/api/forecast?zone=IN-SO&hours=36", headers=auth(token))
+    assert resp.status_code == 503
+    body = resp.get_json()
+    assert body["success"] is False
+    assert "insufficient consecutive hourly history" in body["error"]
+    trained.predict.assert_not_called()
+
+
+@patch("routes.forecast.get_predictor")
+@patch("routes.forecast.get_carbon_data")
+def test_model_extension_failure_is_distinct_from_provider_gap(mock_carbon, mock_pred, client):
+    token = register_user(client, email="ml_fail@example.com")
+    mock_carbon.return_value = _make_live_carbon(forecast_hours=25)
+    trained = _trained_predictor_that_extends()
+
+    def boom(**kwargs):
+        raise ValueError("Forecast feature row 1 contains missing values")
+
+    trained.predict.side_effect = boom
+    mock_pred.return_value = trained
+
+    resp = client.get("/api/forecast?zone=IN-SO&hours=36", headers=auth(token))
+    assert resp.status_code == 503
+    body = resp.get_json()
+    assert "Trained model failed to extend the forecast" in body["error"]
+    assert "missing values" in body["error"]
+
+
+def test_ml_forecast_timestamps_continue_from_last_history_hour():
+    """Recursive ML steps must be last_history+1h, not wall-clock now."""
+    import pandas as pd
+    from forecast.feature_engineering import get_feature_names
+
+    predictor = ForecastPredictor.__new__(ForecastPredictor)
+    predictor._model = MagicMock()
+    predictor._model.predict.return_value = [412.0]
+    predictor._feature_names = get_feature_names()
+    predictor._model_name = "RandomForest"
+
+    feature_row = pd.DataFrame(
+        [[0.0] * len(predictor._feature_names)],
+        columns=predictor._feature_names,
+    )
+
+    def fake_features(**kwargs):
+        return feature_row
+
+    from forecast import predict as predict_module
+    original = predict_module.build_inference_features
+    predict_module.build_inference_features = fake_features
+    try:
+        base = datetime(2026, 11, 2, 10, 0, tzinfo=timezone.utc)
+        history = [
+            {
+                "datetime": (base + timedelta(hours=i)).isoformat(),
+                "carbonIntensity": 400 + i,
+            }
+            for i in range(25)
+        ]
+        out = predictor._ml_forecast(history, "IN-SO", 3)
+    finally:
+        predict_module.build_inference_features = original
+
+    assert len(out) == 3
+    last_hist = base + timedelta(hours=24)
+    for index, point in enumerate(out, start=1):
+        expected = last_hist + timedelta(hours=index)
+        actual = datetime.fromisoformat(point["datetime"].replace("Z", "+00:00"))
+        assert actual == expected
+        assert point["isML"] is True
+        assert point["carbonIntensity"] == 412
 

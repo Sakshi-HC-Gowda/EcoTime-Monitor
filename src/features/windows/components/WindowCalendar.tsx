@@ -1,5 +1,6 @@
 import type { GreenWindow } from '@/types/domain';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { getGreenWindowLabel } from '@/features/windows/utils/windowLabels';
 
 interface Props {
   windows: GreenWindow[];
@@ -11,13 +12,14 @@ export function WindowCalendar({ windows }: Props) {
   return (
     <GlassCard className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-base font-bold text-white">24-Hour Calendar View</h3>
-        <span className="text-xs text-slate-400">Green Window Schedule Grid</span>
+        <h3 className="card-title">24-Hour Calendar View</h3>
+        <span className="caption">Green Window Schedule Grid</span>
       </div>
 
       <div className="grid grid-cols-6 sm:grid-cols-12 gap-2">
         {hours.map((h) => {
-          const matchedWindow = windows.find((w) => new Date(w.startTime).getHours() === h);
+          const matchedWindowIndex = windows.findIndex((w) => new Date(w.startTime).getHours() === h);
+          const matchedWindow = matchedWindowIndex >= 0 ? windows[matchedWindowIndex] : undefined;
 
           return (
             <div
@@ -30,7 +32,12 @@ export function WindowCalendar({ windows }: Props) {
             >
               <div className="text-[10px] font-mono">{h.toString().padStart(2, '0')}:00</div>
               <div className="text-xs font-bold mt-1">
-                {matchedWindow ? `${Math.round(matchedWindow.avgCarbonIntensity)}g` : '-'}
+                {matchedWindow ? (
+                  <>
+                    <span className="block">{getGreenWindowLabel(matchedWindowIndex)}</span>
+                    <span>{Math.round(matchedWindow.avgCarbonIntensity)}g</span>
+                  </>
+                ) : '-'}
               </div>
             </div>
           );

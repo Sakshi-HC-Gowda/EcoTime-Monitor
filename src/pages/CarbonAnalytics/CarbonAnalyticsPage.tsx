@@ -19,7 +19,7 @@ export function CarbonAnalyticsPage() {
 
   if (isLoading) {
     return (
-      <div className="page-shell page-stack max-w-[1650px] mx-auto">
+      <div className="page-shell page-stack">
         <LoadingSkeleton count={1} height="h-14" variant="row" />
         <div className="card-grid card-grid-sm-2 card-grid-lg-4">
           <LoadingSkeleton count={4} height="h-28" />
@@ -41,7 +41,7 @@ export function CarbonAnalyticsPage() {
   const isOptimal = current < 180;
 
   return (
-    <div className="page-shell page-stack max-w-[1650px] mx-auto">
+    <div className="page-shell page-stack">
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="page-header">
@@ -128,9 +128,9 @@ export function CarbonAnalyticsPage() {
           <div>
             <div className="flex items-center gap-2 mb-1">
               <Activity className="w-4 h-4 text-blue-400" />
-              <h3 className="text-[15px] font-bold text-white">Historical & Forecast Carbon Trend</h3>
+              <h3 className="card-heading-title">Historical & Forecast Carbon Trend</h3>
             </div>
-            <p className="text-xs text-slate-500">Past 12 hours vs next 24 hours carbon intensity curve</p>
+            <p className="card-description">Past 12 hours vs next 24 hours carbon intensity curve</p>
           </div>
           <div className="flex items-center gap-4 text-[11px] font-bold flex-shrink-0">
             <span className="flex items-center gap-1.5 text-blue-400">
@@ -150,18 +150,18 @@ export function CarbonAnalyticsPage() {
         <GlassCard>
           <div className="flex items-center gap-2 mb-1">
             <Zap className="w-4 h-4 text-amber-400" />
-            <h3 className="text-[15px] font-bold text-white">Generation Energy Mix</h3>
+            <h3 className="card-heading-title">Generation Energy Mix</h3>
           </div>
-          <p className="text-xs text-slate-500 mb-5">Breakdown of primary power generation sources</p>
+          <p className="card-description mb-5">Breakdown of primary power generation sources</p>
           <GridMixChart />
         </GlassCard>
 
         <GlassCard>
           <div className="flex items-center gap-2 mb-1">
             <Leaf className="w-4 h-4 text-green-400" />
-            <h3 className="text-[15px] font-bold text-white">Regional Benchmarking</h3>
+            <h3 className="card-heading-title">Regional Benchmarking</h3>
           </div>
-          <p className="text-xs text-slate-500 mb-5">Carbon intensity comparison across grid zones</p>
+          <p className="card-description mb-5">Carbon intensity comparison across grid zones</p>
           <RegionComparison />
         </GlassCard>
       </div>

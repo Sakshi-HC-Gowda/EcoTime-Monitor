@@ -16,7 +16,7 @@ export function ForecastPage() {
 
   if (isLoading) {
     return (
-      <div className="page-shell page-stack max-w-[1650px] mx-auto">
+      <div className="page-shell page-stack">
         <LoadingSkeleton count={3} height="h-40" />
       </div>
     );
@@ -31,7 +31,7 @@ export function ForecastPage() {
   }
 
   return (
-    <div className="page-shell page-stack max-w-[1650px] mx-auto">
+    <div className="page-shell page-stack">
       <div>
         <h1 className="page-header-title heading-row">
           ML Carbon Forecast
@@ -58,10 +58,10 @@ export function ForecastPage() {
       <GlassCard>
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+            <h3 className="card-title flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-purple-400" /> 36-Hour Carbon Intensity Prediction
             </h3>
-            <p className="text-xs text-slate-400">ML predicted carbon curve with confidence bands</p>
+            <p className="card-description">ML predicted carbon curve with confidence bands</p>
           </div>
         </div>
 

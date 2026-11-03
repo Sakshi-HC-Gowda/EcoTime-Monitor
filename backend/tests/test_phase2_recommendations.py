@@ -721,7 +721,7 @@ def test_trained_forecast_failure_does_not_fall_back_to_simulation(monkeypatch):
             "datetime": (history_start + timedelta(hours=hour)).isoformat(),
             "carbonIntensity": 200,
         }
-        for hour in range(24)
+        for hour in range(25)
     ]
 
     def fail_model(*_args, **_kwargs):

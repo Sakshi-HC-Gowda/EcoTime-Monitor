@@ -16,17 +16,26 @@ export function useActivitiesQuery(page: number = 1, pageSize: number = 50, stat
 
 export function useActivityMutations() {
   const queryClient = useQueryClient();
+  const invalidateOptimizationActivities = () => {
+    void queryClient.invalidateQueries({ queryKey: ['optimization-activities'] });
+  };
 
   const createMutation = useMutation({
     mutationFn: ({ task, idempotencyKey }: { task: CreateTaskRequest; idempotencyKey: string }) =>
       activitiesService.createTask(task, idempotencyKey),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['activities'] }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['activities'] });
+      invalidateOptimizationActivities();
+    },
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, update }: { id: string; update: UpdateTaskRequest }) =>
       activitiesService.updateTask(id, update),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['activities'] }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['activities'] });
+      invalidateOptimizationActivities();
+    },
   });
 
   const deleteMutation = useMutation({
@@ -35,7 +44,10 @@ export function useActivityMutations() {
       if (!response.success) throw new Error(response.error || 'Could not delete activity');
       return response;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['activities'] }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['activities'] });
+      invalidateOptimizationActivities();
+    },
   });
 
   const scheduleMutation = useMutation({
@@ -47,6 +59,7 @@ export function useActivityMutations() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['activities'] });
       void queryClient.invalidateQueries({ queryKey: ['windows'] });
+      invalidateOptimizationActivities();
     },
   });
 
@@ -54,9 +67,15 @@ export function useActivityMutations() {
     mutationFn: async (id: string) => {
       const response = await activitiesService.runTask(id);
       if (!response.success || !response.data) throw new Error(response.error || 'Could not start the simulated run');
+      if (response.data.activity.status !== 'running') {
+        throw new Error('The server did not confirm that the activity started running');
+      }
       return response.data;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['activities'] }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['activities'] });
+      invalidateOptimizationActivities();
+    },
   });
 
   return { createMutation, updateMutation, deleteMutation, scheduleMutation, runMutation };

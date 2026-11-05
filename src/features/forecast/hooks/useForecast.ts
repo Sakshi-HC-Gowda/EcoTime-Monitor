@@ -33,6 +33,7 @@ export function useTrainModel() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['forecast-info'] });
       queryClient.invalidateQueries({ queryKey: ['forecast'] });
+      queryClient.invalidateQueries({ queryKey: ['optimization-schedule'] });
     },
   });
 }

@@ -145,6 +145,12 @@ export interface GreenWindow {
   scheduledActivityCount?: number;
   scheduledDuration?: number;
   remainingCapacity?: number;
+  availableCapacity?: number;
+  availableIntervals?: Array<{
+    startTime: string;
+    endTime: string;
+    duration: number;
+  }>;
 }
 
 export interface ForecastPoint extends CarbonDataPoint {
@@ -202,7 +208,7 @@ export interface WindowScore {
 
 export interface OptimizationResult {
   method: 'greedy' | 'knapsack';
-  windowId: string;
+  windowId: string | null;
   selectedTasks: Task[];
   totalSavedCo2: number; // estimated gCO2e; may be negative
   carbonUnit?: 'gCO2e';
@@ -234,9 +240,10 @@ export interface SchedulingRecommendation {
 
 export interface SchedulingCarbonSource {
   zone: string;
-  source: string;
+  source?: string | null;
   isSimulated: boolean;
-  observedAt: string;
+  observedAt?: string | null;
+  currentIntensity?: number | null;
   forecastSource: string;
   classification: string;
   relativeThreshold: number;
@@ -258,6 +265,31 @@ export interface SchedulingResponse {
   recommendations: SchedulingRecommendation[];
   windows: GreenWindow[];
   carbonData: SchedulingCarbonSource;
+}
+
+export interface OptimizationInputSnapshot {
+  zone: string;
+  method: SchedulingRequest['method'];
+  activities: Array<{
+    id: string;
+    updatedAt: string | null;
+    status: TaskStatus;
+    assignedWindowId: string | null;
+    scheduledStartTime: string | null;
+    scheduledEndTime: string | null;
+    earliestStart: string | null;
+    deadline: string | null;
+    duration: number;
+    powerDraw: number;
+    type: TaskFlexibility;
+    activityType: ActivityType;
+    priorityScore: number | null;
+  }>;
+}
+
+export interface PersistedOptimization {
+  response: SchedulingResponse;
+  inputSnapshot: OptimizationInputSnapshot;
 }
 
 // ============================================================================

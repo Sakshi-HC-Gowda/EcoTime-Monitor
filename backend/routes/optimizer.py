@@ -10,6 +10,7 @@ GET  /api/config/simulation  — Retrieve current simulation configuration
 from __future__ import annotations
 
 import logging
+import json
 import math
 import os
 from datetime import datetime, timedelta, timezone
@@ -35,6 +36,40 @@ optimizer_bp = Blueprint("optimizer", __name__)
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _optimization_input_snapshot(activities: list[Activity], zone: str, method: str) -> dict:
+    return {
+        "zone": zone,
+        "method": method,
+        "activities": [
+            {
+                "id": activity.id,
+                "updatedAt": activity.updated_at.isoformat() if activity.updated_at else None,
+                "status": activity.status,
+                "assignedWindowId": activity.assigned_window_id,
+                "scheduledStartTime": (
+                    activity.scheduled_start_time.isoformat()
+                    if activity.scheduled_start_time else None
+                ),
+                "scheduledEndTime": (
+                    activity.expected_end_time.isoformat()
+                    if activity.expected_end_time else None
+                ),
+                "earliestStart": (
+                    activity.earliest_start.isoformat()
+                    if activity.earliest_start else None
+                ),
+                "deadline": activity.deadline.isoformat() if activity.deadline else None,
+                "duration": activity.duration,
+                "powerDraw": activity.power_draw,
+                "type": activity.type,
+                "activityType": activity.activity_type,
+                "priorityScore": activity.priority_score,
+            }
+            for activity in sorted(activities, key=lambda item: item.id)
+        ],
+    }
 
 
 def _get_simulation_config() -> SimulationConfig:
@@ -191,6 +226,36 @@ def schedule():
 
     stored_by_id = {task.id: task.to_dict() for task in owned_tasks}
     tasks = [stored_by_id[str(request_task["id"])] for request_task in requested_tasks]
+    organization_activities = Activity.query.filter_by(
+        organization_id=request.user.organization_id
+    ).all()
+    input_snapshot = _optimization_input_snapshot(organization_activities, zone, method)
+    reserved_intervals_by_window: dict[str, list[tuple[datetime, datetime]]] = {}
+    unavailable_window_ids: set[str] = set()
+    reservations = Activity.query.filter(
+        Activity.organization_id == request.user.organization_id,
+        Activity.status.in_(["scheduled", "running"]),
+        Activity.assigned_window_id.isnot(None),
+    ).all()
+    for activity in reservations:
+        window_id = str(activity.assigned_window_id)
+        start = activity.scheduled_start_time or activity.execution_start_time
+        if start is None:
+            unavailable_window_ids.add(window_id)
+            continue
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=timezone.utc)
+        else:
+            start = start.astimezone(timezone.utc)
+        end = activity.expected_end_time or start + timedelta(minutes=activity.duration)
+        if end.tzinfo is None:
+            end = end.replace(tzinfo=timezone.utc)
+        else:
+            end = end.astimezone(timezone.utc)
+        if end <= start:
+            unavailable_window_ids.add(window_id)
+            continue
+        reserved_intervals_by_window.setdefault(window_id, []).append((start, end))
 
     logger.info(
         "POST /api/recommendations method=%s tasks=%d zone=%s",
@@ -204,6 +269,9 @@ def schedule():
             method=method,
             baseline_intensity=baseline,
             zone_id=zone,
+            reserved_intervals_by_window=reserved_intervals_by_window,
+            unavailable_window_ids=unavailable_window_ids,
+            require_fresh_data=True,
         )
     except RecommendationDataUnavailable as exc:
         logger.warning("Scheduling recommendation data unavailable: %s", exc)
@@ -233,6 +301,22 @@ def schedule():
                 status=recommendation["status"],
                 organization_id=request.user.organization_id,
             )
+        snapshot_record = AnalyticsRecommendation(
+            organization_id=request.user.organization_id,
+            activity_id=None,
+            text="Optimization run",
+            reason=json.dumps(
+                {
+                    "response": sched_result,
+                    "inputSnapshot": input_snapshot,
+                },
+                allow_nan=False,
+                separators=(",", ":"),
+            ),
+            status="optimization_result",
+        )
+        db.session.add(snapshot_record)
+        db.session.commit()
     except Exception:
         db.session.rollback()
         logger.exception("Failed to persist scheduling recommendations")
@@ -599,6 +683,7 @@ def get_recommendations():
         AnalyticsRecommendation.query.filter_by(
             organization_id=request.user.organization_id
         )
+        .filter(AnalyticsRecommendation.status != "optimization_result")
         .order_by(AnalyticsRecommendation.created_at.desc())
         .limit(limit)
         .all()
@@ -610,4 +695,45 @@ def get_recommendations():
         "data": data,
         "count": len(data),
         "timestamp": _now_iso(),
+    }), 200
+
+
+@optimizer_bp.route("/optimization/latest", methods=["GET"])
+@require_auth
+def get_latest_optimization():
+    record = (
+        AnalyticsRecommendation.query.filter_by(
+            organization_id=request.user.organization_id,
+            status="optimization_result",
+        )
+        .order_by(AnalyticsRecommendation.created_at.desc(), AnalyticsRecommendation.id.desc())
+        .first()
+    )
+    if record is None:
+        return jsonify({
+            "success": True,
+            "data": None,
+            "timestamp": _now_iso(),
+        }), 200
+
+    try:
+        data = json.loads(record.reason)
+        if (
+            not isinstance(data, dict)
+            or not isinstance(data.get("response"), dict)
+            or not isinstance(data.get("inputSnapshot"), dict)
+        ):
+            raise ValueError("Stored optimization result has an invalid shape")
+    except (TypeError, ValueError, json.JSONDecodeError):
+        logger.exception("Could not decode latest optimization result for organization %s", request.user.organization_id)
+        return jsonify({
+            "success": False,
+            "error": "The latest optimization result could not be loaded.",
+            "timestamp": _now_iso(),
+        }), 500
+
+    return jsonify({
+        "success": True,
+        "data": data,
+        "timestamp": record.created_at.isoformat(),
     }), 200

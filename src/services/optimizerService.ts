@@ -1,7 +1,18 @@
 import { apiClient } from './apiClient';
-import type { SchedulingRequest, SchedulingResponse, EcoScore, SimulationConfig, ApiResponse } from '../types/domain';
+import type {
+  ApiResponse,
+  EcoScore,
+  PersistedOptimization,
+  SchedulingRequest,
+  SchedulingResponse,
+  SimulationConfig,
+} from '../types/domain';
 
 export const optimizerService = {
+  async getLatestOptimization(): Promise<ApiResponse<PersistedOptimization | null>> {
+    return apiClient.request<PersistedOptimization | null>('/optimization/latest');
+  },
+
   async runScheduler(request: SchedulingRequest): Promise<ApiResponse<SchedulingResponse>> {
     return apiClient.request<SchedulingResponse>('/recommendations', {
       method: 'POST',

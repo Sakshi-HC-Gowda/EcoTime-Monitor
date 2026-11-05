@@ -166,13 +166,13 @@ export function ActivitiesPage() {
     } catch (error) {
       setExecutionMessages((current) => ({ ...current, [activity.id]: error instanceof Error ? error.message : 'Could not start the run' }));
     } finally {
+      await refetch();
       executingIdsRef.current.delete(activity.id);
       setExecutingIds((current) => {
         const next = new Set(current);
         next.delete(activity.id);
         return next;
       });
-      void refetch();
     }
   };
 

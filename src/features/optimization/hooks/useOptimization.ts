@@ -87,6 +87,10 @@ export function useOptimizationSchedule(
         updatedAt: task.updatedAt ?? null,
         status: task.status,
         assignedWindowId: task.assignedWindowId ?? null,
+        scheduledStartTime: task.scheduledStartTime ?? null,
+        scheduledEndTime: task.scheduledEndTime ?? null,
+        earliestStart: task.earliestStart ?? null,
+        deadline: task.deadline ?? null,
         duration: task.duration,
         powerDraw: task.powerDraw,
         type: task.type,
@@ -172,6 +176,10 @@ function matchesInputSnapshot(
         && activity.updatedAt === currentActivity.updatedAt
         && activity.status === currentActivity.status
         && activity.assignedWindowId === currentActivity.assignedWindowId
+        && activity.scheduledStartTime === currentActivity.scheduledStartTime
+        && activity.scheduledEndTime === currentActivity.scheduledEndTime
+        && activity.earliestStart === currentActivity.earliestStart
+        && activity.deadline === currentActivity.deadline
         && activity.duration === currentActivity.duration
         && activity.powerDraw === currentActivity.powerDraw
         && activity.type === currentActivity.type

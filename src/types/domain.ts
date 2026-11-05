@@ -275,6 +275,10 @@ export interface OptimizationInputSnapshot {
     updatedAt: string | null;
     status: TaskStatus;
     assignedWindowId: string | null;
+    scheduledStartTime: string | null;
+    scheduledEndTime: string | null;
+    earliestStart: string | null;
+    deadline: string | null;
     duration: number;
     powerDraw: number;
     type: TaskFlexibility;

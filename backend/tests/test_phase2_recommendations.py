@@ -469,6 +469,11 @@ def test_recommendations_return_and_persist_the_current_optimization(
     assert latest.status_code == 200
     assert latest.get_json()["data"]["response"] == data
     assert latest.get_json()["data"]["inputSnapshot"]["activities"][0]["id"] == activity["id"]
+    snapshot_activity = latest.get_json()["data"]["inputSnapshot"]["activities"][0]
+    assert snapshot_activity["scheduledStartTime"] is None
+    assert snapshot_activity["scheduledEndTime"] is None
+    assert snapshot_activity["earliestStart"] is None
+    assert snapshot_activity["deadline"] is None
 
     other_token = client.post(
         "/api/auth/register",

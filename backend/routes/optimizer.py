@@ -48,6 +48,19 @@ def _optimization_input_snapshot(activities: list[Activity], zone: str, method: 
                 "updatedAt": activity.updated_at.isoformat() if activity.updated_at else None,
                 "status": activity.status,
                 "assignedWindowId": activity.assigned_window_id,
+                "scheduledStartTime": (
+                    activity.scheduled_start_time.isoformat()
+                    if activity.scheduled_start_time else None
+                ),
+                "scheduledEndTime": (
+                    activity.expected_end_time.isoformat()
+                    if activity.expected_end_time else None
+                ),
+                "earliestStart": (
+                    activity.earliest_start.isoformat()
+                    if activity.earliest_start else None
+                ),
+                "deadline": activity.deadline.isoformat() if activity.deadline else None,
                 "duration": activity.duration,
                 "powerDraw": activity.power_draw,
                 "type": activity.type,

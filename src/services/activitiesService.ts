@@ -7,6 +7,11 @@ export interface ActivityScheduleResult {
   recommendation: SchedulingRecommendation | null;
 }
 
+export interface ActivityScheduleRequest {
+  windowId: string;
+  zone: string;
+}
+
 export interface ActivityExecutionResult {
   activity: Task;
   executionMode: 'simulated';
@@ -21,6 +26,37 @@ export const activitiesService = {
     if (status) params.append('status', status);
 
     return apiClient.request<PaginatedResponse<Task>>(`/activities?${params.toString()}`);
+  },
+
+  async getAllTasks(pageSize: number = 200): Promise<ApiResponse<Task[]>> {
+    const tasks: Task[] = [];
+    let page = 1;
+
+    while (true) {
+      const response = await this.getTasks(page, pageSize);
+
+      if (!response.success || !response.data) {
+        return {
+          success: false,
+          error: response.error || 'Failed to fetch activities',
+          timestamp: response.timestamp,
+        };
+      }
+
+      tasks.push(...response.data.items);
+      if (!response.data.hasMore) {
+        return { success: true, data: tasks, timestamp: response.timestamp };
+      }
+      if (response.data.items.length === 0) {
+        return {
+          success: false,
+          error: 'Activity pagination did not return any items for the next page',
+          timestamp: response.timestamp,
+        };
+      }
+
+      page += 1;
+    }
   },
 
   async getTask(id: string): Promise<ApiResponse<Task>> {
@@ -42,9 +78,10 @@ export const activitiesService = {
     });
   },
 
-  async scheduleTask(id: string): Promise<ApiResponse<ActivityScheduleResult>> {
+  async scheduleTask(id: string, request?: ActivityScheduleRequest): Promise<ApiResponse<ActivityScheduleResult>> {
     return apiClient.request<ActivityScheduleResult>(`/activities/${encodeURIComponent(id)}/schedule`, {
       method: 'POST',
+      ...(request ? { body: JSON.stringify(request) } : {}),
     });
   },
 

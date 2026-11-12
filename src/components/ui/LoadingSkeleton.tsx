@@ -7,8 +7,8 @@ interface LoadingSkeletonProps {
 }
 
 const variantClasses: Record<SkeletonVariant, string> = {
-  card: 'rounded-2xl',
-  row:  'rounded-xl',
+  card: 'rounded-[var(--radius-card)]',
+  row:  'rounded-[var(--radius-control)]',
   text: 'rounded-md h-4',
 };
 

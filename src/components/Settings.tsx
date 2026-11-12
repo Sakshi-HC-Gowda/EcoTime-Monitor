@@ -1,5 +1,6 @@
 import { Key, Settings as SettingsIcon, CheckCircle2, RotateCcw, AlertTriangle } from 'lucide-react';
 import { GRID_ZONES } from '../services/electricityMaps';
+import { Button } from './ui/Button';
 
 interface SettingsProps {
   apiKey: string;
@@ -29,25 +30,15 @@ export const Settings: React.FC<SettingsProps> = ({
   const currentZone = GRID_ZONES.find(z => z.id === selectedZone) || GRID_ZONES[0];
 
   return (
-    <div className="glass-panel settings-panel" style={{ maxWidth: '800px', margin: '0 auto' }}>
+    <div className="glass-panel settings-panel w-full">
       
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
-        <div style={{
-          width: '38px',
-          height: '38px',
-          borderRadius: '10px',
-          background: 'var(--blue-glow)',
-          border: '1px solid var(--blue-border)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: 'var(--blue)'
-        }}>
-          <SettingsIcon size={20} />
+      <div className="cluster mb-2.5">
+        <div className="ds-icon-box bg-[var(--blue-glow)] border-[var(--blue-border)] text-[var(--blue)]">
+          <SettingsIcon className="ds-icon-lg" />
         </div>
         <div>
-          <h2 style={{ fontSize: '20px', fontWeight: '700' }}>Platform Configuration Settings</h2>
-          <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Configure connection, threshold standards, and simulator states</p>
+          <h2 className="card-title">Platform Configuration Settings</h2>
+          <p className="caption">Configure connection, threshold standards, and simulator states</p>
         </div>
       </div>
 
@@ -198,14 +189,15 @@ export const Settings: React.FC<SettingsProps> = ({
               Reset total carbon savings, clear active task registers, and restore default tasks checklist.
             </p>
           </div>
-          <button 
-            type="button" 
-            className="btn btn-rose" 
-            style={{ fontSize: '12px', padding: '8px 16px' }}
+          <Button
+            type="button"
+            variant="danger"
+            size="sm"
             onClick={onResetStatistics}
+            iconLeft={<RotateCcw />}
           >
-            <RotateCcw size={14} /> Reset Simulation Statistics
-          </button>
+            Reset Simulation Statistics
+          </Button>
         </div>
       </div>
 

@@ -18,11 +18,11 @@ export function ErrorState({
       padding="lg"
       className="py-12 text-center border-rose-500/20 bg-rose-500/[0.02] flex flex-col items-center"
     >
-      <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center mb-5">
-        <AlertTriangle className="w-5 h-5" />
+      <div className="ds-icon-box mb-5 bg-rose-500/10 border-rose-500/20 text-rose-400">
+        <AlertTriangle className="ds-icon-lg" />
       </div>
-      <h3 className="text-lg font-semibold text-white mb-2">{title}</h3>
-      <p className="text-sm text-slate-400 max-w-sm mb-6 leading-relaxed">{message}</p>
+      <h3 className="card-title mb-2">{title}</h3>
+      <p className="caption max-w-sm mb-6">{message}</p>
       {onRetry && (
         <Button variant="secondary" size="sm" onClick={onRetry} iconLeft={<RefreshCw className="w-3.5 h-3.5" />}>
           Retry Connection

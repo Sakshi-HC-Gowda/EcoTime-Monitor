@@ -92,6 +92,7 @@ def recommend(carbon_fixture, tasks, method="greedy", window_end_hour=8):
         method=method,
         baseline_intensity=600,
         zone_id="US-CA",
+        require_fresh_data=True,
     )
 
 
@@ -173,6 +174,50 @@ def test_no_lower_carbon_window_is_explained(carbon_fixture):
     assert "no lower-carbon band" in result["carbonData"]["classification"]
 
 
+def test_current_zero_carbon_intensity_is_preserved(carbon_fixture):
+    carbon, _ = carbon_fixture
+    carbon["current"]["carbonIntensity"] = 0
+
+    result = recommend(carbon_fixture, [task()])
+
+    assert result["carbonData"]["currentIntensity"] == 0
+
+
+def test_missing_current_carbon_intensity_is_rejected(carbon_fixture):
+    carbon, _ = carbon_fixture
+    carbon["current"].pop("carbonIntensity")
+
+    with pytest.raises(optimizer_service.RecommendationDataUnavailable, match="current intensity"):
+        recommend(carbon_fixture, [task()])
+
+
+def test_stale_carbon_observation_is_rejected(carbon_fixture):
+    carbon, _ = carbon_fixture
+    stale_time = datetime.now(timezone.utc) - timedelta(hours=2)
+    carbon["observedAt"] = stale_time.isoformat()
+    carbon["current"]["datetime"] = stale_time.isoformat()
+
+    with pytest.raises(optimizer_service.RecommendationDataUnavailable, match="stale"):
+        recommend(carbon_fixture, [task()])
+
+
+def test_stale_forecast_is_rejected(carbon_fixture):
+    carbon, _ = carbon_fixture
+    now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    carbon["current"]["datetime"] = now.isoformat()
+    carbon["observedAt"] = now.isoformat()
+    carbon["forecast"] = [
+        {
+            "datetime": (now - timedelta(hours=24 - hour)).isoformat(),
+            "carbonIntensity": 100 + hour,
+        }
+        for hour in range(24)
+    ]
+
+    with pytest.raises(optimizer_service.RecommendationDataUnavailable, match="forecast is stale"):
+        recommend(carbon_fixture, [task()])
+
+
 @pytest.mark.parametrize("method", ["greedy", "knapsack"])
 def test_optimizers_enforce_capacity_and_assign_non_overlapping_slots(carbon_fixture, method):
     carbon, start = carbon_fixture
@@ -190,6 +235,133 @@ def test_optimizers_enforce_capacity_and_assign_non_overlapping_slots(carbon_fix
     first_end = datetime.fromisoformat(ordered[0]["scheduledEndTime"])
     second_start = datetime.fromisoformat(ordered[1]["scheduledStartTime"])
     assert second_start >= first_end
+
+
+def test_recommendations_use_only_the_free_tail_after_existing_reservations(carbon_fixture):
+    _, start = carbon_fixture
+    baseline = recommend(carbon_fixture, [task()])
+    window = baseline["windows"][0]
+    reserved_start = datetime.fromisoformat(window["startTime"])
+    reserved_end = reserved_start + timedelta(minutes=30)
+
+    result = optimizer_service.recommend_schedule(
+        tasks=[task()],
+        permitted_window=interval(start, start + timedelta(hours=8)),
+        method="greedy",
+        baseline_intensity=600,
+        zone_id="US-CA",
+        reserved_intervals_by_window={
+            window["id"]: [(reserved_start, reserved_end)],
+        },
+        unavailable_window_ids={
+            item["id"] for item in baseline["windows"] if item["id"] != window["id"]
+        },
+    )
+
+    selected = result["result"]["selectedTasks"]
+    assert len(selected) == 1
+    assert selected[0]["assignedWindowId"] == window["id"]
+    assert datetime.fromisoformat(selected[0]["scheduledStartTime"]) >= reserved_end
+
+
+def test_optimizer_uses_earlier_and_later_gaps_between_multiple_reservations(carbon_fixture):
+    _, start = carbon_fixture
+    baseline = recommend(carbon_fixture, [task()])
+    window = baseline["windows"][0]
+    window_start = datetime.fromisoformat(window["startTime"])
+    reservations = [
+        (window_start + timedelta(minutes=30), window_start + timedelta(minutes=40)),
+        (window_start + timedelta(minutes=70), window_start + timedelta(minutes=80)),
+    ]
+
+    result = optimizer_service.recommend_schedule(
+        tasks=[task("first", duration=25), task("second", duration=25), task("third", duration=25)],
+        permitted_window=interval(start, start + timedelta(hours=8)),
+        method="greedy",
+        baseline_intensity=600,
+        zone_id="US-CA",
+        reserved_intervals_by_window={window["id"]: reservations},
+        unavailable_window_ids={item["id"] for item in baseline["windows"] if item["id"] != window["id"]},
+    )
+
+    selected = sorted(
+        result["result"]["selectedTasks"],
+        key=lambda item: item["scheduledStartTime"],
+    )
+    assert len(selected) == 3
+    assert [datetime.fromisoformat(item["scheduledStartTime"]) for item in selected] == [
+        window_start,
+        window_start + timedelta(minutes=40),
+        window_start + timedelta(minutes=80),
+    ]
+    assert result["windows"][0]["availableCapacity"] == 100
+    assert len(result["windows"][0]["availableIntervals"]) == 3
+
+
+def test_activity_must_fit_one_free_interval_even_if_total_capacity_is_larger(carbon_fixture):
+    _, start = carbon_fixture
+    baseline = recommend(carbon_fixture, [task()])
+    window = baseline["windows"][0]
+    window_start = datetime.fromisoformat(window["startTime"])
+    window_end = datetime.fromisoformat(window["endTime"])
+    reservations = [
+        (window_start + timedelta(minutes=10), window_start + timedelta(minutes=20)),
+        (window_start + timedelta(minutes=30), window_end),
+    ]
+
+    result = optimizer_service.recommend_schedule(
+        tasks=[task(duration=15)],
+        permitted_window=interval(start, start + timedelta(hours=8)),
+        method="knapsack",
+        baseline_intensity=600,
+        zone_id="US-CA",
+        reserved_intervals_by_window={window["id"]: reservations},
+        unavailable_window_ids={item["id"] for item in baseline["windows"] if item["id"] != window["id"]},
+    )
+
+    assert result["windows"][0]["availableCapacity"] == 20
+    assert result["result"]["selectedTasks"] == []
+
+
+def test_fully_reserved_windows_are_not_returned_as_available(carbon_fixture):
+    _, start = carbon_fixture
+    baseline = recommend(carbon_fixture, [task()])
+    reservations = {}
+    for window in baseline["windows"]:
+        window_start = datetime.fromisoformat(window["startTime"])
+        window_end = datetime.fromisoformat(window["endTime"])
+        reservations[window["id"]] = [(window_start, window_end)]
+
+    result = optimizer_service.recommend_schedule(
+        tasks=[task()],
+        permitted_window=interval(start, start + timedelta(hours=8)),
+        method="knapsack",
+        baseline_intensity=600,
+        zone_id="US-CA",
+        reserved_intervals_by_window=reservations,
+    )
+
+    assert result["windows"]
+    assert all(window["availableCapacity"] == 0 for window in result["windows"])
+    assert result["result"]["selectedTasks"] == []
+
+
+def test_optimizer_restricts_assignments_to_selected_window(carbon_fixture):
+    baseline = recommend(carbon_fixture, [task()])
+    selected_window_id = baseline["windows"][0]["id"]
+
+    result = optimizer_service.recommend_schedule(
+        tasks=[task()],
+        permitted_window=None,
+        method="greedy",
+        baseline_intensity=600,
+        zone_id="US-CA",
+        permitted_window_id=selected_window_id,
+    )
+
+    assert [window["id"] for window in result["windows"]] == [selected_window_id]
+    assert result["recommendations"][0]["windowId"] == selected_window_id
+    assert result["result"]["selectedTasks"][0]["assignedWindowId"] == selected_window_id
 
 
 def test_provider_api_failure_does_not_return_a_recommendation(client, monkeypatch):
@@ -233,6 +405,92 @@ def test_provider_api_failure_does_not_return_a_recommendation(client, monkeypat
     assert response.status_code == 503
     assert response.get_json()["success"] is False
     assert "Provider unavailable" in response.get_json()["error"]
+
+
+@pytest.mark.parametrize("method", ["greedy", "knapsack"])
+def test_recommendations_return_and_persist_the_current_optimization(
+    client,
+    app,
+    carbon_fixture,
+    method,
+):
+    from models.analytics_recommendation import AnalyticsRecommendation
+
+    token = client.post(
+        "/api/auth/register",
+        json={
+            "email": f"optimizer-result-{method}@example.com",
+            "password": "Password123!",
+            "first_name": "Optimizer",
+            "last_name": "Result",
+            "organization_name": "Optimizer Result Org",
+        },
+    ).get_json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    activity = client.post(
+        "/api/activities",
+        headers=headers,
+        json={
+            "name": "Optimization result activity",
+            "type": "flexible",
+            "duration": 30,
+            "powerDraw": 100,
+        },
+    ).get_json()["data"]
+
+    response = client.post(
+        "/api/recommendations",
+        headers=headers,
+        json={"tasks": [{"id": activity["id"]}], "method": method},
+    )
+
+    assert response.status_code == 200, response.get_data(as_text=True)
+    data = response.get_json()["data"]
+    assert data["result"]["method"] == method
+    assert data["result"]["createdAt"]
+    assert data["result"]["selectedTasks"]
+    assert data["result"]["selectedTasks"][0]["id"] == activity["id"]
+    assigned_window = data["result"]["selectedTasks"][0]["assignedWindowId"]
+    window = next(item for item in data["windows"] if item["id"] == assigned_window)
+    assert window["startTime"]
+    assert window["endTime"]
+    assert window["availableCapacity"] > 0
+    assert data["result"]["selectedTasks"][0]["duration"] <= window["availableCapacity"]
+    assert data["carbonData"]["currentIntensity"] >= 0
+    assert data["savings"]["baselineCo2"] >= 0
+    assert data["savings"]["recommendedCo2"] >= 0
+    with app.app_context():
+        persisted = AnalyticsRecommendation.query.filter_by(
+            activity_id=activity["id"],
+            organization_id=activity["organizationId"],
+        ).one()
+        assert persisted.status == "scheduled"
+    latest = client.get("/api/optimization/latest", headers=headers)
+    assert latest.status_code == 200
+    assert latest.get_json()["data"]["response"] == data
+    assert latest.get_json()["data"]["inputSnapshot"]["activities"][0]["id"] == activity["id"]
+    snapshot_activity = latest.get_json()["data"]["inputSnapshot"]["activities"][0]
+    assert snapshot_activity["scheduledStartTime"] is None
+    assert snapshot_activity["scheduledEndTime"] is None
+    assert snapshot_activity["earliestStart"] is None
+    assert snapshot_activity["deadline"] is None
+
+    other_token = client.post(
+        "/api/auth/register",
+        json={
+            "email": "optimizer-other@example.com",
+            "password": "Password123!",
+            "first_name": "Other",
+            "last_name": "Org",
+            "organization_name": "Other Optimizer Org",
+        },
+    ).get_json()["token"]
+    other_latest = client.get(
+        "/api/optimization/latest",
+        headers={"Authorization": f"Bearer {other_token}"},
+    )
+    assert other_latest.status_code == 200
+    assert other_latest.get_json()["data"] is None
 
 
 def test_activity_scheduling_bounds_round_trip_through_storage(client):
@@ -328,6 +586,171 @@ def test_schedule_activity_persists_feasible_optimizer_result(client, monkeypatc
     assert datetime.fromisoformat(persisted["scheduledEndTime"]) == start + timedelta(minutes=20)
     assert client.get("/api/activities?status=pending", headers={"Authorization": f"Bearer {token}"}).get_json()["data"]["total"] == 0
     assert client.get("/api/activities?status=scheduled", headers={"Authorization": f"Bearer {token}"}).get_json()["data"]["total"] == 1
+
+
+def test_schedule_activity_passes_selected_window_and_zone(client, monkeypatch):
+    from routes import optimizer as optimizer_routes
+
+    token = client.post("/api/auth/register", json={
+        "email": "selected-window@example.com", "password": "Password123!",
+        "first_name": "Selected", "last_name": "Window", "organization_name": "Selected Window",
+    }).get_json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    activity = client.post("/api/activities", headers=headers, json={
+        "name": "Selected workload", "type": "flexible", "activityType": "batch-processing", "duration": 20,
+    }).get_json()["data"]
+    start = datetime.now(timezone.utc) + timedelta(hours=1)
+    calls = []
+
+    def recommendation(**kwargs):
+        calls.append(kwargs)
+        return {
+            "recommendations": [{
+                "activityId": activity["id"], "status": "scheduled", "startTime": start.isoformat(),
+                "windowId": "US-CA:selected-window", "reason": "Fits the selected window.",
+            }],
+            "windows": [{
+                "id": "US-CA:selected-window",
+                "startTime": (start - timedelta(minutes=5)).isoformat(),
+                "endTime": (start + timedelta(minutes=25)).isoformat(),
+            }],
+        }
+
+    monkeypatch.setattr(optimizer_routes, "recommend_schedule", recommendation)
+    response = client.post(
+        f"/api/activities/{activity['id']}/schedule",
+        headers=headers,
+        json={"windowId": "US-CA:selected-window", "zone": "US-CA"},
+    )
+
+    assert response.status_code == 200
+    assert calls[0]["permitted_window_id"] == "US-CA:selected-window"
+    assert calls[0]["zone_id"] == "US-CA"
+    assert response.get_json()["data"]["activity"]["assignedWindowId"] == "US-CA:selected-window"
+
+
+def test_schedule_activity_rejects_invalid_selected_zone_or_window(client, monkeypatch):
+    from routes import optimizer as optimizer_routes
+
+    token = client.post("/api/auth/register", json={
+        "email": "invalid-selected-window@example.com", "password": "Password123!",
+        "first_name": "Invalid", "last_name": "Window", "organization_name": "Invalid Window",
+    }).get_json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    activity = client.post("/api/activities", headers=headers, json={
+        "name": "Invalid selected workload", "type": "flexible", "activityType": "batch-processing", "duration": 20,
+    }).get_json()["data"]
+
+    invalid_zone = client.post(
+        f"/api/activities/{activity['id']}/schedule",
+        headers=headers,
+        json={"windowId": "NOT-A-REAL-WINDOW", "zone": "NOT-A-REAL-ZONE"},
+    )
+    assert invalid_zone.status_code == 400
+    assert "Unsupported grid zone" in invalid_zone.get_json()["error"]
+
+    monkeypatch.setattr(
+        optimizer_routes,
+        "recommend_schedule",
+        lambda **_: (_ for _ in ()).throw(ValueError("The selected Green Window is not valid for the requested zone.")),
+    )
+    invalid_window = client.post(
+        f"/api/activities/{activity['id']}/schedule",
+        headers=headers,
+        json={"windowId": "US-CA:NOT-A-REAL-WINDOW", "zone": "US-CA"},
+    )
+    assert invalid_window.status_code == 400
+    assert "selected Green Window" in invalid_window.get_json()["error"]
+
+
+def test_schedule_activity_real_optimizer_rejects_invalid_selected_window(
+    client, carbon_fixture
+):
+    token = client.post("/api/auth/register", json={
+        "email": "real-invalid-window@example.com", "password": "Password123!",
+        "first_name": "Real", "last_name": "Invalid", "organization_name": "Real Invalid Window",
+    }).get_json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    activity = client.post("/api/activities", headers=headers, json={
+        "name": "Real invalid window workload", "type": "flexible",
+        "activityType": "batch-processing", "duration": 20,
+    }).get_json()["data"]
+
+    response = client.post(
+        f"/api/activities/{activity['id']}/schedule",
+        headers=headers,
+        json={"windowId": "US-CA:not-a-real-window", "zone": "US-CA"},
+    )
+
+    assert response.status_code == 400
+    assert "selected Green Window" in response.get_json()["error"]
+    persisted = client.get(
+        f"/api/activities/{activity['id']}", headers=headers
+    ).get_json()["data"]
+    assert persisted["status"] == "pending"
+    assert persisted["assignedWindowId"] is None
+
+
+def test_schedule_activity_real_optimizer_persists_selected_window(
+    client, carbon_fixture
+):
+    token = client.post("/api/auth/register", json={
+        "email": "real-selected-window@example.com", "password": "Password123!",
+        "first_name": "Real", "last_name": "Selected", "organization_name": "Real Selected Window",
+    }).get_json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    activity = client.post("/api/activities", headers=headers, json={
+        "name": "Real selected window workload", "type": "flexible",
+        "activityType": "batch-processing", "duration": 20,
+    }).get_json()["data"]
+    selected_window_id = recommend(carbon_fixture, [{
+        **task(activity["id"]),
+        "duration": 20,
+    }])["windows"][0]["id"]
+
+    response = client.post(
+        f"/api/activities/{activity['id']}/schedule",
+        headers=headers,
+        json={"windowId": selected_window_id, "zone": "US-CA"},
+    )
+
+    assert response.status_code == 200
+    scheduled = response.get_json()["data"]["activity"]
+    assert scheduled["status"] == "scheduled"
+    assert scheduled["assignedWindowId"] == selected_window_id
+    start = datetime.fromisoformat(scheduled["scheduledStartTime"])
+    end = datetime.fromisoformat(scheduled["scheduledEndTime"])
+    assert end > start
+    assert (end - start) == timedelta(minutes=20)
+
+
+def test_schedule_activity_real_optimizer_does_not_fallback_when_selected_window_is_infeasible(
+    client, carbon_fixture
+):
+    token = client.post("/api/auth/register", json={
+        "email": "real-infeasible-window@example.com", "password": "Password123!",
+        "first_name": "Real", "last_name": "Infeasible", "organization_name": "Real Infeasible Window",
+    }).get_json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    activity = client.post("/api/activities", headers=headers, json={
+        "name": "Real infeasible window workload", "type": "flexible",
+        "activityType": "batch-processing", "duration": 180,
+    }).get_json()["data"]
+    selected_window_id = recommend(carbon_fixture, [task("candidate")])["windows"][0]["id"]
+
+    response = client.post(
+        f"/api/activities/{activity['id']}/schedule",
+        headers=headers,
+        json={"windowId": selected_window_id, "zone": "US-CA"},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["data"]["scheduled"] is False
+    persisted = client.get(
+        f"/api/activities/{activity['id']}", headers=headers
+    ).get_json()["data"]
+    assert persisted["status"] == "pending"
+    assert persisted["assignedWindowId"] is None
 
 
 def test_schedule_activity_no_feasible_window_keeps_activity_status_unchanged(client, monkeypatch):
@@ -497,7 +920,7 @@ def test_run_now_rejects_unsupported_upload_and_foreign_activity(client):
     assert foreign.status_code == 404
 
 
-def test_run_now_rejects_stale_non_scheduled_status(client):
+def test_run_now_rejects_stale_non_scheduled_status(client, app):
     token = client.post("/api/auth/register", json={
         "email": "run-stale@example.com", "password": "Password123!",
         "first_name": "Run", "last_name": "Stale", "organization_name": "Run Stale Org",
@@ -510,6 +933,8 @@ def test_run_now_rejects_stale_non_scheduled_status(client):
 
     assert response.status_code == 409
     assert "must be scheduled" in response.get_json()["error"]
+    with app.app_context():
+        assert db.session.get(Activity, activity["id"]).status == "pending"
 
 
 def test_api_unavailability_is_labeled_and_not_replaced_by_api_shaped_data(monkeypatch):
@@ -538,7 +963,7 @@ def test_trained_forecast_failure_does_not_fall_back_to_simulation(monkeypatch):
             "datetime": (history_start + timedelta(hours=hour)).isoformat(),
             "carbonIntensity": 200,
         }
-        for hour in range(24)
+        for hour in range(25)
     ]
 
     def fail_model(*_args, **_kwargs):
@@ -560,5 +985,12 @@ def test_recommendations_and_carbon_data_endpoints_require_auth(client):
         json={"tasks": [{"id": "untrusted"}], "method": "greedy"},
     )
     assert response.status_code == 401
-    for path in ("/api/carbon", "/api/windows", "/api/zones", "/api/forecast", "/api/forecast/info"):
+    for path in (
+        "/api/carbon",
+        "/api/windows",
+        "/api/zones",
+        "/api/forecast",
+        "/api/forecast/info",
+        "/api/optimization/latest",
+    ):
         assert client.get(path).status_code == 401

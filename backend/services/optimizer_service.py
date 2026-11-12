@@ -175,7 +175,7 @@ def _place_allocations(
                 continue
             placed[activity_id] = {
                 **task,
-                "assignedWindowId": str(window_id),
+                "assignedWindowId": str(window.get("parentWindowId", window_id)),
                 "scheduledStartTime": start.isoformat(),
                 "scheduledEndTime": end.isoformat(),
                 "status": "delayed",
@@ -184,12 +184,44 @@ def _place_allocations(
     return placed
 
 
+def _available_intervals(
+    start: datetime,
+    end: datetime,
+    reservations: list[tuple[datetime, datetime]],
+) -> list[tuple[datetime, datetime]]:
+    """Return all unreserved UTC intervals within a Green Window."""
+    cursor = start.astimezone(timezone.utc)
+    window_end = end.astimezone(timezone.utc)
+    occupied = sorted(
+        (
+            max(cursor, reserved_start.astimezone(timezone.utc)),
+            min(window_end, reserved_end.astimezone(timezone.utc)),
+        )
+        for reserved_start, reserved_end in reservations
+        if reserved_end.astimezone(timezone.utc) > cursor
+        and reserved_start.astimezone(timezone.utc) < window_end
+    )
+
+    intervals: list[tuple[datetime, datetime]] = []
+    for reserved_start, reserved_end in occupied:
+        if reserved_start > cursor:
+            intervals.append((cursor, reserved_start))
+        cursor = max(cursor, reserved_end)
+    if cursor < window_end:
+        intervals.append((cursor, window_end))
+    return intervals
+
+
 def recommend_schedule(
     tasks: list[dict],
     permitted_window: dict | None,
     method: str,
     baseline_intensity: float = DEFAULT_BASELINE_INTENSITY,
     zone_id: str = "US-CA",
+    permitted_window_id: str | None = None,
+    reserved_intervals_by_window: dict[str, list[tuple[datetime, datetime]]] | None = None,
+    unavailable_window_ids: set[str] | None = None,
+    require_fresh_data: bool = False,
 ) -> dict:
     """Connect verified carbon/forecast data to existing window and scheduling algorithms."""
     calculate_emissions_grams(0.0, baseline_intensity)
@@ -207,11 +239,29 @@ def recommend_schedule(
     # Only reject if the data is NOT a usable simulated fallback.
     if carbon.get("error") and not carbon.get("isSimulated"):
         raise RecommendationDataUnavailable(str(carbon["error"]))
-    if not isinstance(carbon.get("current"), dict) or _parse_datetime(
-        carbon["current"].get("datetime")
-    ) is None:
+    current_time = (
+        _parse_datetime(carbon.get("observedAt"))
+        or _parse_datetime(carbon.get("current", {}).get("datetime"))
+        if isinstance(carbon.get("current"), dict)
+        else None
+    )
+    if not isinstance(carbon.get("current"), dict) or current_time is None:
         raise RecommendationDataUnavailable(
             "Carbon data has no valid observation timestamp."
+        )
+    if require_fresh_data and datetime.now(timezone.utc) - current_time > timedelta(hours=1):
+        raise RecommendationDataUnavailable(
+            "Carbon observation is stale; refresh carbon data before optimizing."
+        )
+    current_intensity = carbon["current"].get("carbonIntensity")
+    if require_fresh_data and (
+        isinstance(current_intensity, bool)
+        or not isinstance(current_intensity, (int, float))
+        or not math.isfinite(current_intensity)
+        or current_intensity < 0
+    ):
+        raise RecommendationDataUnavailable(
+            "Carbon data has no valid current intensity."
         )
 
     from forecast.predict import get_predictor
@@ -240,6 +290,16 @@ def recommend_schedule(
             raise RecommendationDataUnavailable(
                 "No valid carbon forecast is available for scheduling."
             )
+    now = datetime.now(timezone.utc)
+    if require_fresh_data and not any(
+        timestamp is not None and timestamp > now
+        for timestamp in (
+            _parse_datetime(point["datetime"]) for point in forecast
+        )
+    ):
+        raise RecommendationDataUnavailable(
+            "Carbon forecast is stale; refresh forecast data before optimizing."
+        )
 
     if permitted_window is None:
         forecast_times = [_parse_datetime(point["datetime"]) for point in forecast]
@@ -267,7 +327,18 @@ def recommend_schedule(
     for window in detected_windows:
         window["id"] = f"{zone_id}:{window['id']}"
     windows = rank_windows(detected_windows)
+    if permitted_window_id is not None:
+        selected_window = next(
+            (window for window in windows if str(window.get("id")) == permitted_window_id),
+            None,
+        )
+        if selected_window is None:
+            raise ValueError("The selected Green Window is not valid for the requested zone.")
+        permitted_start = _parse_datetime(selected_window.get("startTime"))
+        permitted_end = _window_end(selected_window)
+        windows = [selected_window]
     bounded_windows = []
+    allocation_windows = []
     for window in windows:
         start = _parse_datetime(window.get("startTime"))
         end = _window_end(window)
@@ -276,12 +347,43 @@ def recommend_schedule(
             clipped_end = min(end, permitted_end)
             clipped_duration = (clipped_end - clipped_start).total_seconds() / 60
             if clipped_duration > 0:
+                window_id = str(window["id"])
+                reservations = (reserved_intervals_by_window or {}).get(window_id, [])
+                free_intervals = (
+                    []
+                    if unavailable_window_ids and window_id in unavailable_window_ids
+                    else _available_intervals(clipped_start, clipped_end, reservations)
+                )
+                available_capacity = sum(
+                    (interval_end - interval_start).total_seconds() / 60
+                    for interval_start, interval_end in free_intervals
+                )
                 bounded_windows.append({
                     **window,
                     "startTime": clipped_start.isoformat(),
                     "endTime": clipped_end.isoformat(),
                     "duration": clipped_duration,
+                    "availableCapacity": available_capacity,
+                    "availableIntervals": [
+                        {
+                            "startTime": interval_start.isoformat(),
+                            "endTime": interval_end.isoformat(),
+                            "duration": (interval_end - interval_start).total_seconds() / 60,
+                        }
+                        for interval_start, interval_end in free_intervals
+                    ],
                 })
+                allocation_windows.extend(
+                    {
+                        **window,
+                        "id": f"{window_id}#free-{index}",
+                        "parentWindowId": window_id,
+                        "startTime": interval_start.isoformat(),
+                        "endTime": interval_end.isoformat(),
+                        "duration": (interval_end - interval_start).total_seconds() / 60,
+                    }
+                    for index, (interval_start, interval_end) in enumerate(free_intervals)
+                )
 
     eligible_tasks: list[dict] = []
     allowed_windows: dict[str, set[str]] = {}
@@ -323,7 +425,7 @@ def recommend_schedule(
                 duration_value = 0
             fits = {
                 str(window["id"])
-                for window in bounded_windows
+                for window in allocation_windows
                 if (start := _parse_datetime(window.get("startTime"))) is not None
                 and (end := _window_end(window)) is not None
                 and max(start, earliest) + timedelta(minutes=duration_value)
@@ -372,15 +474,15 @@ def recommend_schedule(
     if method == "greedy":
         scheduled = schedule_greedy(
             eligible_tasks,
-            bounded_windows,
+            allocation_windows,
             baseline_intensity,
             allowed_window_ids_by_task=allowed_windows,
         )
         allocations = scheduled["window_allocations"]
     else:
-        allocations = {str(window["id"]): [] for window in bounded_windows}
+        allocations = {str(window["id"]): [] for window in allocation_windows}
         remaining = {str(task["id"]): task for task in eligible_tasks}
-        for window in bounded_windows:
+        for window in allocation_windows:
             window_id = str(window["id"])
             window_tasks = [
                 task for task_id, task in remaining.items()
@@ -397,7 +499,7 @@ def recommend_schedule(
     placements = _place_allocations(
         allocations,
         eligible_tasks,
-        bounded_windows,
+        allocation_windows,
         permitted_start,
         permitted_end,
     )
@@ -459,7 +561,10 @@ def recommend_schedule(
                 )
 
     total_duration = sum(float(task.get("duration", 0)) for task in selected_tasks)
-    total_capacity = sum(float(window.get("duration", 0)) for window in bounded_windows)
+    total_capacity = sum(
+        float(window.get("availableCapacity", 0))
+        for window in bounded_windows
+    )
     baseline_co2 = sum(
         calculate_emissions_grams(
             calculate_energy_kwh(task["powerDraw"], task["duration"]),
@@ -515,6 +620,7 @@ def recommend_schedule(
             "source": carbon.get("source"),
             "isSimulated": bool(carbon.get("isSimulated")),
             "observedAt": carbon.get("observedAt"),
+            "currentIntensity": current_intensity,
             "forecastSource": forecast_source,
             "classification": (
                 "lower-carbon relative to forecast range"

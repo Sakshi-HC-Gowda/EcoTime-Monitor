@@ -51,6 +51,7 @@ __pycache__/
 .venv/
 venv/
 env/
+/backend/venv312/
 
 # Flask
 instance/

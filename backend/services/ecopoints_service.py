@@ -306,6 +306,7 @@ def award_points(
     )
 
     db.session.flush()
+    db.session.commit()
 
     return transaction
 

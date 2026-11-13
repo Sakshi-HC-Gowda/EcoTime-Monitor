@@ -49,7 +49,6 @@ export function SettingsPage() {
 
   useEffect(() => {
     if (!user?.organizationId || user.role?.name !== 'Organization Admin') {
-      setMembers([]);
       return;
     }
 
@@ -78,6 +77,8 @@ export function SettingsPage() {
   }, [user?.organizationId, user?.role?.name]);
 
   const isAdmin = user?.role?.name === 'Organization Admin';
+  // Non-admins never see member data, even if a previous admin session left some in state.
+  const shownMembers = isAdmin && user?.organizationId ? members : [];
 
   const handleApiKeyChange = (key: string) => {
     setApiKey(key);
@@ -181,7 +182,7 @@ export function SettingsPage() {
                 <Users className="h-4 w-4 text-slate-300" />
                 <h2 className="text-sm font-semibold text-white">Organization users</h2>
               </div>
-              <span className="text-[11px] text-slate-400">{members.length} users</span>
+              <span className="text-[11px] text-slate-400">{shownMembers.length} users</span>
             </div>
 
             {loading ? (
@@ -191,7 +192,7 @@ export function SettingsPage() {
                 <AlertTriangle className="mt-0.5 h-4 w-4 text-rose-300" />
                 <span>{error}</span>
               </div>
-            ) : members.length === 0 ? (
+            ) : shownMembers.length === 0 ? (
               <div className="px-5 py-6 text-sm text-slate-400">No organization members are available for this tenant.</div>
             ) : (
               <div className="overflow-x-auto">
@@ -204,7 +205,7 @@ export function SettingsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {members.map((member) => (
+                    {shownMembers.map((member) => (
                       <tr key={member.id} className="border-t border-white/10 text-slate-200">
                         <td className="px-5 py-3">{member.firstName} {member.lastName}</td>
                         <td className="px-5 py-3">{member.email}</td>

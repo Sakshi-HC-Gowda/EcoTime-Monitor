@@ -41,6 +41,7 @@ export interface SustainabilityScore {
   lastSustainableDate: string | null;
   createdAt: string;
   updatedAt: string;
+  leaderboardOptIn?: boolean;
 }
 
 export interface UserBadge {

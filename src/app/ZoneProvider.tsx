@@ -36,6 +36,8 @@ export function ZoneProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // On successful detection, adopt the detected zone (overrides empty/null stored)
     if (status === 'success' && location) {
+      // Syncing with an external system (geolocation result), which is what effects are for.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedZoneState(location.zone);
       try {
         localStorage.setItem(ZONE_STORAGE_KEY, location.zone);
@@ -50,7 +52,7 @@ export function ZoneProvider({ children }: { children: ReactNode }) {
     try {
       if (zone) localStorage.setItem(ZONE_STORAGE_KEY, zone);
       else localStorage.removeItem(ZONE_STORAGE_KEY);
-    } catch (e) {
+    } catch {
       // ignore storage errors
     }
   }, []);

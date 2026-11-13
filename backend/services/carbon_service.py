@@ -153,7 +153,33 @@ GRID_ZONES: dict[str, dict] = {
     },
 }
 
-_DEFAULT_ZONE_ID = "US-CA"
+_FALLBACK_ZONE_ID = "US-CA"
+
+
+def normalize_zone_id(zone_id: str | None) -> str:
+    """Return the canonical zone ID (case-insensitive match) or the stripped input."""
+    candidate = (zone_id or "").strip()
+    for known in GRID_ZONES:
+        if known.upper() == candidate.upper():
+            return known
+    return candidate
+
+
+def _resolve_default_zone() -> str:
+    configured = os.getenv("DEFAULT_ZONE", "").strip()
+    if not configured:
+        return _FALLBACK_ZONE_ID
+    canonical = normalize_zone_id(configured)
+    if canonical in GRID_ZONES:
+        return canonical
+    logger.warning(
+        "DEFAULT_ZONE=%r is not a supported zone (%s); using %s",
+        configured, ", ".join(GRID_ZONES), _FALLBACK_ZONE_ID,
+    )
+    return _FALLBACK_ZONE_ID
+
+
+_DEFAULT_ZONE_ID = _resolve_default_zone()
 
 # Green Window detection uses the cleanest band of each forecast rather than a
 # global absolute cutoff. 0.35 means "points in the lowest 35% of this

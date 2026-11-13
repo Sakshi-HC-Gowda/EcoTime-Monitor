@@ -19,13 +19,15 @@ from services.carbon_service import (
     get_carbon_data,
     detect_green_windows,
     get_available_zones,
+    normalize_zone_id,
+    _DEFAULT_ZONE_ID,
 )
 from optimization.window_ranking import rank_windows
 
 logger = logging.getLogger(__name__)
 carbon_bp = Blueprint("carbon", __name__)
 
-_DEFAULT_ZONE = os.getenv("DEFAULT_ZONE", "US-CA")
+_DEFAULT_ZONE = _DEFAULT_ZONE_ID
 _DEFAULT_THRESHOLD = float(os.getenv("LOW_CARBON_THRESHOLD", "180"))
 
 
@@ -61,7 +63,7 @@ def get_carbon():
         }
     """
     raw_zone = request.args.get("zone", _DEFAULT_ZONE)
-    zone = raw_zone.strip() if isinstance(raw_zone, str) else ""
+    zone = normalize_zone_id(raw_zone) if isinstance(raw_zone, str) else ""
     offset = request.args.get("offset", 0, type=float)
 
     logger.info("GET /api/carbon zone=%s offset=%s", zone, offset)
@@ -103,7 +105,7 @@ def get_windows():
         }
     """
     raw_zone = request.args.get("zone", _DEFAULT_ZONE)
-    zone = raw_zone.strip() if isinstance(raw_zone, str) else ""
+    zone = normalize_zone_id(raw_zone) if isinstance(raw_zone, str) else ""
     threshold = request.args.get("threshold", _DEFAULT_THRESHOLD, type=float)
     offset = request.args.get("offset", 0, type=float)
 
@@ -121,6 +123,17 @@ def get_windows():
             raise RuntimeError(carbon["error"])
 
         forecast = carbon.get("forecast", [])
+        forecast_source = carbon.get("forecastSource")
+        if not forecast and not carbon.get("isSimulated"):
+            # Live provider returned no forecast (common on free tiers): use the
+            # trained model on the live history, clearly labeled as ml_model.
+            from forecast.predict import get_predictor
+            predictor = get_predictor()
+            history = carbon.get("history", [])
+            if predictor.is_trained() and len(history) >= 24:
+                predictor._validate_history(history)
+                forecast = predictor.predict(zone_id=zone, horizon_hours=24, history=history)
+                forecast_source = "ml_model"
         if not forecast:
             raise RuntimeError(
                 "No forecast data available for green window detection"
@@ -163,7 +176,7 @@ def get_windows():
         "isSimulated": carbon.get("isSimulated", False),
         "source": carbon.get("source"),
         "observedAt": carbon.get("observedAt"),
-        "forecastSource": carbon.get("forecastSource"),
+        "forecastSource": forecast_source,
         "timestamp": _now_iso(),
     }), 200
 

@@ -4,14 +4,17 @@ import {
   Flame,
   Leaf,
   Trophy,
-  TreePine,
-  Wind,
+  CalendarCheck,
+  Gauge,
   Users,
 } from 'lucide-react';
 
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Button } from '@/components/ui/Button';
-import {apiClient} from '@/services/api';
+import { apiClient } from '@/services/apiClient';
+import { optimizerService } from '@/services/optimizerService';
+import { useAuth } from '@/features/auth/AuthProvider';
+import type { PersistedOptimization } from '@/types/domain';
 
 import type{
   SustainabilityScore,
@@ -27,28 +30,55 @@ export function SustainabilityPage() {
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
   const [leaderboardOptIn, setLeaderboardOptIn] = useState(false);
   const [optInLoading, setOptInLoading] = useState(false);
+  const [dataError, setDataError] = useState<string | null>(null);
 
-  const userId =
-    localStorage.getItem('ecotime_user_id') || 'demo-user';
+  const { user } = useAuth();
+  const userId = user ? String(user.id) : '';
+  const [latest, setLatest] = useState<PersistedOptimization | null>(null);
+
+  useEffect(() => {
+    optimizerService.getLatestOptimization().then((res) => {
+      if (res.success) setLatest(res.data ?? null);
+    });
+  }, []);
+
+  const savings = latest?.response.savings;
+  const moved = latest?.response.recommendations.filter((r) => r.status === 'scheduled').length ?? 0;
+  const formatG = (g: number) => (Math.abs(g) >= 1000 ? `${(g / 1000).toFixed(2)} kgCO₂e` : `${g.toFixed(1)} gCO₂e`);
 
   useEffect(() => {
     const loadSustainabilityData = async () => {
+      if (!userId) return;
       setLoading(true);
 
-      const [scoreResponse, badgeResponse] = await Promise.all([
-        apiClient.getSustainabilityScore(userId),
-        apiClient.getUserBadges(userId),
-      ]);
+      setDataError(null);
+      try {
+        const [scoreResponse, badgeResponse] = await Promise.all([
+          apiClient.request<SustainabilityScore>(`/ecopoints/${encodeURIComponent(userId)}/score`),
+          apiClient.request<{ badges: UserBadge[] }>(`/badges/${encodeURIComponent(userId)}`),
+        ]);
 
-      if (scoreResponse.success && scoreResponse.data) {
-        setScore(scoreResponse.data);
+        if (scoreResponse.success && scoreResponse.data) {
+          setScore(scoreResponse.data);
+          setLeaderboardOptIn(Boolean(scoreResponse.data.leaderboardOptIn));
+        } else if (scoreResponse.error?.includes('404')) {
+          // A new user has no score row until a qualifying event is recorded.
+          setScore(null);
+          setLeaderboardOptIn(false);
+        } else {
+          throw new Error(scoreResponse.error || 'Could not load sustainability score');
+        }
+
+        if (badgeResponse.success && badgeResponse.data) {
+          setBadges(badgeResponse.data.badges ?? []);
+        } else {
+          throw new Error(badgeResponse.error || 'Could not load badges');
+        }
+      } catch (error) {
+        setDataError(error instanceof Error ? error.message : 'Could not load sustainability data');
+      } finally {
+        setLoading(false);
       }
-
-      if (badgeResponse.success && badgeResponse.data) {
-        setBadges(badgeResponse.data.badges);
-      }
-
-      setLoading(false);
     };
 
     loadSustainabilityData();
@@ -62,12 +92,12 @@ export function SustainabilityPage() {
 
       setLeaderboardLoading(true);
 
-      const response = await apiClient.getOrganizationLeaderboard(
-        score.organizationId
+      const response = await apiClient.request<{ leaderboard: LeaderboardEntry[] }>(
+        `/organizations/${encodeURIComponent(score.organizationId)}/leaderboard`,
       );
 
       if (response.success && response.data) {
-        setLeaderboard(response.data.leaderboard);
+        setLeaderboard(response.data.leaderboard ?? []);
       }
 
       setLeaderboardLoading(false);
@@ -85,10 +115,9 @@ export function SustainabilityPage() {
 
     const newValue = !leaderboardOptIn;
 
-    const response = await apiClient.setLeaderboardOptIn(
-      score.organizationId,
-      userId,
-      newValue
+    const response = await apiClient.request<{ leaderboardOptIn: boolean }>(
+      `/organizations/${encodeURIComponent(score.organizationId)}/leaderboard/opt-in`,
+      { method: 'POST', body: JSON.stringify({ enabled: newValue }) },
     );
 
     if (response.success && response.data) {
@@ -97,17 +126,16 @@ export function SustainabilityPage() {
       if (!newValue) {
         setLeaderboard([]);
       } else {
-        const leaderboardResponse =
-          await apiClient.getOrganizationLeaderboard(
-            score.organizationId
-          );
+        const leaderboardResponse = await apiClient.request<{ leaderboard: LeaderboardEntry[] }>(
+          `/organizations/${encodeURIComponent(score.organizationId)}/leaderboard`,
+        );
 
         if (
           leaderboardResponse.success &&
           leaderboardResponse.data
         ) {
           setLeaderboard(
-            leaderboardResponse.data.leaderboard
+            leaderboardResponse.data.leaderboard ?? []
           );
         }
       }
@@ -133,31 +161,30 @@ export function SustainabilityPage() {
             Impact Tracker
           </span>
         </h1>
-        <p className="page-header-subtitle">Your sustainability insights will appear here once activity measurements and carbon baselines are available.</p>
+        <p className="page-header-subtitle">Estimated impact from your latest optimization run, plus your EcoPoints progress. Figures are estimates from assumed power and duration, not measured savings.</p>
       </div>
 
-      {/* Placeholder metric cards */}
-      {/* Placeholder metric cards */}
+      {/* Impact from the latest optimization run */}
       <div className="card-grid card-grid-sm-3">
         {[
           {
             icon: Leaf,
-            label: 'Estimated net emissions savings',
-            value: 'Not available',
+            label: 'Estimated emissions saved (latest run)',
+            value: savings ? formatG(savings.totalSavedCo2) : 'Run an optimization to see this',
             color: 'text-green-400',
             bg: 'bg-green-500/10 border-green-500/20',
           },
           {
-            icon: TreePine,
-            label: 'Physical equivalents',
-            value: 'Not calculated',
+            icon: Gauge,
+            label: 'Estimated reduction vs baseline',
+            value: savings ? `${savings.reductionPercent.toFixed(1)}%` : '—',
             color: 'text-teal-400',
             bg: 'bg-teal-500/10 border-teal-500/20',
           },
           {
-            icon: Wind,
-            label: 'Estimated energy',
-            value: 'Not available',
+            icon: CalendarCheck,
+            label: 'Activities moved to Green Windows',
+            value: latest ? String(moved) : '—',
             color: 'text-blue-400',
             bg: 'bg-blue-500/10 border-blue-500/20',
           },
@@ -186,6 +213,11 @@ export function SustainabilityPage() {
         </GlassCard>
       ) : (
         <>
+          {dataError && (
+            <GlassCard padding="sm">
+              <p role="alert" className="text-sm text-amber-300">Sustainability data could not be loaded: {dataError}</p>
+            </GlassCard>
+          )}
           {/* Main Metrics */}
           <div className="card-grid card-grid-sm-3">
 

@@ -1,5 +1,7 @@
 import type { ApiResponse } from '../types/domain';
 
+export const UNAUTHORIZED_EVENT = 'ecotime:unauthorized';
+
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5000/api';
 
 export class ApiClient {
@@ -25,6 +27,11 @@ export class ApiClient {
     try {
       const response = await fetch(url, { ...options, headers });
       const json = await response.json();
+
+      if (response.status === 401 && !endpoint.startsWith('/auth/')) {
+        // Expired or invalid session: let the auth layer clear it and redirect to login.
+        window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
+      }
 
       if (!response.ok) {
         return {

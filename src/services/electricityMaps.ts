@@ -1,3 +1,4 @@
+import { carbonService } from './carbonService';
 export interface CarbonDataPoint {
   datetime: string;
   carbonIntensity: number;
@@ -104,7 +105,7 @@ export function getSimulatedIntensity(zone: GridZone, date: Date): number {
 export function generateMockCarbonData(zoneId: string, currentOffsetHours: number = 0): CarbonResponse {
   const zone = GRID_ZONES.find(z => z.id === zoneId) || GRID_ZONES[0];
   const now = new Date();
-  
+
   // Apply simulation time offset
   now.setMinutes(now.getMinutes() + Math.round(currentOffsetHours * 60));
 
@@ -153,7 +154,6 @@ export async function fetchCarbonData(
   _apiKey: string | null,
   currentOffsetHours: number = 0
 ): Promise<CarbonResponse> {
-  const { carbonService } = await import('./carbonService');
   const res = await carbonService.getCarbonData(zoneId, currentOffsetHours);
   if (!res.success || !res.data) {
     throw new Error(res.error || 'Backend carbon data is unavailable');

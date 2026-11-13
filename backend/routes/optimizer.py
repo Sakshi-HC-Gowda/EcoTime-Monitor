@@ -13,6 +13,7 @@ import logging
 import json
 import math
 import os
+from services.carbon_service import _DEFAULT_ZONE_ID, GRID_ZONES, normalize_zone_id
 from datetime import datetime, timedelta, timezone
 from flask import Blueprint, request, jsonify
 from auth_utils import require_auth, require_organization_admin
@@ -78,7 +79,7 @@ def _get_simulation_config() -> SimulationConfig:
     if config is None:
         config = SimulationConfig(
             id=1,
-            zone=os.getenv("DEFAULT_ZONE", "US-CA"),
+            zone=_DEFAULT_ZONE_ID,
             low_carbon_threshold=float(os.getenv("LOW_CARBON_THRESHOLD", "180")),
             baseline_intensity=float(os.getenv("BASELINE_INTENSITY", "380")),
             simulation_speed=int(os.getenv("SIMULATION_SPEED", "15")),
@@ -454,18 +455,34 @@ def schedule_activity(activity_id: str):
     activity.scheduled_start_time = start
     activity.expected_end_time = end
     activity.updated_at = now
-    db.session.add(ActivityHistory(
+    schedule_event = ActivityHistory(
         activity_id=activity.id,
         previous_status=previous,
         new_status="scheduled",
         execution_time=(now - previous_updated_at).total_seconds() if previous_updated_at else None,
-    ))
+    )
+    db.session.add(schedule_event)
     try:
         db.session.commit()
     except Exception:
         db.session.rollback()
         logger.exception("Could not persist optimizer schedule for activity %s", activity_id)
         return jsonify({"success": False, "error": "Could not save the recommended schedule", "timestamp": _now_iso()}), 500
+    try:
+        from config.scoring_rules import get_points
+        from services.ecopoints_service import award_points
+        award_points(
+            user_id=str(request.user.id),
+            event_type="follow_green_window",
+            event_id=str(schedule_event.id),
+            points=get_points("follow_green_window"),
+            activity_id=activity.id,
+            organization_id=str(request.user.organization_id) if request.user.organization_id else None,
+            description="Scheduled a flexible activity into a recommended Green Window",
+        )
+    except Exception:
+        db.session.rollback()
+        logger.exception("EcoPoints award failed for activity %s", activity_id)
     return jsonify({
         "success": True,
         "data": {"scheduled": True, "activity": activity.to_dict(), "recommendation": recommendation},
@@ -604,7 +621,12 @@ def set_config():
         if "zone" in data:
             if not isinstance(data["zone"], str) or not data["zone"].strip():
                 raise ValueError("Field 'zone' must be a non-empty string")
-            config.zone = data["zone"].strip()
+            canonical_zone = normalize_zone_id(data["zone"])
+            if canonical_zone not in GRID_ZONES:
+                raise ValueError(
+                    f"Unsupported zone '{data['zone'].strip()}'. Supported: {', '.join(GRID_ZONES)}"
+                )
+            config.zone = canonical_zone
         if "lowCarbonThreshold" in data:
             if isinstance(data["lowCarbonThreshold"], bool):
                 raise ValueError(

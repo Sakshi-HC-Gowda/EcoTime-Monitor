@@ -16,6 +16,7 @@ import { useZone } from '@/app/ZoneProvider';
 import { useActivityMutations } from '@/features/activities/hooks/useActivitiesQuery';
 import { useOptimizationActivities, useOptimizationSchedule } from '@/features/optimization/hooks/useOptimization';
 import { useCarbon } from '@/features/carbon/hooks/useCarbon';
+import { WhatIfPlanner } from '@/features/optimization/components/WhatIfPlanner';
 import { Button } from '@/components/ui/Button';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -249,6 +250,8 @@ export function OptimizationPage() {
         <SummaryCard icon={TriangleAlert} label="Activities needing attention" value={resultUnavailable ? '—' : attentionCount} tone="amber" />
         <SummaryCard icon={Check} label="Approved / scheduled" value={scheduledCount} tone="blue" />
       </div>
+
+      <WhatIfPlanner activities={activitiesToOptimize} zone={selectedZone} />
 
       {scheduleQuery.isError && (
         <ErrorState

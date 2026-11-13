@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -97,6 +97,9 @@ def create_app(config_name: str | None = None) -> Flask:
         TESTING=config_name == "testing",
         SQLALCHEMY_DATABASE_URI=database_url,
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        JWT_ACCESS_TOKEN_EXPIRES=timedelta(
+            minutes=max(5, int(os.getenv("JWT_ACCESS_TOKEN_EXPIRES_MINUTES", "480")))
+        ),
         MAX_CONTENT_LENGTH=101 * 1024 * 1024,
         SQLALCHEMY_ENGINE_OPTIONS={
             "pool_pre_ping": True,
@@ -173,19 +176,27 @@ def create_app(config_name: str | None = None) -> Flask:
     # -----------------------------------------------------------------------
     # CORS
     # -----------------------------------------------------------------------
+    default_origins = [
+        "http://localhost:5173",   # Vite dev server
+        "http://localhost:3000",   # Alt dev
+        "http://localhost:5000",   # Production build
+        "http://127.0.0.1:5173",
+    ]
+    # Deployed frontend origin(s): comma-separated, e.g. https://ecotime.vercel.app
+    extra_origins = [
+        origin.strip().rstrip("/")
+        for origin in os.getenv("CORS_ORIGINS", "").split(",")
+        if origin.strip()
+    ]
     CORS(app, resources={
         r"/api/*": {
-            "origins": [
-                "http://localhost:5173",   # Vite dev server
-                "http://localhost:3000",   # Alt dev
-                "http://localhost:5000",   # Production build
-                "http://127.0.0.1:5173",
-            ],
+            "origins": default_origins + extra_origins,
             "methods": ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization", "Idempotency-Key"],
         }
     })
 
+    # -----------------------------------------------------------------------
        # -----------------------------------------------------------------------
     # Blueprint Registration
     # -----------------------------------------------------------------------

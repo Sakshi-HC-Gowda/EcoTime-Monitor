@@ -9,6 +9,9 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 
+from auth_utils import require_auth
+from models.activity import Activity
+
 from config.scoring_rules import SCORING_RULES, get_points
 from services.ecopoints_service import (
     award_points,
@@ -24,7 +27,15 @@ ecopoints_bp = Blueprint(
 )
 
 
+def _forbid_other_user(user_id) -> tuple | None:
+    """Users may only read or write their own EcoPoints data."""
+    if str(user_id) != str(request.user.id):
+        return jsonify({"error": "You can only access your own EcoPoints data"}), 403
+    return None
+
+
 @ecopoints_bp.post("/ecopoints/award")
+@require_auth
 def award_ecopoints():
     """
     Award EcoPoints for a legitimate EcoTime activity event.
@@ -38,9 +49,10 @@ def award_ecopoints():
     activity_id = data.get("activityId")
 
     if not user_id:
-        return jsonify({
-            "error": "userId is required"
-        }), 400
+        user_id = str(request.user.id)
+    denied = _forbid_other_user(user_id)
+    if denied:
+        return denied
 
     if not event_type:
         return jsonify({
@@ -56,6 +68,12 @@ def award_ecopoints():
         return jsonify({
             "error": "activityId is required"
         }), 400
+
+    owned = Activity.query.filter_by(
+        id=activity_id, organization_id=request.user.organization_id
+    ).first()
+    if owned is None:
+        return jsonify({"error": "Activity not found"}), 404
 
     # Only allow predefined scoring rules.
     if event_type not in SCORING_RULES:
@@ -73,7 +91,7 @@ def award_ecopoints():
             points=points,
             activity_id=activity_id,
             recommendation_id=data.get("recommendationId"),
-            organization_id=data.get("organizationId"),
+            organization_id=str(request.user.organization_id) if request.user.organization_id else None,
             description=data.get("description"),
         )
 
@@ -100,10 +118,14 @@ def award_ecopoints():
 
 
 @ecopoints_bp.get("/ecopoints/<user_id>")
+@require_auth
 def get_ecopoints(user_id: str):
     """
     Get EcoPoint transaction history for a user.
     """
+    denied = _forbid_other_user(user_id)
+    if denied:
+        return denied
 
     transactions = get_user_transactions(user_id)
 
@@ -115,10 +137,14 @@ def get_ecopoints(user_id: str):
 
 
 @ecopoints_bp.get("/ecopoints/<user_id>/score")
+@require_auth
 def get_sustainability_score(user_id: str):
     """
     Get sustainability score and streak information.
     """
+    denied = _forbid_other_user(user_id)
+    if denied:
+        return denied
 
     score = get_user_score(user_id)
 
@@ -129,20 +155,12 @@ def get_sustainability_score(user_id: str):
 
     return jsonify(score), 200
 @ecopoints_bp.get("/ecopoints/transactions")
+@require_auth
 def get_my_transactions():
-    user_id = request.args.get("userId")
-
-    if not user_id:
-        return jsonify({
-            "error": "userId query parameter is required"
-        }), 400
-
+    user_id = str(request.user.id)
     transactions = get_user_transactions(user_id)
-
     return jsonify({
         "userId": user_id,
-        "transactions": [
-            transaction.to_dict()
-            for transaction in transactions
-        ]
+        "transactions": transactions,
+        "totalTransactions": len(transactions),
     }), 200

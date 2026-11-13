@@ -22,6 +22,7 @@ from models.activity_history import ActivityHistory
 from models.upload_registration import UploadRegistration
 from models.simulation_config import SimulationConfig
 from services import optimizer_service
+from services.carbon_service import _DEFAULT_ZONE_ID
 
 logger = logging.getLogger(__name__)
 
@@ -244,7 +245,7 @@ def schedule_upload(upload_id: str, organization_id: int) -> tuple[UploadRegistr
         raise UploadError("The staged upload is unavailable; register the file again", 409)
 
     config = db.session.get(SimulationConfig, 1)
-    zone_id = config.zone if config else os.getenv("DEFAULT_ZONE", "US-CA")
+    zone_id = config.zone if config else _DEFAULT_ZONE_ID
     baseline = config.baseline_intensity if config else 380.0
     try:
         result = optimizer_service.recommend_schedule(

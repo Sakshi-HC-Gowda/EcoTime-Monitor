@@ -217,6 +217,48 @@ The frontend defaults to `http://localhost:5000/api`. To override it, copy
 `.env.example` to `.env.local` and set `VITE_API_BASE`. Vite variables are
 client-visible; do not put secrets in them.
 
+## Demo quick start
+
+1. Backend: copy `backend/.env.example` to `backend/.env`, set `DATABASE_URL`, `SECRET_KEY`,
+   `ELECTRICITY_MAPS_API_KEY`, `DEFAULT_ZONE=IN-SO` and `BASELINE_INTENSITY=650`, then run
+   `cd backend && python app.py`.
+2. Seed demo data (safe to re-run): `cd backend && python scripts/seed_demo.py`. It creates the
+   demo user (`demo@ecotime.app` / `EcoTime@Demo1`), sample activities, one optimization run and
+   a few scheduled activities (which award EcoPoints). It also syncs the stored zone and
+   baseline with your `.env`, because the app only reads `DEFAULT_ZONE` when the config row is
+   first created.
+3. Scheduled uploads need the worker: `cd backend && python worker.py` (second terminal).
+4. Frontend: `npm ci && npm run dev`, open http://localhost:5173 and log in.
+
+Supported zones: US-CA, IN, IN-SO, IN-WE, IN-NO, IN-EA, IN-NE, US-NY, DK-DK2, GB, FR, DE, BR,
+AU-NSW. An unsupported `DEFAULT_ZONE` falls back to US-CA with a logged warning.
+
+### Deployment notes
+
+- Set `CORS_ORIGINS` to your deployed frontend origin(s), comma-separated, and set
+  `VITE_API_BASE` (frontend build-time) to the deployed API URL ending in `/api`.
+- `JWT_ACCESS_TOKEN_EXPIRES_MINUTES` controls session length (default 480). An expired session
+  logs the user out and returns them to the login page.
+- Uploaded files are stored on local disk; use a persistent volume or expect them to be lost on
+  redeploy on ephemeral hosts.
+- `backend/data/best_model.pkl` ships in the repository and was trained with the pinned
+  `scikit-learn`/`xgboost` versions in `requirements.txt`. Retrain with `python forecast/train.py`
+  after changing those pins.
+- With a live Electricity Maps key, Green Windows and recommendations use the provider forecast
+  when it is available and otherwise the trained model on live history (labeled `ml_model`).
+- The model is trained on the repository's synthetic zone simulation, so its cross-validation
+  scores measure how well it reproduces that simulation, not real-grid forecasting accuracy.
+
+### What-if planner
+
+The Optimization page includes an interactive what-if planner. Choose an activity, slide its
+start time across the next 48 hours of forecast, and see the estimated emissions for that start
+next to "run as soon as allowed" and the cleanest start. It honors each activity's earliest
+start and deadline, and only treats flexible activities with priority below 80 as movable (the
+same rule the backend optimizer uses). Emissions are `power (W) x minutes / 60000 x average
+forecast intensity`, weighting each hour of the run by its intensity. The fleet-wide total is an
+upper bound because it ignores window capacity and overlaps, which the optimizer handles.
+
 ## Database and schema safety
 
 SQLAlchemy uses PostgreSQL in development/production and an in-memory SQLite
@@ -243,7 +285,7 @@ npm run build
 git diff --check
 ```
 
-Verified for the reviewed implementation: **97 backend tests passed**;
+Verified for the reviewed implementation: **176 backend tests passed**;
 `npm run build` passed (TypeScript build and Vite production bundle); and
 `git diff --check` passed. The frontend build emits a Vite warning that one
 minified bundle exceeds 500 kB. No browser/manual end-to-end test, live carbon

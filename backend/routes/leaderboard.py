@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 
+from auth_utils import require_organization_access
 from models import SustainabilityScore
 from services.leaderboard_service import get_organization_leaderboard
 from extensions import db
@@ -20,6 +21,7 @@ leaderboard_bp = Blueprint(
 
 
 @leaderboard_bp.get("/organizations/<organization_id>/leaderboard")
+@require_organization_access
 def get_leaderboard(organization_id: str):
     leaderboard = get_organization_leaderboard(organization_id)
 
@@ -29,10 +31,11 @@ def get_leaderboard(organization_id: str):
         "totalUsers": len(leaderboard),
     }), 200
 @leaderboard_bp.post("/organizations/<organization_id>/leaderboard/opt-in")
+@require_organization_access
 def set_leaderboard_opt_in(organization_id: str):
     data = request.get_json(silent=True) or {}
 
-    user_id = data.get("userId")
+    user_id = str(request.user.id)  # always the authenticated user
     enabled = data.get("enabled")
 
     if not user_id:

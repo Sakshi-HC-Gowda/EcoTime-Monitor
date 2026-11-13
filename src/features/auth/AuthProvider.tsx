@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { authService } from './authService';
+import { UNAUTHORIZED_EVENT } from '@/services/apiClient';
 import type { AuthSession, AuthUser } from './types';
 
 interface AuthContextValue {
@@ -81,6 +82,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setToken(null);
   }, []);
+
+  useEffect(() => {
+    const handleUnauthorized = () => logout();
+    window.addEventListener(UNAUTHORIZED_EVENT, handleUnauthorized);
+    return () => window.removeEventListener(UNAUTHORIZED_EVENT, handleUnauthorized);
+  }, [logout]);
 
   const value = useMemo<AuthContextValue>(
     () => ({

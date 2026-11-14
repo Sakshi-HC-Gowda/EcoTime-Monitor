@@ -332,6 +332,9 @@ def _ensure_organization_ownership_schema() -> None:
         "ALTER TABLE activities ADD COLUMN IF NOT EXISTS organization_id INTEGER"
     ))
     db.session.execute(text(
+        "ALTER TABLE activities ADD COLUMN IF NOT EXISTS user_id INTEGER"
+    ))
+    db.session.execute(text(
         "ALTER TABLE activities ADD COLUMN IF NOT EXISTS earliest_start TIMESTAMP WITH TIME ZONE"
     ))
     db.session.execute(text(
@@ -395,6 +398,18 @@ def _ensure_organization_ownership_schema() -> None:
         "'activities_organization_id_fkey') THEN "
         "ALTER TABLE activities ADD CONSTRAINT activities_organization_id_fkey "
         "FOREIGN KEY (organization_id) REFERENCES organizations(id); "
+        "END IF; END $$"
+    ))
+    db.session.execute(text(
+        "CREATE INDEX IF NOT EXISTS ix_activities_user_id "
+        "ON activities (user_id)"
+    ))
+    db.session.execute(text(
+        "DO $$ BEGIN "
+        "IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = "
+        "'activities_user_id_fkey') THEN "
+        "ALTER TABLE activities ADD CONSTRAINT activities_user_id_fkey "
+        "FOREIGN KEY (user_id) REFERENCES users(id); "
         "END IF; END $$"
     ))
     db.session.execute(text(

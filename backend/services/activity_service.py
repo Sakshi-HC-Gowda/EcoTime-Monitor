@@ -261,6 +261,8 @@ def start_simulated_activity(task_id: str, organization_id: int) -> tuple[dict |
 
 def advance_simulated_activities(organization_id: int) -> None:
     """Persist elapsed-time progress and completion for simulated workloads."""
+    from services.completion_reward_service import try_award_completion_points
+
     now = datetime.now(timezone.utc)
     running = Activity.query.filter_by(
         organization_id=organization_id,
@@ -282,12 +284,15 @@ def advance_simulated_activities(organization_id: int) -> None:
         if progress >= 100.0:
             activity.status = "completed"
             activity.progress = 100.0
-            db.session.add(ActivityHistory(
+            history = ActivityHistory(
                 activity_id=activity.id,
                 previous_status="running",
                 new_status="completed",
                 execution_time=(now - started).total_seconds(),
-            ))
+            )
+            db.session.add(history)
+            db.session.flush()
+            try_award_completion_points(activity, history)
     if changed:
         try:
             db.session.commit()
@@ -426,6 +431,7 @@ def create_activity(
     activity = Activity(
         id=task_id,
         organization_id=authenticated_user.organization_id,
+        user_id=authenticated_user.id,
         idempotency_key=idempotency_key,
         request_fingerprint=request_fingerprint,
         name=activity_name,

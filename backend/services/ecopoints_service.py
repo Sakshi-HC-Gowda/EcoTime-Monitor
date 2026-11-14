@@ -12,6 +12,7 @@ EcoTime activity/recommendation event.
 
 from __future__ import annotations
 
+import hashlib
 from datetime import date, datetime, timedelta, timezone
 from uuid import uuid4
 
@@ -24,6 +25,7 @@ from models import (
     EcoPointTransaction,
     SustainabilityScore,
     Badge,
+    User,
 )
 
 from config.scoring_rules import (
@@ -75,6 +77,13 @@ def award_points(
             f"Activity '{activity_id}' does not exist."
         )
 
+    # Validate organization consistency
+    if organization_id is not None and activity.organization_id is not None:
+        if str(activity.organization_id) != str(organization_id):
+            raise ValueError(
+                f"Activity '{activity_id}' does not belong to organization '{organization_id}'."
+            )
+
     # ---------------------------------------------------------
     # 2. Verify the exact ActivityHistory event
     # ---------------------------------------------------------
@@ -101,7 +110,7 @@ def award_points(
             f"for activity '{activity_id}'."
         )
 
-        # ---------------------------------------------------------
+    # ---------------------------------------------------------
     # 3. Prevent duplicate and near-duplicate rewards
     # ---------------------------------------------------------
 
@@ -117,6 +126,19 @@ def award_points(
 
     if existing:
         return None
+
+    # Activity-level idempotency: prevent multiple rewards of the same type for one activity
+    if activity_id is not None:
+        existing_activity_reward = (
+            EcoPointTransaction.query
+            .filter_by(
+                activity_id=activity_id,
+                event_type=event_type,
+            )
+            .first()
+        )
+        if existing_activity_reward is not None:
+            return None
 
     # Prevent repeated scoring of near-identical activity events
     # within the configured anti-gaming time window.
@@ -155,11 +177,16 @@ def award_points(
         if recent_transaction is not None:
             return None
 
-       # ---------------------------------------------------------
-    # 4. Apply daily and weekly EcoPoints caps
+    # ---------------------------------------------------------
+    # 4. Apply daily and weekly EcoPoints caps (serialized)
     # ---------------------------------------------------------
 
+    # Serialize concurrent point awards for the same user row
+    if str(user_id).isdigit():
+        db.session.query(User).filter_by(id=int(user_id)).with_for_update().first()
+
     now = datetime.now(timezone.utc)
+    today = now.date()
 
     # -------------------------
     # Daily cap
@@ -191,7 +218,6 @@ def award_points(
     if daily_points + points > daily_cap:
         return None
 
-
     # -------------------------
     # Weekly cap
     # -------------------------
@@ -222,11 +248,18 @@ def award_points(
         return None
 
     # ---------------------------------------------------------
-    # 5. Create immutable transaction
+    # 5. Create immutable transaction with stable identity
     # ---------------------------------------------------------
 
+    # Deterministic stable primary key for activity completion events
+    if activity_id is not None:
+        digest = hashlib.sha256(f"{activity_id}:{event_type}".encode("utf-8")).hexdigest()[:32]
+        tx_id = f"tx-{digest}"
+    else:
+        tx_id = str(uuid4())
+
     transaction = EcoPointTransaction(
-        id=str(uuid4()),
+        id=tx_id,
         user_id=user_id,
         organization_id=organization_id,
         activity_id=activity_id,
@@ -237,12 +270,13 @@ def award_points(
         description=description,
     )
 
-    db.session.add(transaction)
-
+    # Use a savepoint so that an unexpected IntegrityError rolls back
+    # ONLY the savepoint, never the surrounding outer transaction.
     try:
-        db.session.flush()
+        with db.session.begin_nested():
+            db.session.add(transaction)
+            db.session.flush()
     except IntegrityError:
-        db.session.rollback()
         return None
 
     # ---------------------------------------------------------
@@ -273,10 +307,8 @@ def award_points(
     score.score += points
 
     # ---------------------------------------------------------
-    # 7. Update sustainability streak
+    # 7. Update sustainability streak (explicit UTC date policy)
     # ---------------------------------------------------------
-
-    today = date.today()
 
     if score.last_sustainable_date is None:
         score.current_streak = 1

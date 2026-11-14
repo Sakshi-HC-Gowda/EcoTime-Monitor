@@ -27,10 +27,10 @@ const matchesStatusTab = (status: Task['status'], tab: TabStatus) =>
   status.toLowerCase() === tab;
 
 const TABS: { value: TabStatus; label: string }[] = [
-  { value: 'all',       label: 'All' },
-  { value: 'pending',   label: 'Pending' },
+  { value: 'all', label: 'All' },
+  { value: 'pending', label: 'Pending' },
   { value: 'scheduled', label: 'Scheduled' },
-  { value: 'running',   label: 'Running' },
+  { value: 'running', label: 'Running' },
   { value: 'completed', label: 'Completed' },
 ];
 
@@ -173,6 +173,7 @@ export function ActivitiesPage() {
         next.delete(activity.id);
         return next;
       });
+      void refetch();
     }
   };
 
@@ -484,7 +485,7 @@ export function ActivitiesPage() {
     : activitiesData.items.filter((task) => matchesStatusTab(task.status, activeTab));
 
   return (
-  <div className="page-shell page-stack activities-page">
+    <div className="page-shell page-stack activities-page">
       {selectedWindow && selectedWindowZone && (
         <GlassCard className="border-teal-500/20 bg-teal-500/[0.05]">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -517,130 +518,129 @@ export function ActivitiesPage() {
         className="sr-only"
         onChange={handleFileSelection}
       />
-        {/* ── Header ─────────────────────────────────────────────────────────── */}
-        <div className="page-header activities-header">
-          <div>
-            <h1 className="page-header-title heading-row">
-              Digital Workloads
-              <span className="ds-badge bg-amber-500/10 text-amber-400 border-amber-500/20">
-                {activitiesData.total} Total
-              </span>
-            </h1>
-            <p className="page-header-subtitle">
-              Register, monitor, and manage carbon-aware digital workloads with full lifecycle status controls.
-            </p>
-          </div>
-
-          <div className="cluster">
-            <Button size="sm" onClick={() => setIsModalOpen(true)} iconLeft={<Plus className="w-3.5 h-3.5" />}>
-              Register Activity
-            </Button>
-          </div>
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="page-header activities-header">
+        <div>
+          <h1 className="page-header-title heading-row">
+            Digital Workloads
+            <span className="ds-badge bg-amber-500/10 text-amber-400 border-amber-500/20">
+              {activitiesData.total} Total
+            </span>
+          </h1>
+          <p className="page-header-subtitle">
+            Register, monitor, and manage carbon-aware digital workloads with full lifecycle status controls.
+          </p>
         </div>
 
-        {/* ── Segment control tabs ────────────────────────────────────────────── */}
-        {deleteError && <p role="alert" className="rounded-lg border border-rose-500/20 bg-rose-500/10 p-3 text-sm text-rose-300">{deleteError}</p>}
-        <div className="segment-control activities-segment w-full sm:w-auto">
-          {TABS.map(({ value, label }) => {
-            const count = value === 'all'
-              ? activitiesData.statusCounts
-                ? Object.values(activitiesData.statusCounts).reduce((sum, value) => sum + (value ?? 0), 0)
-                : activeTab === 'all' ? activitiesData.total : activitiesData.items.length
-              : activitiesData.statusCounts?.[value]
-                ?? activitiesData.items.filter((task) => matchesStatusTab(task.status, value)).length;
+        <div className="cluster">
+          <Button size="sm" onClick={() => setIsModalOpen(true)} iconLeft={<Plus className="w-3.5 h-3.5" />}>
+            Register Activity
+          </Button>
+        </div>
+      </div>
 
-            return (
-              <button
-                key={value}
-                onClick={() => setActiveTab(value)}
-                className={`segment-tab ${activeTab === value ? 'active' : ''}`}
-                aria-current={activeTab === value ? 'page' : undefined}
-              >
-                {label}
-                {count > 0 && (
-                  <span className={`ds-badge ml-0.5 px-1.5 py-0.5 ${
-                    activeTab === value
-                      ? 'bg-white/10 text-white'
-                      : 'bg-white/[0.05] text-slate-500'
+      {/* ── Segment control tabs ────────────────────────────────────────────── */}
+      {deleteError && <p role="alert" className="rounded-lg border border-rose-500/20 bg-rose-500/10 p-3 text-sm text-rose-300">{deleteError}</p>}
+      <div className="segment-control activities-segment w-full sm:w-auto">
+        {TABS.map(({ value, label }) => {
+          const count = value === 'all'
+            ? activitiesData.statusCounts
+              ? Object.values(activitiesData.statusCounts).reduce((sum, value) => sum + (value ?? 0), 0)
+              : activeTab === 'all' ? activitiesData.total : activitiesData.items.length
+            : activitiesData.statusCounts?.[value]
+            ?? activitiesData.items.filter((task) => matchesStatusTab(task.status, value)).length;
+
+          return (
+            <button
+              key={value}
+              onClick={() => setActiveTab(value)}
+              className={`segment-tab ${activeTab === value ? 'active' : ''}`}
+              aria-current={activeTab === value ? 'page' : undefined}
+            >
+              {label}
+              {count > 0 && (
+                <span className={`ds-badge ml-0.5 px-1.5 py-0.5 ${activeTab === value
+                    ? 'bg-white/10 text-white'
+                    : 'bg-white/[0.05] text-slate-500'
                   }`}>
-                    {count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
 
-        {/* ── Activity grid ───────────────────────────────────────────────────── */}
-        {tasks.length === 0 ? (
-          <EmptyState
-            icon={Filter}
-            title="No activities in this status"
-            description="Register a new digital workload or switch tabs to see other workloads."
-            actionLabel="Register Activity"
-            onAction={() => setIsModalOpen(true)}
-            accentColor="amber"
-          />
-        ) : (
-          <div className="card-grid card-grid-sm-2 card-grid-lg-3 activities-grid">
-            {tasks.map((task) => (
-              <ActivityCard
-                key={task.id}
-                activity={task}
-                assignedWindowLabel={getGreenWindowLabelById(currentWindows ?? [], task.assignedWindowId)}
-                carbonIntensity={carbon?.current.carbonIntensity}
-                carbonIsSimulated={carbon?.isSimulated}
-                baselineIntensity={simulationConfig?.baselineIntensity}
-                onUpdateStatus={(id, status, scheduledStartTime) =>
-                  updateMutation.mutate({ id, update: { status, scheduledStartTime } })
-                }
-                onRunNow={(activity) => {
-                  const current = uploadStates[activity.id]?.upload;
-                  if (current) void runRegisteredNow(activity, current);
-                }}
-                onScheduleUpload={(activity) => {
-                  const current = uploadStates[activity.id]?.upload;
-                  if (current) void scheduleRegistered(activity, current);
-                }}
-                onChooseFile={(activity) => openFilePicker(activity)}
-                onScheduleActivity={(activity) => void scheduleActivity(activity)}
-                onRunActivity={(activity) => void runActivityNow(activity)}
-                scheduling={schedulingIds.has(task.id)}
-                executing={executingIds.has(task.id)}
-                deleting={deleteMutation.isPending}
-                schedulingReason={scheduleMessages[task.id]}
-                schedulingError={schedulingErrors[task.id]}
-                executionMessage={executionMessages[task.id]}
-                selectedFile={selectedFiles[task.id]}
-                onUploadSelected={() => {
-                  const selected = selectedFiles[task.id];
-                  if (!selected) return;
-                  setSelectedFiles((current) => {
-                    const next = { ...current };
-                    delete next[task.id];
-                    return next;
-                  });
-                  void startUpload(task, selected);
-                }}
-                onDelete={(id) => void confirmDelete(id)}
-                uploadState={uploadStates[task.id]}
-              />
-            ))}
-          </div>
-        )}
-
-        {/* ── Modal ──────────────────────────────────────────────────────────── */}
-        <CreateActivityModal
-          isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
-          onSubmit={async (newTask, idempotencyKey) => {
-            const response = await createMutation.mutateAsync({ task: newTask, idempotencyKey });
-            if (!response.success || !response.data) {
-              throw new Error(response.error || 'Could not register the activity.');
-            }
-            await refetch();
-          }}
+      {/* ── Activity grid ───────────────────────────────────────────────────── */}
+      {tasks.length === 0 ? (
+        <EmptyState
+          icon={Filter}
+          title="No activities in this status"
+          description="Register a new digital workload or switch tabs to see other workloads."
+          actionLabel="Register Activity"
+          onAction={() => setIsModalOpen(true)}
+          accentColor="amber"
         />
+      ) : (
+        <div className="card-grid card-grid-sm-2 card-grid-lg-3 activities-grid">
+          {tasks.map((task) => (
+            <ActivityCard
+              key={task.id}
+              activity={task}
+              assignedWindowLabel={getGreenWindowLabelById(currentWindows ?? [], task.assignedWindowId)}
+              carbonIntensity={carbon?.current.carbonIntensity}
+              carbonIsSimulated={carbon?.isSimulated}
+              baselineIntensity={simulationConfig?.baselineIntensity}
+              onUpdateStatus={(id, status, scheduledStartTime) =>
+                updateMutation.mutate({ id, update: { status, scheduledStartTime } })
+              }
+              onRunNow={(activity) => {
+                const current = uploadStates[activity.id]?.upload;
+                if (current) void runRegisteredNow(activity, current);
+              }}
+              onScheduleUpload={(activity) => {
+                const current = uploadStates[activity.id]?.upload;
+                if (current) void scheduleRegistered(activity, current);
+              }}
+              onChooseFile={(activity) => openFilePicker(activity)}
+              onScheduleActivity={(activity) => void scheduleActivity(activity)}
+              onRunActivity={(activity) => void runActivityNow(activity)}
+              scheduling={schedulingIds.has(task.id)}
+              executing={executingIds.has(task.id)}
+              deleting={deleteMutation.isPending}
+              schedulingReason={scheduleMessages[task.id]}
+              schedulingError={schedulingErrors[task.id]}
+              executionMessage={executionMessages[task.id]}
+              selectedFile={selectedFiles[task.id]}
+              onUploadSelected={() => {
+                const selected = selectedFiles[task.id];
+                if (!selected) return;
+                setSelectedFiles((current) => {
+                  const next = { ...current };
+                  delete next[task.id];
+                  return next;
+                });
+                void startUpload(task, selected);
+              }}
+              onDelete={(id) => void confirmDelete(id)}
+              uploadState={uploadStates[task.id]}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* ── Modal ──────────────────────────────────────────────────────────── */}
+      <CreateActivityModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSubmit={async (newTask, idempotencyKey) => {
+          const response = await createMutation.mutateAsync({ task: newTask, idempotencyKey });
+          if (!response.success || !response.data) {
+            throw new Error(response.error || 'Could not register the activity.');
+          }
+          await refetch();
+        }}
+      />
     </div>
   );
 }

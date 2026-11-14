@@ -181,63 +181,63 @@ export function ActivityCard({
       <div className="px-[var(--card-padding-md)] pb-5">
         <p className="label-text mb-2">Activity metrics</p>
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-        <div className="ds-card min-w-0 p-2.5">
-          <span className="label-text mb-1 block truncate">Assumed power</span>
-          <span className="flex items-center gap-1.5 text-sm font-semibold text-white">
-            <Clock className="h-3 w-3 flex-shrink-0 text-amber-400" />
-            {estimatedPower.toFixed(0)} W
-          </span>
-        </div>
-
-        <div className="ds-card min-w-0 p-2.5">
-          <span className="label-text mb-1 block truncate">Estimated duration</span>
-          <span className="flex items-center gap-1.5 text-sm font-semibold text-white">
-            <Clock className="h-3 w-3 flex-shrink-0 text-cyan-400" />
-            {activity.duration} min
-          </span>
-        </div>
-
-        <div className="ds-card min-w-0 p-2.5">
-          <span className="label-text mb-1 block truncate">Estimated energy</span>
-          <span className="flex items-center gap-1.5 text-sm font-bold text-amber-300">
-            <Zap className="h-3 w-3 flex-shrink-0 text-amber-400" />
-            {estimatedEnergy.toFixed(2)} kWh
-          </span>
-        </div>
-
-        <div className="ds-card min-w-0 p-2.5">
-          <span className="label-text mb-1 block truncate">
-            Estimated emissions
-          </span>
-          <span className={`text-sm font-bold ${isHighCarbon ? 'text-rose-300' : 'text-green-300'}`}>
-            {estimatedCarbonImpact === null ? 'Unavailable without carbon intensity' : `${estimatedCarbonImpact.toFixed(2)} gCO2e`}
-          </span>
-          {estimatedCarbonImpact !== null && (
-            <span className="mt-1 block text-[10px] text-slate-500">
-              {carbonIsSimulated ? 'Simulated carbon input' : 'Provider-reported carbon input'}
-            </span>
-          )}
-        </div>
-
-        <div className="ds-card col-span-2 p-2.5 sm:col-span-4">
-          <div className="mb-1 flex items-center justify-between gap-3">
-            <span className="label-text block">EcoScore</span>
-            <span className="text-xs font-bold text-cyan-300">
-              {ecoScore === null ? 'Unavailable' : `${ecoScore.toFixed(1)} / 100`}
+          <div className="ds-card min-w-0 p-2.5">
+            <span className="label-text mb-1 block truncate">Assumed power</span>
+            <span className="flex items-center gap-1.5 text-sm font-semibold text-white">
+              <Clock className="h-3 w-3 flex-shrink-0 text-amber-400" />
+              {estimatedPower.toFixed(0)} W
             </span>
           </div>
-          <div className="h-1.5 w-full rounded-full bg-white/[0.06]">
-            <div
-              className="h-full rounded-full bg-cyan-400/80"
-              style={{ width: `${Math.max(4, Math.min(100, ecoScore ?? 0))}%` }}
-            />
+
+          <div className="ds-card min-w-0 p-2.5">
+            <span className="label-text mb-1 block truncate">Estimated duration</span>
+            <span className="flex items-center gap-1.5 text-sm font-semibold text-white">
+              <Clock className="h-3 w-3 flex-shrink-0 text-cyan-400" />
+              {activity.duration} min
+            </span>
           </div>
-          <span className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-slate-300">
-            <Sparkles className="h-3 w-3 text-cyan-400" />
-            {ecoScore === null ? 'Waiting for valid carbon data' : recommendation}
-          </span>
+
+          <div className="ds-card min-w-0 p-2.5">
+            <span className="label-text mb-1 block truncate">Estimated energy</span>
+            <span className="flex items-center gap-1.5 text-sm font-bold text-amber-300">
+              <Zap className="h-3 w-3 flex-shrink-0 text-amber-400" />
+              {estimatedEnergy.toFixed(2)} kWh
+            </span>
+          </div>
+
+          <div className="ds-card min-w-0 p-2.5">
+            <span className="label-text mb-1 block truncate">
+              Estimated emissions
+            </span>
+            <span className={`text-sm font-bold ${isHighCarbon ? 'text-rose-300' : 'text-green-300'}`}>
+              {estimatedCarbonImpact === null ? 'Unavailable without carbon intensity' : `${estimatedCarbonImpact.toFixed(2)} gCO2e`}
+            </span>
+            {estimatedCarbonImpact !== null && (
+              <span className="mt-1 block text-[10px] text-slate-500">
+                {carbonIsSimulated ? 'Simulated carbon input' : 'Provider-reported carbon input'}
+              </span>
+            )}
+          </div>
+
+          <div className="ds-card col-span-2 p-2.5 sm:col-span-4">
+            <div className="mb-1 flex items-center justify-between gap-3">
+              <span className="label-text block">EcoScore</span>
+              <span className="text-xs font-bold text-cyan-300">
+                {ecoScore === null ? 'Unavailable' : `${ecoScore.toFixed(1)} / 100`}
+              </span>
+            </div>
+            <div className="h-1.5 w-full rounded-full bg-white/[0.06]">
+              <div
+                className="h-full rounded-full bg-cyan-400/80"
+                style={{ width: `${Math.max(4, Math.min(100, ecoScore ?? 0))}%` }}
+              />
+            </div>
+            <span className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-slate-300">
+              <Sparkles className="h-3 w-3 text-cyan-400" />
+              {ecoScore === null ? 'Waiting for valid carbon data' : recommendation}
+            </span>
+          </div>
         </div>
-      </div>
       </div>
 
       {showUploadStatus && (
@@ -368,43 +368,43 @@ export function ActivityCard({
         )}
 
         {isFileUpload && upload && ['pending', 'scheduled', 'failed'].includes(uploadStatus) && (
-          <Button
-            type="button"
-            size="xs"
-            className="flex-1"
+          <button
             onClick={handleRunNow}
-            disabled={uploadStatus === 'registering' || uploadStatus === 'running' || executing}
-            iconLeft={<Play />}
+            disabled={uploadStatus === 'registering' || uploadStatus === 'running'}
+            className="ds-control flex flex-1 items-center justify-center gap-1.5 bg-green-500/80 text-[12px] font-bold text-white shadow-sm shadow-green-500/20 hover:bg-green-500 disabled:opacity-50"
           >
-            {executing ? 'Starting…' : 'Run Now'}
-          </Button>
+            <Play className="h-3 w-3" /> Run Now (stores file only)
+          </button>
+        )}
+
+        {isFileUpload && upload && ['pending', 'failed'].includes(uploadStatus) && (
+          <button
+            onClick={handleSchedule}
+            disabled={uploadStatus === 'registering' || uploadStatus === 'running'}
+            className="ds-control flex flex-1 items-center justify-center gap-1.5 border border-white/[0.07] bg-white/[0.04] text-[12px] font-semibold text-slate-300 hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Calendar className="h-3 w-3" /> Schedule upload
+          </button>
         )}
 
         {!isFileUpload && ['idle', 'pending', 'paused', 'delayed'].includes(activity.status) && (
-          <Button
-            type="button"
-            variant="outline"
-            size="xs"
-            className="flex-1 border-green-500/20 bg-green-500/10 text-green-200 hover:bg-green-500/20 hover:text-white"
-            onClick={handleSchedule}
-            disabled={scheduling || executing}
-            iconLeft={<Calendar />}
+          <button
+            onClick={() => onScheduleActivity?.(activity)}
+            disabled={scheduling}
+            className="ds-control flex flex-1 items-center justify-center gap-1.5 border border-green-500/20 bg-green-500/10 text-[12px] font-semibold text-green-200 hover:bg-green-500/20 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {scheduling ? 'Finding a window…' : 'Schedule activity'}
-          </Button>
+            <Calendar className="h-3 w-3" /> {scheduling ? 'Finding a window…' : 'Schedule activity'}
+          </button>
         )}
 
-        {!isFileUpload && ['idle', 'pending', 'scheduled'].includes(activity.status) && (
-          <Button
-            type="button"
-            size="xs"
-            className="flex-1"
-            onClick={handleRunNow}
-            disabled={executing || scheduling}
-            iconLeft={<Play />}
+        {!isFileUpload && activity.status === 'scheduled' && (
+          <button
+            onClick={() => onRunActivity?.(activity)}
+            disabled={executing}
+            className="ds-control flex flex-1 items-center justify-center gap-1.5 bg-green-500/80 text-[12px] font-bold text-white shadow-sm shadow-green-500/20 hover:bg-green-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {executing ? 'Starting…' : 'Run Now'}
-          </Button>
+            <Play className="h-3 w-3" /> {executing ? 'Starting simulated run…' : 'Run Now (simulated)'}
+          </button>
         )}
 
         {!isFileUpload && activity.status === 'running' && (

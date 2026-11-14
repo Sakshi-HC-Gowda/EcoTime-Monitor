@@ -63,10 +63,10 @@ def _activity_for(activity_id: str, organization_id: int) -> Activity:
     return activity
 
 
-def _append_activity_transition(activity: Activity, new_status: str) -> None:
+def _append_activity_transition(activity: Activity, new_status: str) -> ActivityHistory | None:
     if activity.status == new_status:
-        return
-    db.session.add(ActivityHistory(
+        return None
+    history = ActivityHistory(
         activity_id=activity.id,
         previous_status=activity.status,
         new_status=new_status,
@@ -74,13 +74,15 @@ def _append_activity_transition(activity: Activity, new_status: str) -> None:
             (_now() - _utc(activity.updated_at)).total_seconds()
             if activity.updated_at else None
         ),
-    ))
+    )
+    db.session.add(history)
     activity.status = new_status
     activity.updated_at = _now()
     if new_status == "completed":
         activity.progress = 100.0
     elif new_status in {"pending", "failed"}:
         activity.progress = 0.0
+    return history
 
 
 def _validate_bytes(filename: str, content: bytes) -> str:
@@ -381,7 +383,18 @@ def execute_upload(
             registration.status = "completed"
             registration.completed_at = _now()
             registration.error_message = None
-            _append_activity_transition(activity, "completed")
+            recovery_history = _append_activity_transition(activity, "completed")
+            if recovery_history is None and activity.status == "completed":
+                recovery_history = (
+                    ActivityHistory.query
+                    .filter_by(activity_id=activity.id, new_status="completed")
+                    .order_by(ActivityHistory.created_at.desc())
+                    .first()
+                )
+            if recovery_history is not None:
+                db.session.flush()
+                from services.completion_reward_service import try_award_completion_points
+                try_award_completion_points(activity, recovery_history)
             try:
                 db.session.commit()
             except Exception as exc:
@@ -465,7 +478,11 @@ def execute_upload(
     registration.completed_at = _now()
     registration.updated_at = _now()
     registration.error_message = None
-    _append_activity_transition(activity, "completed")
+    completion_history = _append_activity_transition(activity, "completed")
+    if completion_history is not None:
+        db.session.flush()
+        from services.completion_reward_service import try_award_completion_points
+        try_award_completion_points(activity, completion_history)
     try:
         db.session.commit()
     except Exception as exc:

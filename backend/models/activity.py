@@ -40,6 +40,12 @@ class Activity(db.Model):
         nullable=False,
         index=True,
     )
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id"),
+        nullable=True,
+        index=True,
+    )
     idempotency_key = db.Column(db.String(128), nullable=True)
     request_fingerprint = db.Column(db.String(64), nullable=True)
     __table_args__ = (
@@ -155,6 +161,7 @@ class Activity(db.Model):
         return {
             "id": self.id,
             "organizationId": self.organization_id,
+            "userId": self.user_id,
             "name": self.name,
             "type": self.type,
             "activityType": self.activity_type,

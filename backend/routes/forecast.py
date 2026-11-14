@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 import math
 import threading
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timedelta, timezone
 from flask import Blueprint, request, jsonify
 from auth_utils import require_auth, require_organization_admin
 
@@ -291,17 +291,55 @@ def get_forecast():
         elif not provider_forecast:
             raise ValueError("No forecast points are available")
         else:
-            logger.error(
-                "Forecast for zone %s has only %d provider points (requested %d); "
-                "trained_model=%s",
-                zone,
-                len(provider_forecast),
-                hours,
-                predictor.is_trained(),
-            )
-            raise ValueError(
-                f"Only {len(provider_forecast)} forecast points are available; {hours} requested"
-            )
+
+            forecast_points = list(carbon.get("forecast", []))
+            if not forecast_points:
+                raise ValueError("No forecast points are available")
+
+            # Extend only simulated fallback data when fewer points are available.
+            if carbon.get("isSimulated") and len(forecast_points) < hours:
+                from services.carbon_service import (
+                    GRID_ZONES,
+                    _DEFAULT_ZONE_ID,
+                    _get_simulated_intensity,
+                )
+
+                zone_config = GRID_ZONES.get(zone, GRID_ZONES[_DEFAULT_ZONE_ID])
+                last_dt = datetime.fromisoformat(
+                    str(forecast_points[-1]["datetime"]).replace("Z", "+00:00")
+                )
+                needed = hours - len(forecast_points)
+
+                for step in range(1, needed + 1):
+                    next_dt = last_dt + timedelta(hours=step)
+                    forecast_points.append({
+                        "datetime": next_dt.isoformat(),
+                        "carbonIntensity": _get_simulated_intensity(
+                            zone_config, next_dt
+                        ),
+                    })
+
+            if len(forecast_points) < hours:
+                logger.error(
+                    "Forecast for zone %s has only %d points (requested %d); "
+                    "trained_model=%s",
+                    zone,
+                    len(forecast_points),
+                    hours,
+                    predictor.is_trained(),
+                )
+                raise ValueError(
+                    f"Only {len(forecast_points)} forecast points are available; "
+                    f"{hours} requested"
+                )
+
+            forecast_points = forecast_points[:hours]
+            predictor._validate_forecast(forecast_points, len(forecast_points))
+            forecast_points = [
+                {**point, "isML": False} for point in forecast_points
+            ]
+            forecast_source = carbon.get("forecastSource", "unavailable")
+
     except Exception as exc:
         logger.exception("GET /api/forecast failed for zone %s", zone)
         return jsonify({

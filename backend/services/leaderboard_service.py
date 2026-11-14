@@ -6,7 +6,7 @@ Provides organization-level sustainability rankings.
 
 from __future__ import annotations
 
-from models import SustainabilityScore
+from models import SustainabilityScore, User
 
 
 def get_organization_leaderboard(
@@ -32,9 +32,19 @@ def get_organization_leaderboard(
     leaderboard = []
 
     for rank, score in enumerate(scores, start=1):
+        user = User.query.filter_by(id=int(score.user_id)).first() if str(score.user_id).isdigit() else None
+        display_name = (
+            " ".join(
+                part for part in (user.first_name, user.last_name)
+                if part and part.strip()
+            ).strip()
+            if user
+            else None
+        )
         leaderboard.append({
             "rank": rank,
             "userId": score.user_id,
+            "displayName": display_name,
             "score": score.score,
             "totalPoints": score.total_points,
             "currentStreak": score.current_streak,

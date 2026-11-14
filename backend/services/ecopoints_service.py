@@ -110,6 +110,19 @@ def award_points(
             f"for activity '{activity_id}'."
         )
 
+    # Green Window points are completion rewards, never scheduling rewards.
+    # The completion service performs the same transition check before calling
+    # this lower-level helper; keep this guard here for defense in depth.
+    if event_type == "follow_green_window" and (
+        activity.status != "completed"
+        or history_event.previous_status != "running"
+        or history_event.new_status != "completed"
+    ):
+        raise ValueError(
+            "Green Window points require a completed activity with a "
+            "running-to-completed history transition."
+        )
+
     # ---------------------------------------------------------
     # 3. Prevent duplicate and near-duplicate rewards
     # ---------------------------------------------------------

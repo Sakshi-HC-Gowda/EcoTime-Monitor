@@ -262,13 +262,30 @@ upper bound because it ignores window capacity and overlaps, which the optimizer
 ## Database and schema safety
 
 SQLAlchemy uses PostgreSQL in development/production and an in-memory SQLite
-database by default for tests. Startup calls `db.create_all()` and a
-PostgreSQL-specific additive schema helper. The helper adds supported columns,
-indexes and ownership constraints and does not drop tables or reset data. It is
-not a versioned migration system and does not infer ownership for legacy rows
-with missing organization IDs. Review the helper and take a database backup
-before deploying schema changes to an existing database; resolve legacy
-unowned data deliberately rather than assigning tenants speculatively.
+database by default for tests. Schema creation and changes are managed by
+Flask-Migrate/Alembic under `backend/migrations/`; application startup only
+checks database connectivity. From `backend`, review a backup and run the
+read-only checks before applying a migration:
+
+```powershell
+python phase5_db_checks.py
+flask --app app:create_app db upgrade
+```
+
+The Phase 5 migration is additive and preserves existing tables, columns,
+rows, unique constraints (`uq_ecopoint_user_event`, `uq_badge_user_type`,
+`uq_org_member`) and idempotency indexes. It does not convert the string
+`user_id`/`organization_id` values in reward tables, because the migration
+cannot safely infer mappings. Ownership foreign keys are added only when
+existing values have no orphans; otherwise the migration logs the validation
+failure and leaves the data available for explicit repair. Legacy `idle`
+activities are recorded in `activity_history` and moved to `pending`.
+
+The Phase 5 downgrade is intentionally a no-op because status-history writes
+and data-preserving repairs are not safely reversible. Restore a reviewed
+backup if reversal is required. Do not run `flask db upgrade` against a
+development database until the migration and its validation output have been
+reviewed.
 
 Uploaded files are stored locally beneath `backend/uploads/org-<organization
 id>/`. This is local application storage, not object storage or a production

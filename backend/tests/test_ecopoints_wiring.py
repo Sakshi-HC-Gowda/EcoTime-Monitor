@@ -45,7 +45,7 @@ def test_user_cannot_read_or_award_for_another_user(client):
     assert r.status_code == 403
 
 
-def test_scheduling_an_activity_awards_points_once(client):
+def test_scheduling_an_activity_does_not_award_points(client):
     headers, user_id = _register(client, "c@example.com", "Org C")
     created = client.post("/api/activities", headers=headers, json={
         "name": "Nightly backup", "type": "flexible", "duration": 30,
@@ -58,7 +58,6 @@ def test_scheduling_an_activity_awards_points_once(client):
         pytest.skip("No feasible simulated window at this time of day")
 
     score = client.get(f"/api/ecopoints/{user_id}/score", headers=headers)
-    assert score.status_code == 200
-    assert score.get_json()["totalPoints"] == 10
+    assert score.status_code == 404
     history = client.get(f"/api/ecopoints/{user_id}", headers=headers).get_json()
-    assert history["totalTransactions"] == 1
+    assert history["totalTransactions"] == 0

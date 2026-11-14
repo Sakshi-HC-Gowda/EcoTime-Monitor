@@ -468,21 +468,6 @@ def schedule_activity(activity_id: str):
         db.session.rollback()
         logger.exception("Could not persist optimizer schedule for activity %s", activity_id)
         return jsonify({"success": False, "error": "Could not save the recommended schedule", "timestamp": _now_iso()}), 500
-    try:
-        from config.scoring_rules import get_points
-        from services.ecopoints_service import award_points
-        award_points(
-            user_id=str(request.user.id),
-            event_type="follow_green_window",
-            event_id=str(schedule_event.id),
-            points=get_points("follow_green_window"),
-            activity_id=activity.id,
-            organization_id=str(request.user.organization_id) if request.user.organization_id else None,
-            description="Scheduled a flexible activity into a recommended Green Window",
-        )
-    except Exception:
-        db.session.rollback()
-        logger.exception("EcoPoints award failed for activity %s", activity_id)
     return jsonify({
         "success": True,
         "data": {"scheduled": True, "activity": activity.to_dict(), "recommendation": recommendation},

@@ -1,0 +1,10 @@
+EcoTime database migrations
+
+Run from the backend directory:
+
+    flask --app app:create_app db current
+    flask --app app:create_app db upgrade
+
+Before upgrading an existing PostgreSQL database, take a schema/data backup and
+run `python phase5_db_checks.py` against that database. The application startup
+only verifies connectivity; it does not create or alter schema objects.

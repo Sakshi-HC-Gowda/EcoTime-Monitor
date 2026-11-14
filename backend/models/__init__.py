@@ -1,8 +1,8 @@
 """
 EcoTime Database Models Package
 ================================
-Exports all SQLAlchemy models so app.py can call db.create_all()
-after a single import.
+Exports all SQLAlchemy models so SQLAlchemy and Alembic register the
+complete metadata after a single import.
 """
 
 from .activity import Activity

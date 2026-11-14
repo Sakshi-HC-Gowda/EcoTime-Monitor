@@ -25,7 +25,7 @@ from flask_jwt_extended import JWTManager
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.exceptions import RequestEntityTooLarge
-from extensions import db
+from extensions import db, migrate
 
 # Load backend/.env regardless of the directory used to start Flask.
 load_dotenv(Path(__file__).resolve().with_name(".env"))
@@ -142,9 +142,14 @@ def create_app(config_name: str | None = None) -> Flask:
     # Database Initialisation
     # -----------------------------------------------------------------------
     db.init_app(app)
+    migrate.init_app(
+        app,
+        db,
+        directory=str(Path(__file__).resolve().with_name("migrations")),
+    )
 
     with app.app_context():
-        # Import models so SQLAlchemy registers them before create_all()
+        # Import models so SQLAlchemy and Alembic register the complete metadata.
         from models import (  # noqa: F401
             Activity,
             ActivityHistory,
@@ -160,15 +165,10 @@ def create_app(config_name: str | None = None) -> Flask:
             UploadRegistration,
         )
         try:
-            # Flask-SQLAlchemy delegates to SQLAlchemy's safe table check:
-            # create_all() creates only absent tables and never drops data.
-            db.create_all()
-            _ensure_organization_ownership_schema()
-            _migrate_legacy_idle_activities()
             db.session.execute(text("SELECT 1"))
             db.session.commit()
             app.config["DATABASE_AVAILABLE"] = True
-            logger.info("Database ready; tables verified/created")
+            logger.info("Database connection ready; apply migrations with 'flask db upgrade'")
         except SQLAlchemyError as error:
             db.session.rollback()
             logger.error("Database unavailable: %s", error)

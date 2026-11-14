@@ -185,6 +185,10 @@ def award_points(
     if str(user_id).isdigit():
         db.session.query(User).filter_by(id=int(user_id)).with_for_update().first()
 
+    # Serialize concurrent point awards for the same user row
+    if str(user_id).isdigit():
+        db.session.query(User).filter_by(id=int(user_id)).with_for_update().first()
+
     now = datetime.now(timezone.utc)
     today = now.date()
 

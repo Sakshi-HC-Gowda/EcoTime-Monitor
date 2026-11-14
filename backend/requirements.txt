@@ -2,6 +2,7 @@ Flask==3.0.0
 Flask-CORS==4.0.0
 Flask-JWT-Extended==4.6.0
 Flask-SQLAlchemy==3.1.1
+Flask-Migrate==4.1.0
 python-dotenv==1.0.0
 psycopg2-binary==2.9.13
 requests==2.31.0
@@ -14,4 +15,3 @@ numpy==1.26.4
 joblib==1.4.2
 # Testing
 pytest==9.1.1
-

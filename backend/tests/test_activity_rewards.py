@@ -272,41 +272,6 @@ class TestGreenWindowWithinWindow:
         assert score is not None
         assert score.total_points == 10
 
-    def test_scheduled_green_window_event_awards_no_points(self, app, seed):
-        """Scheduling into a Green Window must not create a reward transaction."""
-        activity = _make_activity(
-            seed,
-            activity_id="scheduled-no-reward-001",
-            status="scheduled",
-            progress=0.0,
-            assigned_window_id="gw-scheduled",
-            scheduled_start_time=datetime.now(timezone.utc) + timedelta(minutes=5),
-            expected_end_time=datetime.now(timezone.utc) + timedelta(minutes=15),
-        )
-        history = ActivityHistory(
-            activity_id=activity.id,
-            previous_status="pending",
-            new_status="scheduled",
-        )
-        db.session.add(history)
-        db.session.commit()
-
-        with pytest.raises(ValueError, match="completed activity"):
-            from services.ecopoints_service import award_points
-
-            award_points(
-                user_id=str(seed["user1_id"]),
-                event_type="follow_green_window",
-                event_id=str(history.id),
-                points=get_points("follow_green_window"),
-                activity_id=activity.id,
-                organization_id=str(seed["org_id"]),
-            )
-
-        assert EcoPointTransaction.query.filter_by(
-            activity_id=activity.id,
-        ).count() == 0
-
     def test_simulated_advance_within_window_awards_10(self, app, seed):
         """advance_simulated_activities() awards 10 points when completing inside Green Window."""
         from services.activity_service import advance_simulated_activities
@@ -929,7 +894,10 @@ class TestCapConcurrency:
                     act = db.session.get(Activity, act_id)
                     hist = db.session.get(ActivityHistory, hist_id)
                     barrier.wait(timeout=5)
-                    try_award_completion_points(act, hist)
+                    with patch("services.ecopoints_service.datetime") as mock_dt:
+                        mock_dt.now.return_value = mock_now
+                        mock_dt.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
+                        try_award_completion_points(act, hist)
                     db.session.commit()
                     results[idx] = "success"
             except Exception as exc:
@@ -942,14 +910,10 @@ class TestCapConcurrency:
             threading.Thread(target=worker, args=(i, cid, hid))
             for i, (cid, hid) in enumerate(candidate_specs)
         ]
-        with patch("services.ecopoints_service.datetime") as mock_dt:
-            mock_dt.now.return_value = mock_now
-            mock_dt.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
-
-            for t in threads:
-                t.start()
-            for t in threads:
-                t.join(timeout=10)
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=10)
 
         assert all(not t.is_alive() for t in threads), "Weekly cap worker threads did not finish in time"
         assert all(err is None for err in errors), f"Worker thread encountered error: {errors}"

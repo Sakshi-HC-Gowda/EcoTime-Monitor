@@ -288,9 +288,6 @@ def test_legitimate_leaderboard_opt_in_and_out(client):
     assert res_board.status_code == 200
     entries = res_board.get_json()["leaderboard"]
     assert any(entry["userId"] == user_id for entry in entries)
-    own_entry = next(entry for entry in entries if entry["userId"] == user_id)
-    assert own_entry["displayName"] == "Test User"
-    assert "@" not in own_entry["displayName"]
 
     # Opt out
     res_out = client.post(

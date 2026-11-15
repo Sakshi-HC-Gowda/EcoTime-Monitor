@@ -17,6 +17,7 @@ import json
 import logging
 import math
 import sys
+from threading import Lock
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -265,11 +266,14 @@ class ForecastPredictor:
 
 # Singleton predictor instance (loaded once on first import)
 _predictor: ForecastPredictor | None = None
+_predictor_lock = Lock()
 
 
 def get_predictor() -> ForecastPredictor:
     """Return the global singleton ForecastPredictor."""
     global _predictor
     if _predictor is None:
-        _predictor = ForecastPredictor()
+        with _predictor_lock:
+            if _predictor is None:
+                _predictor = ForecastPredictor()
     return _predictor

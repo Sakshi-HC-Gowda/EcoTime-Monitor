@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Users, ShieldCheck, Building2, AlertTriangle } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { organizationService } from '@/services/organizationService';
+import { organizationService, type OrganizationInvitation } from '@/services/organizationService';
 import type { AuthUser } from '@/features/auth/types';
 
 export function OrganizationPage() {
@@ -10,6 +11,9 @@ export function OrganizationPage() {
   const [members, setMembers] = useState<AuthUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [invitation, setInvitation] = useState<OrganizationInvitation | null>(null);
+  const [invitationLoading, setInvitationLoading] = useState(false);
+  const [invitationError, setInvitationError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user?.organizationId || user.role?.name !== 'Organization Admin') {
@@ -42,6 +46,34 @@ export function OrganizationPage() {
 
   const isAdmin = user?.role?.name === 'Organization Admin';
 
+  const handleCreateInvitation = async () => {
+    if (!user?.organizationId || invitationLoading) return;
+    setInvitationLoading(true);
+    setInvitationError(null);
+    try {
+      const created = await organizationService.createInvitation(user.organizationId);
+      setInvitation(created);
+    } catch (createError) {
+      setInvitationError(createError instanceof Error ? createError.message : 'Unable to create invitation');
+    } finally {
+      setInvitationLoading(false);
+    }
+  };
+
+  const handleRevokeInvitation = async () => {
+    if (!user?.organizationId || !invitation || invitationLoading) return;
+    setInvitationLoading(true);
+    setInvitationError(null);
+    try {
+      await organizationService.revokeInvitation(user.organizationId, invitation.id);
+      setInvitation((current) => current ? { ...current, revokedAt: new Date().toISOString() } : current);
+    } catch (revokeError) {
+      setInvitationError(revokeError instanceof Error ? revokeError.message : 'Unable to revoke invitation');
+    } finally {
+      setInvitationLoading(false);
+    }
+  };
+
   return (
     <div className="page-shell-narrow page-stack">
       <div>
@@ -70,6 +102,29 @@ export function OrganizationPage() {
         </GlassCard>
 
         {isAdmin ? (
+          <>
+          <GlassCard variant="elevated">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-white">Invite a member</h2>
+                <p className="mt-1 text-xs text-slate-400">Create a single-use code that expires in seven days.</p>
+              </div>
+              <Button type="button" size="sm" onClick={() => void handleCreateInvitation()} disabled={invitationLoading}>
+                {invitationLoading ? 'Working...' : 'Create invitation'}
+              </Button>
+            </div>
+            {invitationError && <p className="mt-3 text-sm text-rose-300">{invitationError}</p>}
+            {invitation?.code && !invitation.revokedAt && (
+              <div className="mt-4 rounded-xl border border-green-500/20 bg-green-500/10 p-4">
+                <p className="text-xs text-green-200">Share this code securely. It will not be shown again after leaving this page.</p>
+                <code className="mt-2 block break-all text-sm font-semibold text-white">{invitation.code}</code>
+                <p className="mt-2 text-xs text-slate-400">Expires {new Date(invitation.expiresAt).toLocaleString()}</p>
+                <Button type="button" variant="ghost" size="xs" className="mt-3" onClick={() => void handleRevokeInvitation()} disabled={invitationLoading}>
+                  Revoke invitation
+                </Button>
+              </div>
+            )}
+          </GlassCard>
           <GlassCard variant="elevated" className="p-0 overflow-hidden">
             <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
               <div className="flex items-center gap-2">
@@ -115,6 +170,7 @@ export function OrganizationPage() {
               </div>
             )}
           </GlassCard>
+          </>
         ) : (
           <GlassCard variant="elevated" className="flex items-start gap-3 text-sm text-slate-300">
             <Users className="mt-0.5 h-4 w-4 text-slate-400" />

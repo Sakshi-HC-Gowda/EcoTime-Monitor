@@ -10,6 +10,8 @@ from .activity_history import ActivityHistory
 from .analytics_recommendation import AnalyticsRecommendation
 from .organization import Organization
 from .organization_member import OrganizationMember
+from .organization_invitation import OrganizationInvitation
+from .organization_provider_credential import OrganizationProviderCredential
 from .role import Role
 from .simulation_config import SimulationConfig
 from .eco_point_transaction import EcoPointTransaction
@@ -24,6 +26,8 @@ __all__ = [
     "AnalyticsRecommendation",
     "Organization",
     "OrganizationMember",
+    "OrganizationInvitation",
+    "OrganizationProviderCredential",
     "Role",
     "SimulationConfig",
     "EcoPointTransaction",

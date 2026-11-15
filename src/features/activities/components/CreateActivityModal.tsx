@@ -43,9 +43,14 @@ const numInputClass =
 
 export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
   const { selectedZone } = useZone();
-  const { data: greenWindows = [] } = useGreenWindows(selectedZone, 180, 0, isOpen);
-  const { data: carbon } = useCarbon(selectedZone);
   const { data: simulationConfig } = useSimulationConfig();
+  const { data: greenWindows = [] } = useGreenWindows(
+    selectedZone,
+    simulationConfig?.lowCarbonThreshold ?? 180,
+    0,
+    isOpen,
+  );
+  const { data: carbon } = useCarbon(selectedZone);
   const [name, setName] = useState('');
   const [activityType, setActivityType] = useState<ActivityType>('dataset-download');
   const [duration, setDuration] = useState(45);

@@ -83,9 +83,14 @@ class SustainabilityScore(db.Model):
         onupdate=lambda: datetime.now(timezone.utc),
     )
     leaderboard_opt_in = db.Column(
-    db.Boolean,
-    nullable=False,
-    default=False,
+        db.Boolean,
+        nullable=False,
+        default=False,
+    )
+    global_leaderboard_opt_in = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=False,
     )
 
     def to_dict(self) -> dict:
@@ -114,6 +119,7 @@ class SustainabilityScore(db.Model):
                 else None
             ),
             "leaderboardOptIn": self.leaderboard_opt_in,
+            "globalLeaderboardOptIn": self.global_leaderboard_opt_in,
         }
 
     def __repr__(self) -> str:

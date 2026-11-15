@@ -311,6 +311,136 @@ def test_legitimate_leaderboard_opt_in_and_out(client):
     assert not any(entry["userId"] == user_id for entry in entries_after)
 
 
+def test_global_leaderboard_uses_separate_consent_and_hides_private_fields(client):
+    first = _register(client, "global-a@example.com", "Global Org A")
+    second = _register(client, "global-b@example.com", "Global Org B")
+
+    first_opt_in = client.post(
+        "/api/leaderboard/global/opt-in",
+        headers=_auth(first["token"]),
+        json={"enabled": True},
+    )
+    second_opt_in = client.post(
+        "/api/leaderboard/global/opt-in",
+        headers=_auth(second["token"]),
+        json={"enabled": True},
+    )
+    assert first_opt_in.status_code == 200
+    assert second_opt_in.status_code == 200
+    assert first_opt_in.get_json()["globalLeaderboardOptIn"] is True
+
+    board = client.get("/api/leaderboard/global", headers=_auth(first["token"]))
+    assert board.status_code == 200
+    entries = board.get_json()["leaderboard"]
+    assert len(entries) == 2
+    assert {entry["organizationName"] for entry in entries} == {"Global Org A", "Global Org B"}
+    assert all(
+        "email" not in entry and "password" not in entry and "userId" not in entry
+        for entry in entries
+    )
+
+    second_opt_out = client.post(
+        "/api/leaderboard/global/opt-in",
+        headers=_auth(second["token"]),
+        json={"enabled": False},
+    )
+    assert second_opt_out.status_code == 200
+    board_after = client.get("/api/leaderboard/global", headers=_auth(first["token"]))
+    assert len(board_after.get_json()["leaderboard"]) == 1
+
+
+def test_global_leaderboard_aggregates_opted_in_members_by_organization(client, app):
+    org_a = _register(client, "aggregate-a@example.com", "Aggregate Org A")
+    employee_a = _create_employee(
+        client,
+        org_a["token"],
+        org_a["user"]["organizationId"],
+        "aggregate-a-member@example.com",
+    )
+    org_b = _register(client, "aggregate-b@example.com", "Aggregate Org B")
+
+    for account in (org_a, employee_a, org_b):
+        response = client.post(
+            "/api/leaderboard/global/opt-in",
+            headers=_auth(account["token"]),
+            json={"enabled": True},
+        )
+        assert response.status_code == 200
+
+    with app.app_context():
+        SustainabilityScore.query.filter_by(
+            user_id=str(org_a["user"]["id"]),
+        ).update({"score": 90.0, "total_points": 40})
+        SustainabilityScore.query.filter_by(
+            user_id=str(employee_a["user"]["id"]),
+        ).update({"score": 70.0, "total_points": 20})
+        SustainabilityScore.query.filter_by(
+            user_id=str(org_b["user"]["id"]),
+        ).update({"score": 80.0, "total_points": 30})
+        db.session.commit()
+        stored_scores = SustainabilityScore.query.all()
+        assert stored_scores
+        assert all(isinstance(score.user_id, str) for score in stored_scores)
+
+    board = client.get(
+        "/api/leaderboard/global",
+        headers=_auth(org_a["token"]),
+    )
+    assert board.status_code == 200
+    entries = board.get_json()["leaderboard"]
+
+    assert [entry["organizationName"] for entry in entries] == [
+        "Aggregate Org B",
+        "Aggregate Org A",
+    ]
+    aggregate_a = entries[1]
+    assert aggregate_a["averageScore"] == 80.0
+    assert aggregate_a["averageEcoPoints"] == 30.0
+    assert aggregate_a["participatingMembers"] == 2
+    assert len(entries) == len({
+        entry["organizationName"] for entry in entries
+    })
+    assert all(
+        set(entry) == {
+            "rank",
+            "organizationName",
+            "averageScore",
+            "averageEcoPoints",
+            "participatingMembers",
+        }
+        for entry in entries
+    )
+
+    opt_out = client.post(
+        "/api/leaderboard/global/opt-in",
+        headers=_auth(employee_a["token"]),
+        json={"enabled": False},
+    )
+    assert opt_out.status_code == 200
+    after_member_opt_out = client.get(
+        "/api/leaderboard/global",
+        headers=_auth(org_a["token"]),
+    ).get_json()["leaderboard"]
+    aggregate_a_after_opt_out = next(
+        entry for entry in after_member_opt_out
+        if entry["organizationName"] == "Aggregate Org A"
+    )
+    assert aggregate_a_after_opt_out["averageScore"] == 90.0
+    assert aggregate_a_after_opt_out["averageEcoPoints"] == 40.0
+    assert aggregate_a_after_opt_out["participatingMembers"] == 1
+
+    client.post(
+        "/api/leaderboard/global/opt-in",
+        headers=_auth(org_b["token"]),
+        json={"enabled": False},
+    )
+    remaining = client.get(
+        "/api/leaderboard/global",
+        headers=_auth(org_a["token"]),
+    ).get_json()["leaderboard"]
+    assert [entry["organizationName"] for entry in remaining] == ["Aggregate Org A"]
+
+
 # ---------------------------------------------------------------------------
 # 8. Admin point awarding with organization boundary enforcement & commit
 # ---------------------------------------------------------------------------

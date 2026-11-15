@@ -26,6 +26,7 @@ export interface SustainabilityScore {
   createdAt: string | null;
   updatedAt: string | null;
   leaderboardOptIn: boolean;
+  globalLeaderboardOptIn: boolean;
 }
 
 export interface UserBadge {
@@ -66,10 +67,29 @@ export interface OrganizationLeaderboardResponse {
   totalUsers: number;
 }
 
+export interface GlobalLeaderboardEntry {
+  rank: number;
+  organizationName: string;
+  averageScore: number;
+  averageEcoPoints: number;
+  participatingMembers: number;
+}
+
+export interface GlobalLeaderboardResponse {
+  leaderboard: GlobalLeaderboardEntry[];
+  totalOrganizations: number;
+}
+
 export interface LeaderboardOptInResponse {
   userId: string;
   organizationId: string;
   leaderboardOptIn: boolean;
+  message: string;
+}
+
+export interface GlobalLeaderboardOptInResponse {
+  userId: string;
+  globalLeaderboardOptIn: boolean;
   message: string;
 }
 
@@ -124,5 +144,18 @@ export const sustainabilityService = {
         }),
       }
     );
+  },
+
+  async getGlobalLeaderboard(): Promise<ApiResponse<GlobalLeaderboardResponse>> {
+    return apiClient.request<GlobalLeaderboardResponse>('/leaderboard/global');
+  },
+
+  async setGlobalLeaderboardOptIn(
+    enabled: boolean,
+  ): Promise<ApiResponse<GlobalLeaderboardOptInResponse>> {
+    return apiClient.request<GlobalLeaderboardOptInResponse>('/leaderboard/global/opt-in', {
+      method: 'POST',
+      body: JSON.stringify({ enabled }),
+    });
   },
 };

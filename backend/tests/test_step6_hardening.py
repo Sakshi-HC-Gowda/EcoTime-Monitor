@@ -257,7 +257,7 @@ def test_carbon_route_preserves_simulation_source_after_provider_failure(client,
     from services import carbon_service
 
     token = register_user(client)
-    monkeypatch.setattr(carbon_service, "get_electricity_maps_api_key", lambda: "configured")
+    monkeypatch.setattr(carbon_service, "get_electricity_maps_api_key", lambda *_args: "configured")
     monkeypatch.setattr(carbon_service, "_fetch_live_data", lambda *_args: None)
     response = client.get("/api/carbon?zone=US-CA", headers=auth(token))
     assert response.status_code == 200

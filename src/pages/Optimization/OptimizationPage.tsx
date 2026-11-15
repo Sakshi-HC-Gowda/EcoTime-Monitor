@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ArrowRight,
   CalendarClock,
@@ -21,14 +21,61 @@ import { Button } from '@/components/ui/Button';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { LoadingSkeleton } from '@/components/ui/LoadingSkeleton';
-import type { SchedulingRecommendation, Task } from '@/types/domain';
+import type { GreenWindow, SchedulingRecommendation, Task } from '@/types/domain';
 
 const OPTIMIZABLE_STATUSES = new Set<Task['status']>(['idle', 'pending', 'paused', 'delayed']);
 
+type OptimizationNavigationState = {
+  selectedWindow: GreenWindow & { endTime: string };
+  selectedZone: string;
+};
+
+function parseOptimizationNavigationState(value: unknown): OptimizationNavigationState | null {
+  if (!value || typeof value !== 'object') return null;
+  const candidate = value as { selectedWindow?: unknown; selectedZone?: unknown };
+  const window = candidate.selectedWindow;
+  if (!window || typeof window !== 'object' || typeof candidate.selectedZone !== 'string') {
+    return null;
+  }
+  const selectedWindow = window as Partial<{
+    id: unknown;
+    startTime: unknown;
+    endTime: unknown;
+    duration: unknown;
+    avgCarbonIntensity: unknown;
+  }>;
+  if (!(
+    typeof selectedWindow.id === 'string'
+    && typeof selectedWindow.startTime === 'string'
+    && typeof selectedWindow.endTime === 'string'
+    && typeof selectedWindow.duration === 'number'
+    && Number.isFinite(selectedWindow.duration)
+    && typeof selectedWindow.avgCarbonIntensity === 'number'
+    && Number.isFinite(selectedWindow.avgCarbonIntensity)
+  )) {
+    return null;
+  }
+  return {
+    selectedWindow: selectedWindow as GreenWindow & { endTime: string },
+    selectedZone: candidate.selectedZone,
+  };
+}
+
 export function OptimizationPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { selectedZone } = useZone();
   const { user } = useAuth();
+  const navigationState = parseOptimizationNavigationState(location.state);
+  const selectedWindow = navigationState?.selectedWindow;
+  const selectedWindowZone = navigationState?.selectedZone;
+  const selectedWindowEnd = selectedWindow ? new Date(selectedWindow.endTime).getTime() : null;
+  const selectedWindowExpired = selectedWindowEnd !== null
+    && (!Number.isFinite(selectedWindowEnd) || selectedWindowEnd <= Date.now());
+  const selectedWindowZoneMismatch = Boolean(
+    selectedWindow && selectedZone && selectedWindowZone !== selectedZone,
+  );
+  const optimizationZone = selectedWindowZone ?? selectedZone ?? undefined;
   const [refreshToken, setRefreshToken] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [schedulingIds, setSchedulingIds] = useState<Set<string>>(() => new Set());
@@ -70,10 +117,13 @@ export function OptimizationPage() {
   const scheduledCount = activities.filter((activity) => activity.status === 'scheduled').length;
   const scheduleQuery = useOptimizationSchedule(
     optimizerActivities,
-    null,
+    selectedWindow ?? null,
     'greedy',
-    optimizerActivities.length > 0 && Boolean(selectedZone),
-    selectedZone ?? undefined,
+    optimizerActivities.length > 0
+      && Boolean(optimizationZone)
+      && !selectedWindowExpired
+      && !selectedWindowZoneMismatch,
+    optimizationZone,
     user?.id,
     user?.organizationId,
     activities,
@@ -120,13 +170,13 @@ export function OptimizationPage() {
   };
 
   const handleApprove = async (task: Task, recommendation: SchedulingRecommendation) => {
-    if (!selectedZone || !recommendation.windowId) return;
+    if (!optimizationZone || !recommendation.windowId || selectedWindowExpired || selectedWindowZoneMismatch) return;
     setSchedulingIds((current) => new Set(current).add(task.id));
     setScheduleMessages((current) => ({ ...current, [task.id]: '' }));
     try {
       const response = await scheduleMutation.mutateAsync({
         id: task.id,
-        request: { windowId: recommendation.windowId, zone: selectedZone },
+        request: { windowId: recommendation.windowId, zone: optimizationZone },
       });
       if (!response.scheduled || response.activity?.status !== 'scheduled') {
         setScheduleMessages((current) => ({
@@ -136,7 +186,7 @@ export function OptimizationPage() {
         }));
         return;
       }
-      setScheduleMessages((current) => ({ ...current, [task.id]: 'Schedule approved and saved.' }));
+      navigate('/activities');
     } catch (error) {
       setScheduleMessages((current) => ({
         ...current,
@@ -251,6 +301,26 @@ export function OptimizationPage() {
         <SummaryCard icon={Check} label="Approved / scheduled" value={scheduledCount} tone="blue" />
       </div>
 
+      {selectedWindow && (
+        <GlassCard className="border-teal-500/20 bg-teal-500/[0.05]">
+          <p className="text-sm font-semibold text-teal-200">Selected Green Window</p>
+          <p className="mt-1 text-xs text-slate-300">
+            {selectedWindowZone} · {new Date(selectedWindow.startTime).toLocaleString()} · {selectedWindow.duration} minutes
+          </p>
+          {selectedWindowExpired && (
+            <p className="mt-2 text-xs text-amber-300">
+              This Green Window has expired. Return to Green Windows and select a current window.
+            </p>
+          )}
+          {selectedWindowZoneMismatch && (
+            <p className="mt-2 text-xs text-amber-300">
+              The selected window belongs to {selectedWindowZone}, but the active zone is {selectedZone}.
+              Select a new window for the active zone.
+            </p>
+          )}
+        </GlassCard>
+      )}
+
       <WhatIfPlanner activities={activitiesToOptimize} zone={selectedZone} />
 
       {scheduleQuery.isError && (
@@ -278,7 +348,9 @@ export function OptimizationPage() {
           />
           {!scheduleQuery.isError && recommendedCount === 0 && !scheduleQuery.isFetching && (
             <p className="py-6 text-sm text-slate-400">
-              {optimizerActivities.length === 0
+              {selectedWindowExpired || selectedWindowZoneMismatch
+                ? 'No recommendations can be generated for this Green Window.'
+                : optimizerActivities.length === 0
                 ? (fileUploadActivities.length > 0
                   ? 'File uploads are scheduled through the upload workflow.'
                   : 'No activities need a new recommendation right now.')

@@ -17,6 +17,7 @@ from services.carbon_service import _DEFAULT_ZONE_ID, GRID_ZONES, normalize_zone
 from datetime import datetime, timedelta, timezone
 from flask import Blueprint, request, jsonify
 from auth_utils import require_auth, require_organization_admin
+from sqlalchemy.exc import SQLAlchemyError
 
 from extensions import db
 from optimization.carbon_calculator import calculate_emissions_grams
@@ -31,6 +32,12 @@ from services.optimizer_service import (
 )
 from services.activity_service import get_activity
 from services.analytics_service import log_recommendation
+from services.carbon_service import clear_api_failure_cache
+from services.provider_credentials import (
+    CredentialConfigurationError,
+    get_electricity_maps_token,
+    save_organization_token,
+)
 
 logger = logging.getLogger(__name__)
 optimizer_bp = Blueprint("optimizer", __name__)
@@ -137,6 +144,19 @@ def schedule():
 
     requested_tasks = data.get("tasks", [])
     requested_window = data.get("window")
+    requested_window_id = (
+        requested_window.get("id")
+        if isinstance(requested_window, dict)
+        else None
+    )
+    if requested_window_id is not None and (
+        not isinstance(requested_window_id, str) or not requested_window_id.strip()
+    ):
+        return jsonify({
+            "success": False,
+            "error": "Selected Green Window id must be a non-empty string",
+            "timestamp": _now_iso(),
+        }), 400
     method_value = data.get("method", "greedy")
     if not isinstance(method_value, str):
         return jsonify({
@@ -270,9 +290,16 @@ def schedule():
             method=method,
             baseline_intensity=baseline,
             zone_id=zone,
+            permitted_window_id=(
+                requested_window_id.strip()
+                if requested_window_id is not None
+                else None
+            ),
             reserved_intervals_by_window=reserved_intervals_by_window,
             unavailable_window_ids=unavailable_window_ids,
             require_fresh_data=True,
+            organization_id=request.user.organization_id,
+            low_carbon_threshold=config.low_carbon_threshold,
         )
     except RecommendationDataUnavailable as exc:
         logger.warning("Scheduling recommendation data unavailable: %s", exc)
@@ -377,6 +404,8 @@ def schedule_activity(activity_id: str):
             baseline_intensity=config.baseline_intensity,
             zone_id=zone,
             permitted_window_id=selected_window_id.strip() if selected_window_id else None,
+            organization_id=request.user.organization_id,
+            low_carbon_threshold=config.low_carbon_threshold,
         )
     except RecommendationDataUnavailable as exc:
         return jsonify({"success": False, "error": str(exc), "timestamp": _now_iso()}), 503
@@ -670,6 +699,73 @@ def get_config():
     }), 200
 
 
+@optimizer_bp.route("/config/electricity-maps", methods=["GET"])
+@require_auth
+def get_electricity_maps_config():
+    """Return credential status without returning the credential."""
+    try:
+        token, source = get_electricity_maps_token(request.user.organization_id)
+    except CredentialConfigurationError:
+        token, source = None, "none"
+    return jsonify({
+        "success": True,
+        "data": {
+            "configured": token is not None,
+            "source": source,
+        },
+        "timestamp": _now_iso(),
+    }), 200
+
+
+@optimizer_bp.route("/config/electricity-maps", methods=["PUT"])
+@require_organization_admin
+def set_electricity_maps_config():
+    """Create, replace, or clear the authenticated organization's credential."""
+    data = request.get_json(silent=True) or {}
+    token = data.get("token")
+    if token is not None and not isinstance(token, str):
+        return jsonify({
+            "success": False,
+            "error": "token must be a string or null",
+            "timestamp": _now_iso(),
+        }), 400
+    if isinstance(token, str) and len(token.strip()) > 4096:
+        return jsonify({
+            "success": False,
+            "error": "token is too long",
+            "timestamp": _now_iso(),
+        }), 400
+    try:
+        configured = save_organization_token(request.user.organization_id, token)
+    except CredentialConfigurationError as exc:
+        return jsonify({
+            "success": False,
+            "error": str(exc),
+            "timestamp": _now_iso(),
+        }), 503
+    except SQLAlchemyError:
+        db.session.rollback()
+        logger.exception(
+            "Could not persist Electricity Maps credential for organization %s",
+            request.user.organization_id,
+        )
+        return jsonify({
+            "success": False,
+            "error": "Could not persist the provider credential. Apply the pending database migration.",
+            "timestamp": _now_iso(),
+        }), 503
+
+    clear_api_failure_cache()
+    return jsonify({
+        "success": True,
+        "data": {
+            "configured": configured,
+            "source": "organization" if configured else "none",
+        },
+        "timestamp": _now_iso(),
+    }), 200
+
+
 # ---------------------------------------------------------------------------
 # Analytics Recommendations
 # ---------------------------------------------------------------------------
@@ -738,6 +834,39 @@ def get_latest_optimization():
             "error": "The latest optimization result could not be loaded.",
             "timestamp": _now_iso(),
         }), 500
+
+    result = data["response"].get("result")
+    selected_tasks = result.get("selectedTasks") if isinstance(result, dict) else None
+    if not isinstance(selected_tasks, list) or not selected_tasks:
+        return jsonify({
+            "success": True,
+            "data": None,
+            "timestamp": record.created_at.isoformat(),
+        }), 200
+
+    selected_task_ids = {
+        str(task.get("id"))
+        for task in selected_tasks
+        if isinstance(task, dict) and task.get("id") is not None
+    }
+    if len(selected_task_ids) != len(selected_tasks):
+        return jsonify({
+            "success": True,
+            "data": None,
+            "timestamp": record.created_at.isoformat(),
+        }), 200
+
+    owned_selected_tasks = Activity.query.filter(
+        Activity.id.in_(selected_task_ids),
+        Activity.organization_id == request.user.organization_id,
+        Activity.user_id == request.user.id,
+    ).count()
+    if owned_selected_tasks != len(selected_task_ids):
+        return jsonify({
+            "success": True,
+            "data": None,
+            "timestamp": record.created_at.isoformat(),
+        }), 200
 
     return jsonify({
         "success": True,

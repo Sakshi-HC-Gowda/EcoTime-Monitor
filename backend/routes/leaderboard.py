@@ -8,11 +8,16 @@ from __future__ import annotations
 
 from uuid import uuid4
 from flask import Blueprint, jsonify, request
+from sqlalchemy import text
 
-from auth_utils import require_organization_access
+from auth_utils import require_auth, require_organization_access
 from extensions import db
 from models.sustainability_score import SustainabilityScore
-from services.leaderboard_service import get_organization_leaderboard
+from services.leaderboard_service import (
+    get_global_leaderboard,
+    global_consent_column_available,
+    get_organization_leaderboard,
+)
 
 
 leaderboard_bp = Blueprint(
@@ -95,5 +100,95 @@ def set_leaderboard_opt_in(organization_id: str):
             "Leaderboard participation enabled"
             if enabled
             else "Leaderboard participation disabled"
+        ),
+    }), 200
+
+
+@leaderboard_bp.get("/leaderboard/global")
+@require_auth
+def get_global_leaderboard_route():
+    if not global_consent_column_available():
+        return jsonify({
+            "success": False,
+            "error": "Global leaderboard requires the pending database migration.",
+        }), 503
+    leaderboard = get_global_leaderboard()
+    return jsonify({
+        "leaderboard": leaderboard,
+        "totalOrganizations": len(leaderboard),
+    }), 200
+
+
+@leaderboard_bp.post("/leaderboard/global/opt-in")
+@require_auth
+def set_global_leaderboard_opt_in():
+    authenticated_user = request.user
+    data = request.get_json(silent=True) or {}
+    enabled = data.get("enabled")
+    if not isinstance(enabled, bool):
+        return jsonify({"success": False, "error": "enabled must be true or false"}), 400
+    if not global_consent_column_available():
+        return jsonify({
+            "success": False,
+            "error": "Global leaderboard requires the pending database migration.",
+        }), 503
+
+    score = SustainabilityScore.query.filter_by(
+        user_id=str(authenticated_user.id),
+        organization_id=str(authenticated_user.organization_id),
+    ).first()
+    if score is None:
+        score = SustainabilityScore(
+            id=str(uuid4()),
+            user_id=str(authenticated_user.id),
+            organization_id=str(authenticated_user.organization_id),
+            score=0.0,
+            total_points=0,
+            current_streak=0,
+            longest_streak=0,
+            leaderboard_opt_in=False,
+        )
+        db.session.add(score)
+        db.session.flush()
+    db.session.execute(
+        text(
+            """
+            UPDATE sustainability_scores
+            SET global_leaderboard_opt_in = :enabled
+            WHERE user_id = :user_id
+              AND organization_id = :organization_id
+            """
+        ),
+        {
+            "enabled": enabled,
+            "user_id": str(authenticated_user.id),
+            "organization_id": str(authenticated_user.organization_id),
+        },
+    )
+    db.session.commit()
+
+    current_value = db.session.execute(
+        text(
+            """
+            SELECT global_leaderboard_opt_in
+            FROM sustainability_scores
+            WHERE user_id = :user_id
+              AND organization_id = :organization_id
+            """
+        ),
+        {
+            "user_id": str(authenticated_user.id),
+            "organization_id": str(authenticated_user.organization_id),
+        },
+    ).scalar()
+
+    return jsonify({
+        "success": True,
+        "userId": str(authenticated_user.id),
+        "globalLeaderboardOptIn": bool(current_value),
+        "message": (
+            "Global leaderboard participation enabled"
+            if enabled
+            else "Global leaderboard participation disabled"
         ),
     }), 200

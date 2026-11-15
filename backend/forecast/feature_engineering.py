@@ -184,7 +184,9 @@ def build_inference_features(
     # Build a temp series from history
     records = pd.DataFrame(recent_history)
     records["datetime"] = pd.to_datetime(records["datetime"], utc=True)
-    if "zone" not in records.columns and zone_id:
+    if zone_id:
+        # Provider history may omit zone metadata while recursive predictions
+        # include it. Keep every inference row in the requested zone group.
         records["zone"] = zone_id
     records = records.set_index("datetime").sort_index()
     columns = ["carbonIntensity"] + (["zone"] if "zone" in records.columns else [])

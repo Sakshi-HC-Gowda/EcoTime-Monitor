@@ -39,6 +39,21 @@ export function useSimulationConfig() {
   });
 }
 
+export function useLatestOptimization(userId: number | null) {
+  return useQuery({
+    queryKey: ['latest-optimization', userId],
+    queryFn: async () => {
+      const response = await optimizerService.getLatestOptimization();
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to load the latest optimization');
+      }
+      return response.data ?? null;
+    },
+    enabled: userId !== null,
+    staleTime: 30_000,
+  });
+}
+
 export function useEcoScore(taskId: string | undefined, currentIntensity: number, baselineIntensity: number = 380, peakIntensity: number = 800) {
   return useQuery({
     queryKey: ['eco-score', taskId, currentIntensity, baselineIntensity],

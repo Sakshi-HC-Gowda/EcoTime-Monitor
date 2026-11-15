@@ -231,7 +231,18 @@ export function mapToElectricityZone(countryCode: string, state: string): string
     // 3. Fallback to IN-SO for Indian locations instead of generic bare IN
     return 'IN-SO';
   }
-  return COUNTRY_CODE_TO_ZONE[countryCode] ?? 'US-CA';
+  const mappedZone = COUNTRY_CODE_TO_ZONE[countryCode];
+  const supportedZones = new Set([
+    'US-CA',
+    'US-NY',
+    'DK-DK2',
+    'GB',
+    'FR',
+    'DE',
+    'BR',
+    'AU-NSW',
+  ]);
+  return mappedZone && supportedZones.has(mappedZone) ? mappedZone : 'US-CA';
 }
 
 // ============================================================================

@@ -4,9 +4,19 @@ import { getGreenWindowLabel } from '@/features/windows/utils/windowLabels';
 
 interface GreenWindowsListProps {
   windows: GreenWindow[];
+  isLoading?: boolean;
+  isError?: boolean;
 }
 
-export function GreenWindowsList({ windows }: GreenWindowsListProps) {
+export function GreenWindowsList({ windows, isLoading = false, isError = false }: GreenWindowsListProps) {
+  if (isLoading) {
+    return <p className="text-sm text-slate-500 py-2">Loading low-carbon windows...</p>;
+  }
+
+  if (isError) {
+    return <p className="text-sm text-amber-400 py-2">Green Window data is temporarily unavailable.</p>;
+  }
+
   if (windows.length === 0) {
     return (
       <p className="text-sm text-slate-500 py-2">

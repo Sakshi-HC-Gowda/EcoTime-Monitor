@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, request
@@ -10,6 +11,7 @@ from auth_utils import get_current_user, require_auth
 from extensions import db
 from models.organization import Organization
 from models.organization_member import OrganizationMember
+from models.organization_invitation import OrganizationInvitation
 from models.role import Role
 from models.user import User
 
@@ -42,9 +44,12 @@ def register():
     password = str(data.get("password") or "")
     first_name, last_name = _normalize_name(data)
     org_name = (data.get("organization_name") or data.get("organizationName") or "").strip()
+    invitation_code = str(data.get("invitation_code") or data.get("invitationCode") or "").strip()
 
-    if not email or not password or not first_name or not org_name:
+    if not email or not password or not first_name:
         return jsonify({"success": False, "error": "Missing required registration fields"}), 400
+    if not invitation_code and not org_name:
+        return jsonify({"success": False, "error": "Organization name or invitation code is required"}), 400
 
     if "@" not in email:
         return jsonify({"success": False, "error": "A valid email address is required"}), 400
@@ -55,21 +60,43 @@ def register():
     if User.query.filter_by(email=email).first():
         return jsonify({"success": False, "error": "Email already registered"}), 409
 
-    if Organization.query.filter_by(name=org_name).first():
+    invitation = None
+    org = None
+    if invitation_code:
+        token_hash = hashlib.sha256(invitation_code.encode("utf-8")).hexdigest()
+        invitation = (
+            OrganizationInvitation.query
+            .filter_by(token_hash=token_hash)
+            .with_for_update()
+            .first()
+        )
+        if invitation is None or not invitation.is_active():
+            return jsonify({
+                "success": False,
+                "error": "This invitation is invalid, expired, revoked, or already used.",
+            }), 400
+        org = db.session.get(Organization, invitation.organization_id)
+        if org is None:
+            return jsonify({"success": False, "error": "The invited organization no longer exists."}), 400
+    elif Organization.query.filter_by(name=org_name).first():
         return jsonify({
             "success": False,
             "error": "This organization already exists. Ask an organization admin to create your account.",
         }), 409
 
     try:
-        org = Organization(name=org_name)
-        db.session.add(org)
-        db.session.flush()
+        if org is None:
+            org = Organization(name=org_name)
+            db.session.add(org)
+            db.session.flush()
 
-        admin_role = Role.query.filter_by(name="Organization Admin").first()
-        if admin_role is None:
-            admin_role = Role(name="Organization Admin", description="Organization administrator")
-            db.session.add(admin_role)
+        role_name = "Employee" if invitation is not None else "Organization Admin"
+        role = Role.query.filter_by(name=role_name).first()
+        if role is None:
+            role = Role(name=role_name, description=(
+                "Organization employee" if invitation is not None else "Organization administrator"
+            ))
+            db.session.add(role)
             db.session.flush()
 
         user = User(
@@ -77,7 +104,7 @@ def register():
             last_name=last_name,
             email=email,
             organization_id=org.id,
-            role_id=admin_role.id,
+            role_id=role.id,
         )
         user.set_password(password)
         db.session.add(user)
@@ -86,8 +113,11 @@ def register():
         db.session.add(OrganizationMember(
             organization_id=org.id,
             user_id=user.id,
-            role_id=admin_role.id,
+            role_id=role.id,
         ))
+        if invitation is not None:
+            invitation.used_at = datetime.now(timezone.utc)
+            invitation.used_by_user_id = user.id
         db.session.commit()
     except IntegrityError:
         db.session.rollback()
@@ -95,7 +125,7 @@ def register():
 
     token = create_access_token(
         identity=str(user.id),
-        additional_claims={"organization_id": user.organization_id, "role": user.role.name if user.role else "Organization Admin"},
+        additional_claims={"organization_id": user.organization_id, "role": user.role.name if user.role else role_name},
     )
     return jsonify({
         "success": True,

@@ -87,11 +87,11 @@ interface NotificationItem {
 const INITIAL_NOTIFICATIONS: NotificationItem[] = [
   {
     id: '1',
-    title: 'Optimal Green Window Active',
-    message: 'Simulated grid carbon intensity in IN-SO dropped to 142 gCO2e/kWh. Ideal for batch jobs.',
-    time: '5m ago',
+    title: 'Carbon data status',
+    message: 'Carbon readings may be simulated when live provider data is unavailable.',
+    time: 'Now',
     unread: true,
-    type: 'green',
+    type: 'amber',
   },
   {
     id: '2',

@@ -246,7 +246,7 @@ export interface SchedulingCarbonSource {
   currentIntensity?: number | null;
   forecastSource: string;
   classification: string;
-  relativeThreshold: number;
+  threshold: number;
 }
 
 export interface SchedulingSavings {

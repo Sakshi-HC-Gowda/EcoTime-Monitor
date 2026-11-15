@@ -67,7 +67,7 @@ export function DashboardPreview() {
                   <p className="text-xs text-slate-500">Live workload summary</p>
                 </div>
                 <span className="ds-badge border-green-500/20 bg-green-500/10 text-green-400">
-                  Live
+                  Sample preview
                 </span>
               </div>
 

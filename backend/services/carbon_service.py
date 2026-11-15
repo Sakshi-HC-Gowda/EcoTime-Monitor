@@ -14,9 +14,16 @@ import math
 import time
 import os
 import logging
+import hashlib
+from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 
 import requests
+
+from services.provider_credentials import (
+    CredentialConfigurationError,
+    get_electricity_maps_token,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -181,12 +188,6 @@ def _resolve_default_zone() -> str:
 
 _DEFAULT_ZONE_ID = _resolve_default_zone()
 
-# Green Window detection uses the cleanest band of each forecast rather than a
-# global absolute cutoff. 0.35 means "points in the lowest 35% of this
-# forecast's carbon-intensity range".
-GREEN_WINDOW_THRESHOLD_RATIO = 0.35
-
-
 def _validate_zone_id(zone_id: str) -> str:
     """Validate and normalise a zone identifier; reject unsupported zones."""
     if not isinstance(zone_id, str):
@@ -306,12 +307,52 @@ _EMAPS_BASE = "https://api.electricitymap.org/v3"
 # unexpected programming errors are not.
 _NEGATIVE_CACHE_TTL = 120  # seconds
 _last_api_failure: dict[str, float] = {}
+_last_api_error: dict[str, str] = {}
+_LIVE_CACHE_TTL = 30  # seconds; limits duplicate provider reads without hiding stale data
+_live_cache: dict[tuple[str, str], tuple[float, dict]] = {}
 
 
-def get_electricity_maps_api_key() -> str | None:
-    """Return the Electricity Maps API key from environment, if configured."""
-    key = os.getenv("ELECTRICITY_MAPS_API_KEY", "").strip()
-    return key or None
+def get_electricity_maps_api_key(organization_id: int | None = None) -> str | None:
+    """Return an organization token or the environment fallback."""
+    token, _source = get_electricity_maps_token(organization_id)
+    return token
+
+
+def clear_api_failure_cache(zone_id: str | None = None) -> None:
+    """Allow a newly saved credential to be tried immediately."""
+    if zone_id is None:
+        _last_api_failure.clear()
+        _last_api_error.clear()
+        _live_cache.clear()
+        return
+    _last_api_failure.pop(zone_id, None)
+    _last_api_error.pop(zone_id, None)
+    for cache_key in [key for key in _live_cache if key[0] == zone_id]:
+        _live_cache.pop(cache_key, None)
+
+
+def _get_cached_live_data(zone_id: str, api_key: str) -> dict | None:
+    cache_key = (zone_id, hashlib.sha256(api_key.encode("utf-8")).hexdigest())
+    cached = _live_cache.get(cache_key)
+    if cached is None:
+        return None
+    cached_at, data = cached
+    if time.monotonic() - cached_at >= _LIVE_CACHE_TTL:
+        _live_cache.pop(cache_key, None)
+        return None
+    return deepcopy(data)
+
+
+def _cache_live_data(zone_id: str, api_key: str, data: dict) -> None:
+    cache_key = (zone_id, hashlib.sha256(api_key.encode("utf-8")).hexdigest())
+    _live_cache[cache_key] = (time.monotonic(), deepcopy(data))
+
+
+def _api_failure_reason(zone_id: str) -> str:
+    return _last_api_error.get(
+        zone_id,
+        "Live Electricity Maps data unavailable; returned explicitly simulated data.",
+    )
 
 
 def _fetch_live_data(zone_id: str, api_key: str) -> dict | None:
@@ -345,6 +386,15 @@ def _fetch_live_data(zone_id: str, api_key: str) -> dict | None:
             timeout=timeout,
         )
         if not latest_res.ok:
+            if latest_res.status_code in {401, 403}:
+                _last_api_error[zone_id] = "Electricity Maps rejected the configured credential."
+            elif latest_res.status_code == 429:
+                _last_api_error[zone_id] = "Electricity Maps rate limit reached; returned simulated data."
+            else:
+                _last_api_error[zone_id] = (
+                    f"Electricity Maps returned HTTP {latest_res.status_code}; "
+                    "returned simulated data."
+                )
             logger.error(
                 "Electricity Maps latest API failed for zone %s: HTTP %s — %s",
                 zone_id,
@@ -448,10 +498,16 @@ def _fetch_live_data(zone_id: str, api_key: str) -> dict | None:
         }
 
     except requests.RequestException as e:
+        _last_api_error[zone_id] = (
+            "Electricity Maps request timed out or failed; returned simulated data."
+        )
         logger.error("Electricity Maps network error for zone %s: %s", zone_id, e)
         _last_api_failure[zone_id] = time.monotonic()
         return None
     except Exception as e:
+        _last_api_error[zone_id] = (
+            "Electricity Maps returned an invalid response; returned simulated data."
+        )
         logger.error("Electricity Maps API error for zone %s: %s", zone_id, e)
         return None
 
@@ -480,15 +536,13 @@ def detect_green_windows(
     """
     Detect contiguous low-carbon periods in a forecast array.
 
-    A "green window" is any contiguous block of hourly forecast points in
-    the cleanest band for this forecast. The threshold is derived from the
-    forecast range, so high-carbon grids still surface their relatively
-    cleanest periods instead of being compared to a global fixed cutoff.
+    A "green window" is any contiguous block of hourly forecast points at or
+    below the configured absolute carbon-intensity threshold.
 
     Args:
         forecast: List of {datetime, carbonIntensity} hourly points
         current_datetime: ISO timestamp for the current moment
-        threshold: Kept for API compatibility; dynamic forecast threshold is used
+        threshold: Maximum carbon intensity for a green window.
 
     Returns:
         List of green window dicts with scoring info, sorted by start time
@@ -524,34 +578,15 @@ def detect_green_windows(
     forecast_peak = forecast_actual_peak
     forecast_peak = max(forecast_peak, 300)  # Minimum meaningful peak
 
-    # A fixed 180 gCO2/kWh threshold was too region-specific: it worked for
-    # low-carbon grids, but high-carbon grids such as Indian zones could have
-    # valid forecasts and still return no Green Windows at all.
-    #
-    # Dynamic threshold:
-    # 1. Find this forecast's minimum and maximum carbon intensity.
-    # 2. Treat the cleanest configured band of that local range as green.
-    #    With GREEN_WINDOW_THRESHOLD_RATIO = 0.35, a forecast ranging from
-    #    560 to 740 gCO2/kWh has a threshold of 623.
-    # 3. Detect contiguous points at or below that computed threshold.
-    #
-    # This is relative to local grid conditions, so low-carbon grids keep their
-    # genuinely clean windows while high-carbon grids still surface their
-    # cleanest available periods for carbon-aware scheduling.
-    forecast_range = forecast_actual_peak - forecast_min
-    if forecast_range <= 0:
-        logger.debug(
-            "Green Window detection skipped: forecast range has no lower-carbon band"
-        )
-        return windows
-    dynamic_threshold = forecast_min + (
-        forecast_range * GREEN_WINDOW_THRESHOLD_RATIO
-    )
+    if isinstance(threshold, bool) or not isinstance(threshold, (int, float)):
+        raise ValueError("Green Window threshold must be numeric")
+    if not math.isfinite(threshold) or threshold < 0:
+        raise ValueError("Green Window threshold must be a non-negative finite number")
 
     for point in forecast:
         if (
             _is_valid_forecast_point(point)
-            and point["carbonIntensity"] <= dynamic_threshold
+            and point["carbonIntensity"] <= threshold
         ):
             current_block.append(point)
         else:
@@ -570,10 +605,10 @@ def detect_green_windows(
 
     logger.debug(
         "Green Window detection: forecast_min=%s forecast_max=%s "
-        "dynamic_threshold=%.2f windows_detected=%d",
+        "threshold=%.2f windows_detected=%d",
         forecast_min,
         forecast_actual_peak,
-        dynamic_threshold,
+        threshold,
         len(windows),
     )
 
@@ -607,10 +642,17 @@ def _build_window(
     else:
         user_convenience = 60
 
+    stable_start = start_dt.astimezone(timezone.utc).replace(
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
+
     return {
-        # Use the detected interval's UTC start so IDs remain stable when new
-        # forecast windows appear earlier in the horizon.
-        "id": f"win-{int(start_dt.astimezone(timezone.utc).timestamp())}",
+        # Forecast points are generated from the current time and can differ
+        # by seconds between requests. Use the hourly forecast bucket so the
+        # same window remains selectable while its forecast is refreshed.
+        "id": f"win-{int(stable_start.timestamp())}",
         "startTime": points[0]["datetime"],
         "duration": len(points) * 60,  # 60 min per forecast point
         "avgCarbonIntensity": round(avg_intensity),
@@ -629,6 +671,7 @@ def get_carbon_data(
     api_key: str | None = None,
     offset_hours: float = 0.0,
     forecast_hours: int = 24,
+    organization_id: int | None = None,
 ) -> dict:
     """
     Main entry point for obtaining carbon data.
@@ -637,12 +680,22 @@ def get_carbon_data(
     fallback data so callers can distinguish it from provider observations.
     """
     zone = _validate_zone_id(zone_id)
-    resolved_key = api_key if api_key is not None else get_electricity_maps_api_key()
+    resolved_key = (
+        api_key
+        if api_key is not None
+        else get_electricity_maps_api_key(organization_id)
+    )
 
     try:
         if resolved_key:
+            cached_live_data = _get_cached_live_data(zone, resolved_key)
+            if cached_live_data is not None:
+                logger.debug("Using short-lived live carbon cache for zone %s", zone)
+                return cached_live_data
+
             live_data = _fetch_live_data(zone, resolved_key)
             if live_data:
+                _cache_live_data(zone, resolved_key, live_data)
                 logger.info("Using live Electricity Maps data for zone %s", zone)
                 return live_data
 
@@ -653,13 +706,21 @@ def get_carbon_data(
             return _simulation_fallback(
                 zone,
                 offset_hours,
-                "Live Electricity Maps data unavailable; returned explicitly simulated data.",
+                _api_failure_reason(zone),
                 forecast_hours=forecast_hours,
             )
 
-        logger.info("No ELECTRICITY_MAPS_API_KEY configured — using simulation for zone %s", zone)
+        logger.info("No Electricity Maps credential configured — using simulation for zone %s", zone)
         return generate_simulated_data(zone, offset_hours, forecast_hours=forecast_hours)
 
+    except CredentialConfigurationError as exc:
+        logger.error("Electricity Maps credential configuration unavailable: %s", exc)
+        return _simulation_fallback(
+            zone,
+            offset_hours,
+            "Electricity Maps credential configuration is unavailable; using simulated data.",
+            forecast_hours=forecast_hours,
+        )
     except Exception as e:
         logger.exception("Unexpected error fetching carbon data for zone %s", zone)
         return _simulation_fallback(

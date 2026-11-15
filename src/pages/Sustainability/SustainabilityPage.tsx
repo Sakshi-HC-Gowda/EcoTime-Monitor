@@ -880,22 +880,16 @@ const handleLeaderboardOptIn = async () => {
                               #{entry.rank}
                             </td>
 
-                            {isGlobalEntry ? (
-                              <td className="py-3 text-slate-300">
-                                {entry.organizationName}
-                              </td>
-                            ) : (
-                              <td className="py-3 text-slate-300">
-                                <span className="font-medium">
-                                  {entry.displayName || 'Participant'}
+                            <td className="py-3 text-slate-300">
+                              <span className="font-medium">
+                                User {entry.userId}
+                              </span>
+                              {isCurrentUser && (
+                                <span className="ml-2 ds-badge bg-green-500/10 text-green-400 border-green-500/20 text-[10px] py-0 px-1.5">
+                                  You
                                 </span>
-                                {isCurrentUser && (
-                                  <span className="ml-2 ds-badge bg-green-500/10 text-green-400 border-green-500/20 text-[10px] py-0 px-1.5">
-                                    You
-                                  </span>
-                                )}
-                              </td>
-                            )}
+                              )}
+                            </td>
 
                             <td className="py-3 text-right text-white">
                               {isGlobalEntry ? entry.averageScore : entry.score}

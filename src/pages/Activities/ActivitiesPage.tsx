@@ -75,8 +75,11 @@ export function ActivitiesPage() {
     ? navigationState.targetZone
     : null;
   const { data: carbon } = useCarbon(selectedZone);
-  const { data: currentWindows } = useGreenWindows(selectedWindowZone ?? selectedZone, 180);
   const { data: simulationConfig } = useSimulationConfig();
+  const { data: currentWindows } = useGreenWindows(
+    selectedWindowZone ?? selectedZone,
+    simulationConfig?.lowCarbonThreshold ?? 180,
+  );
   const [activeTab, setActiveTab] = useState<TabStatus>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [uploadStates, setUploadStates] = useState<Record<string, UploadCardState>>({});

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import hashlib
+import secrets
+from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, jsonify, request
 from sqlalchemy.exc import IntegrityError
@@ -9,6 +11,7 @@ from auth_utils import get_current_user, require_auth, require_organization_acce
 from extensions import db
 from models.organization import Organization
 from models.organization_member import OrganizationMember
+from models.organization_invitation import OrganizationInvitation
 from models.role import Role
 from models.user import User
 
@@ -119,6 +122,81 @@ def get_members(organization_id: int):
         "members": [member.to_public_dict() for member in members],
         "timestamp": _now_iso(),
     }), 200
+
+
+@organizations_bp.route("/organizations/<int:organization_id>/invitations", methods=["GET"])
+@require_organization_access
+@require_organization_admin
+def get_invitations(organization_id: int):
+    invitations = (
+        OrganizationInvitation.query
+        .filter_by(organization_id=organization_id)
+        .order_by(OrganizationInvitation.created_at.desc())
+        .limit(20)
+        .all()
+    )
+    return jsonify({
+        "organizationId": organization_id,
+        "invitations": [invitation.to_dict() for invitation in invitations],
+        "timestamp": _now_iso(),
+    }), 200
+
+
+@organizations_bp.route("/organizations/<int:organization_id>/invitations", methods=["POST"])
+@require_organization_access
+@require_organization_admin
+def create_invitation(organization_id: int):
+    data = request.get_json(silent=True) or {}
+    raw_hours = data.get("expiresInHours", 168)
+    if isinstance(raw_hours, bool):
+        return jsonify({"success": False, "error": "expiresInHours must be numeric"}), 400
+    try:
+        expires_in_hours = float(raw_hours)
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "error": "expiresInHours must be numeric"}), 400
+    if not 1 <= expires_in_hours <= 720:
+        return jsonify({"success": False, "error": "expiresInHours must be between 1 and 720"}), 400
+
+    invitation_code = secrets.token_urlsafe(24)
+    now = datetime.now(timezone.utc)
+    invitation = OrganizationInvitation(
+        id=secrets.token_urlsafe(18),
+        organization_id=organization_id,
+        created_by_user_id=request.user.id,
+        token_hash=hashlib.sha256(invitation_code.encode("utf-8")).hexdigest(),
+        expires_at=now + timedelta(hours=expires_in_hours),
+        created_at=now,
+    )
+    db.session.add(invitation)
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"success": False, "error": "Invitation creation failed"}), 409
+
+    return jsonify({
+        "success": True,
+        "data": {"invitation": {**invitation.to_dict(), "code": invitation_code}},
+        "timestamp": _now_iso(),
+    }), 201
+
+
+@organizations_bp.route("/organizations/<int:organization_id>/invitations/<invitation_id>/revoke", methods=["POST"])
+@require_organization_access
+@require_organization_admin
+def revoke_invitation(organization_id: int, invitation_id: str):
+    invitation = OrganizationInvitation.query.filter_by(
+        id=invitation_id,
+        organization_id=organization_id,
+    ).first()
+    if invitation is None:
+        return jsonify({"success": False, "error": "Invitation not found"}), 404
+    if invitation.used_at is not None:
+        return jsonify({"success": False, "error": "Used invitations cannot be revoked"}), 409
+    if invitation.revoked_at is None:
+        invitation.revoked_at = datetime.now(timezone.utc)
+        db.session.commit()
+    return jsonify({"success": True, "data": invitation.to_dict(), "timestamp": _now_iso()}), 200
 
 
 @organizations_bp.route("/organizations/<int:organization_id>/members", methods=["POST"])

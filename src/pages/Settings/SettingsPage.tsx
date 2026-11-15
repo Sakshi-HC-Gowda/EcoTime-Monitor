@@ -7,6 +7,9 @@ import { useZone } from '@/app/ZoneProvider';
 import { useTasks } from '@/hooks/useTasks';
 import { useCarbonData } from '@/hooks/useCarbonData';
 import { organizationService } from '@/services/organizationService';
+import { providerService } from '@/services/providerService';
+import { optimizerService } from '@/services/optimizerService';
+import { useSimulationConfig } from '@/features/optimization/hooks/useOptimization';
 import type { AuthUser } from '@/features/auth/types';
 
 const DEFAULT_LOW_CARBON_THRESHOLD = 180;
@@ -22,18 +25,22 @@ function readStoredNumber(key: string, fallback: number, legacyKey?: string): nu
 export function SettingsPage() {
   const { user } = useAuth();
   const { selectedZone, setSelectedZone } = useZone();
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('ecotime_api_key') ?? '');
+  const [apiKey, setApiKey] = useState('');
+  const [credentialConfigured, setCredentialConfigured] = useState<boolean | null>(null);
+  const [credentialLoading, setCredentialLoading] = useState(false);
+  const [credentialError, setCredentialError] = useState<string | null>(null);
   const [lowCarbonThreshold, setLowCarbonThreshold] = useState(() =>
     readStoredNumber('ecotime_low_carbon_threshold', DEFAULT_LOW_CARBON_THRESHOLD, 'ecotime_threshold'),
   );
   const [baselineIntensity, setBaselineIntensity] = useState(() =>
     readStoredNumber('ecotime_baseline_intensity', DEFAULT_BASELINE_INTENSITY, 'ecotime_baseline'),
   );
+  const { data: simulationConfig } = useSimulationConfig();
   const { tasks, totalSavingsGrams, resetAll } = useTasks();
   const zone = selectedZone ?? 'US-CA';
-  const { carbonData } = useCarbonData({
+  const { carbonData, error: carbonError } = useCarbonData({
     zone,
-    apiKey: apiKey || null,
+    apiKey: null,
     lowCarbonThreshold,
     offsetHours: 0,
   });
@@ -82,8 +89,46 @@ export function SettingsPage() {
 
   const handleApiKeyChange = (key: string) => {
     setApiKey(key);
-    localStorage.setItem('ecotime_api_key', key);
-    showFeedback('Saved the local API-key preference. Backend provider credentials are configured server-side.');
+  };
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    providerService.getElectricityMapsCredentialStatus().then((response) => {
+      if (cancelled) return;
+      if (response.success && response.data) {
+        setCredentialConfigured(response.data.configured);
+        setCredentialError(null);
+      } else {
+        setCredentialError(response.error || 'Unable to load provider credential status.');
+      }
+    }).catch(() => {
+      if (!cancelled) setCredentialError('Unable to load provider credential status.');
+    }).finally(() => {
+      if (!cancelled) setCredentialLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  const handleApiKeySave = async () => {
+    if (!isAdmin || credentialLoading) return;
+    setCredentialLoading(true);
+    setCredentialError(null);
+    const response = await providerService.saveElectricityMapsToken(apiKey);
+    if (response.success && response.data) {
+      setCredentialConfigured(response.data.configured);
+      setApiKey('');
+      showFeedback(
+        response.data.configured
+          ? 'Electricity Maps credential saved securely on the server.'
+          : 'Organization Electricity Maps credential cleared.',
+      );
+    } else {
+      setCredentialError(response.error || 'Unable to save the provider credential.');
+    }
+    setCredentialLoading(false);
   };
 
   const handleZoneChange = (zoneId: string) => {
@@ -94,7 +139,23 @@ export function SettingsPage() {
   const handleThresholdChange = (threshold: number) => {
     setLowCarbonThreshold(threshold);
     localStorage.setItem('ecotime_low_carbon_threshold', String(threshold));
+    if (isAdmin) {
+      void optimizerService.setSimulationConfig({ lowCarbonThreshold: threshold }).then((response) => {
+        if (!response.success) {
+          setCredentialError(response.error || 'Unable to save the Green Window threshold.');
+        }
+      });
+    }
   };
+
+  useEffect(() => {
+    if (simulationConfig?.lowCarbonThreshold === undefined) return;
+    setLowCarbonThreshold(simulationConfig.lowCarbonThreshold);
+    localStorage.setItem(
+      'ecotime_low_carbon_threshold',
+      String(simulationConfig.lowCarbonThreshold),
+    );
+  }, [simulationConfig?.lowCarbonThreshold]);
 
   const handleBaselineChange = (baseline: number) => {
     setBaselineIntensity(baseline);
@@ -141,6 +202,13 @@ export function SettingsPage() {
           lowCarbonThreshold={lowCarbonThreshold}
           baselineIntensity={baselineIntensity}
           onApiKeyChange={handleApiKeyChange}
+          onApiKeySave={handleApiKeySave}
+          canEditCredential={isAdmin}
+          canEditThreshold={isAdmin}
+          credentialConfigured={credentialConfigured}
+          credentialLoading={credentialLoading}
+          credentialError={credentialError}
+          carbonError={carbonError}
           onZoneChange={handleZoneChange}
           onThresholdChange={handleThresholdChange}
           onBaselineChange={handleBaselineChange}

@@ -103,7 +103,7 @@ class ResearchPipelineTests(unittest.TestCase):
             for idx, intensity in enumerate(intensities)
         ]
 
-        windows = detect_green_windows(forecast, start.isoformat())
+        windows = detect_green_windows(forecast, start.isoformat(), threshold=210)
 
         self.assertEqual(len(windows), 2)
         self.assertEqual(windows[0]["duration"], 120)

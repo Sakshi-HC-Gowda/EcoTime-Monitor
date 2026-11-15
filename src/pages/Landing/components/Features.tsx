@@ -17,7 +17,7 @@ const features = [
         <div className="text-3xl font-black text-white md:text-4xl">
           124 <span className="text-base font-semibold text-slate-400 md:text-lg">gCO2e/kWh</span>
         </div>
-        <p className="mt-3 font-mono text-sm font-semibold tracking-wide text-green-400">LIVE GRID</p>
+        <p className="mt-3 font-mono text-sm font-semibold tracking-wide text-green-400">SAMPLE PREVIEW</p>
       </div>
     ),
   },

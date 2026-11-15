@@ -16,6 +16,7 @@ import hashlib
 from datetime import date, datetime, timedelta, timezone
 from uuid import uuid4
 
+from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
 
 from extensions import db
@@ -468,4 +469,22 @@ def get_user_score(user_id: str) -> dict | None:
     if score is None:
         return None
 
-    return score.to_dict()
+    payload = score.to_dict()
+    column_names = {
+        column["name"]
+        for column in inspect(db.engine).get_columns("sustainability_scores")
+    }
+    if "global_leaderboard_opt_in" in column_names:
+        payload["globalLeaderboardOptIn"] = bool(
+            db.session.execute(
+                text(
+                    """
+                    SELECT global_leaderboard_opt_in
+                    FROM sustainability_scores
+                    WHERE user_id = :user_id
+                    """
+                ),
+                {"user_id": user_id},
+            ).scalar()
+        )
+    return payload

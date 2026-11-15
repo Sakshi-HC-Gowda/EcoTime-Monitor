@@ -173,6 +173,16 @@ def _extend_provider_with_model(
     return combined, "electricity_maps_api+ml_model"
 
 
+def _provider_fallback_forecast(
+    provider_forecast: list[dict],
+    carbon: dict,
+    predictor,
+) -> tuple[list[dict], str]:
+    forecast_points = [{**point, "isML": False} for point in provider_forecast]
+    predictor._validate_forecast(forecast_points, len(forecast_points))
+    return forecast_points, carbon.get("forecastSource", "electricity_maps_api")
+
+
 # ---------------------------------------------------------------------------
 # GET /api/forecast
 # ---------------------------------------------------------------------------
@@ -217,7 +227,12 @@ def get_forecast():
 
         logger.info("GET /api/forecast zone=%s hours=%d", zone, hours)
 
-        carbon = get_carbon_data(zone_id=zone, offset_hours=0, forecast_hours=hours)
+        carbon = get_carbon_data(
+            zone_id=zone,
+            offset_hours=0,
+            forecast_hours=hours,
+            organization_id=request.user.organization_id,
+        )
         predictor = get_predictor()
         # _simulation_fallback() sets an informational "error" key on valid
         # simulated data explaining *why* the live API was unavailable.
@@ -265,13 +280,25 @@ def get_forecast():
                 hours,
             )
         elif predictor.is_trained() and provider_forecast:
-            forecast_points, forecast_source = _extend_provider_with_model(
-                zone=zone,
-                hours=hours,
-                carbon=carbon,
-                provider_forecast=provider_forecast,
-                predictor=predictor,
-            )
+            try:
+                forecast_points, forecast_source = _extend_provider_with_model(
+                    zone=zone,
+                    hours=hours,
+                    carbon=carbon,
+                    provider_forecast=provider_forecast,
+                    predictor=predictor,
+                )
+            except (RuntimeError, ValueError):
+                logger.warning(
+                    "ML extension failed for zone %s; returning provider forecast",
+                    zone,
+                    exc_info=True,
+                )
+                forecast_points, forecast_source = _provider_fallback_forecast(
+                    provider_forecast,
+                    carbon,
+                    predictor,
+                )
         elif (
             predictor.is_trained()
             and isinstance(history, list)

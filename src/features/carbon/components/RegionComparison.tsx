@@ -11,6 +11,9 @@ const regionsData = [
 export function RegionComparison() {
   return (
     <div className="h-64 w-full">
+      <p className="mb-2 text-[11px] text-slate-500">
+        Illustrative reference values; not live provider data.
+      </p>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={regionsData} layout="vertical">
           <XAxis type="number" stroke="#64748b" fontSize={10} tickLine={false} />

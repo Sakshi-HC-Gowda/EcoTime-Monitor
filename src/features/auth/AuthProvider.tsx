@@ -15,7 +15,8 @@ interface AuthContextValue {
     password: string;
     first_name: string;
     last_name: string;
-    organization_name: string;
+    organization_name?: string;
+    invitation_code?: string;
   }) => Promise<AuthSession>;
   logout: () => void;
 }
@@ -68,7 +69,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     password: string;
     first_name: string;
     last_name: string;
-    organization_name: string;
+    organization_name?: string;
+    invitation_code?: string;
   }) => {
     const session = await authService.register(payload);
     authService.setSession(session);

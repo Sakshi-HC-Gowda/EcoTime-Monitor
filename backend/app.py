@@ -191,7 +191,7 @@ def create_app(config_name: str | None = None) -> Flask:
     CORS(app, resources={
         r"/api/*": {
             "origins": default_origins + extra_origins,
-            "methods": ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+            "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization", "Idempotency-Key"],
         }
     })

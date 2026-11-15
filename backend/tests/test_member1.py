@@ -1,7 +1,10 @@
+from datetime import datetime, timedelta, timezone
+
 import pytest
 
 from app import create_app
 from extensions import db
+from models.organization_invitation import OrganizationInvitation
 
 
 @pytest.fixture
@@ -105,6 +108,130 @@ def test_existing_organization_cannot_be_joined_by_name(client):
     register(client, "admin@company-a.com", "Password123!", "Company A")
     response = register(client, "intruder@company-a.com", "Password123!", "Company A")
     assert response.status_code == 409
+
+
+def test_existing_organization_can_be_joined_with_single_use_invitation(client):
+    admin = register(client, "admin@company-a.com", "Password123!", "Company A")
+    admin_token = admin.get_json()["token"]
+    invitation = client.post(
+        "/api/organizations/1/invitations",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"expiresInHours": 24},
+    )
+    assert invitation.status_code == 201
+    invitation_data = invitation.get_json()["data"]["invitation"]
+    assert invitation_data["code"]
+
+    joined = client.post(
+        "/api/auth/register",
+        json={
+            "email": "member@company-a.com",
+            "password": "Password123!",
+            "first_name": "Member",
+            "last_name": "User",
+            "invitation_code": invitation_data["code"],
+        },
+    )
+    assert joined.status_code == 201
+    assert joined.get_json()["user"]["organizationId"] == 1
+    assert joined.get_json()["user"]["role"]["name"] == "Employee"
+
+    reused = client.post(
+        "/api/auth/register",
+        json={
+            "email": "second-member@company-a.com",
+            "password": "Password123!",
+            "first_name": "Second",
+            "last_name": "User",
+            "invitation_code": invitation_data["code"],
+        },
+    )
+    assert reused.status_code == 400
+
+
+def test_invalid_and_revoked_invitations_are_rejected(client):
+    admin = register(client, "admin@company-a.com", "Password123!", "Company A")
+    admin_token = admin.get_json()["token"]
+    invalid = client.post(
+        "/api/auth/register",
+        json={
+            "email": "invalid@company-a.com",
+            "password": "Password123!",
+            "first_name": "Invalid",
+            "last_name": "Invite",
+            "invitation_code": "not-a-real-code",
+        },
+    )
+    assert invalid.status_code == 400
+
+    invitation = client.post(
+        "/api/organizations/1/invitations",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={},
+    ).get_json()["data"]["invitation"]
+    revoked = client.post(
+        f"/api/organizations/1/invitations/{invitation['id']}/revoke",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert revoked.status_code == 200
+    joined = client.post(
+        "/api/auth/register",
+        json={
+            "email": "revoked@company-a.com",
+            "password": "Password123!",
+            "first_name": "Revoked",
+            "last_name": "Invite",
+            "invitation_code": invitation["code"],
+        },
+    )
+    assert joined.status_code == 400
+
+    expired_invitation_response = client.post(
+        "/api/organizations/1/invitations",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={},
+    )
+    expired_invitation = expired_invitation_response.get_json()["data"]["invitation"]
+    with client.application.app_context():
+        record = db.session.get(OrganizationInvitation, expired_invitation["id"])
+        record.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+        db.session.commit()
+    expired = client.post(
+        "/api/auth/register",
+        json={
+            "email": "expired@company-a.com",
+            "password": "Password123!",
+            "first_name": "Expired",
+            "last_name": "Invite",
+            "invitation_code": expired_invitation["code"],
+        },
+    )
+    assert expired.status_code == 400
+
+
+def test_ordinary_members_cannot_create_invitations(client):
+    admin = register(client, "admin@company-a.com", "Password123!", "Company A")
+    employee = client.post(
+        "/api/organizations/1/members",
+        headers={"Authorization": f"Bearer {admin.get_json()['token']}"},
+        json={
+            "email": "employee@company-a.com",
+            "password": "Password123!",
+            "first_name": "Employee",
+            "last_name": "User",
+        },
+    )
+    employee_token = client.post(
+        "/api/auth/login",
+        json={"email": "employee@company-a.com", "password": "Password123!"},
+    ).get_json()["token"]
+    response = client.post(
+        "/api/organizations/1/invitations",
+        headers={"Authorization": f"Bearer {employee_token}"},
+        json={},
+    )
+    assert employee.status_code == 201
+    assert response.status_code == 403
 
 
 def test_employee_cannot_create_members_or_take_over_org(client):

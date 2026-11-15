@@ -12,6 +12,7 @@ import type { DetectedLocation } from '@/services/locationService';
 import type { LocationStatus } from '@/hooks/useLocation';
 
 export const ZONE_STORAGE_KEY = 'ecotime_zone';
+const DEFAULT_ZONE = 'IN-SO';
 
 interface ZoneContextValue {
   selectedZone: string | null;
@@ -31,7 +32,9 @@ function readStoredZone(): string | null {
 
 export function ZoneProvider({ children }: { children: ReactNode }) {
   const { status, location, errorMessage, retrigger } = useLocation();
-  const [selectedZone, setSelectedZoneState] = useState<string | null>(readStoredZone);
+  const [selectedZone, setSelectedZoneState] = useState<string | null>(
+    () => readStoredZone() ?? DEFAULT_ZONE,
+  );
 
   useEffect(() => {
     // On successful detection, adopt the detected zone (overrides empty/null stored)

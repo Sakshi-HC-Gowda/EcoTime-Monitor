@@ -36,7 +36,7 @@ import { LoadingSkeleton } from '@/components/ui/LoadingSkeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { getEstimatedEcoScore } from '@/features/activities/utils/activityMetrics';
-import { useSimulationConfig } from '@/features/optimization/hooks/useOptimization';
+import { useLatestOptimization, useSimulationConfig } from '@/features/optimization/hooks/useOptimization';
 import { useAuth } from '@/features/auth/AuthProvider';
 
 type CustomTooltipProps = {
@@ -66,11 +66,15 @@ export function DashboardPage() {
   const { selectedZone } = useZone();
   const { user } = useAuth();
   const { data: carbon, isLoading: carbonLoading, isError: carbonError, refetch: refetchCarbon } = useCarbon(selectedZone);
-  const { data: windows, isLoading: windowsLoading } = useGreenWindows(selectedZone, 180);
   const { data: activitiesData, isLoading: activitiesLoading } = useActivitiesQuery(1, 10);
   const { data: simulationConfig } = useSimulationConfig();
+  const { data: windows, isLoading: windowsLoading, isError: windowsError } = useGreenWindows(
+    selectedZone,
+    simulationConfig?.lowCarbonThreshold ?? 180,
+  );
+  const { data: latestOptimization } = useLatestOptimization(user?.id ?? null);
 
-  if (carbonLoading || windowsLoading) {
+  if (carbonLoading) {
     return (
       <div className="page-shell page-stack">
         <LoadingSkeleton count={1} height="h-24" />
@@ -128,6 +132,11 @@ export function DashboardPage() {
   const ecoScore = ecoScores.length
     ? Math.round((ecoScores.reduce((sum, score) => sum + score, 0) / ecoScores.length) * 10) / 10
     : null;
+  const savings = latestOptimization?.response.savings;
+  const validSavings = savings
+    && Number.isFinite(savings.totalSavedCo2)
+    && Number.isFinite(savings.baselineCo2)
+    && savings.baselineCo2 > 0;
 
   // Donut chart data for Activity Lifecycle
   const pieData = [
@@ -191,7 +200,7 @@ export function DashboardPage() {
             <div className="w-6 h-6 rounded-lg bg-emerald-500/20 flex items-center justify-center">
               <Leaf size={14} className="text-emerald-400" />
             </div>
-            <span>Live Monitoring</span>
+            <span>{carbon.isSimulated ? 'Simulated Monitoring' : 'Live Provider Monitoring'}</span>
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
           </div>
         </div>
@@ -220,8 +229,15 @@ export function DashboardPage() {
         />
         <MetricCard
           title="Carbon Saved"
-          value="—"
-          subtitle="Savings are calculated in Optimization"
+          value={validSavings ? savings.totalSavedCo2.toFixed(1) : '—'}
+          unit={validSavings ? 'gCO₂e' : undefined}
+          subtitle={
+            validSavings
+              ? savings.totalSavedCo2 < 0
+                ? 'Estimated emissions increase'
+                : 'Estimated savings from latest optimization'
+              : 'No valid optimization result yet'
+          }
           icon={Leaf}
           iconColor="text-emerald-400"
           iconBg="bg-emerald-500/15 border-emerald-500/30"
@@ -356,7 +372,11 @@ export function DashboardPage() {
               </span>
             </div>
 
-            <GreenWindowsList windows={greenWindows.slice(0, 5)} />
+            <GreenWindowsList
+              windows={greenWindows.slice(0, 5)}
+              isLoading={windowsLoading}
+              isError={windowsError}
+            />
           </GlassCard>
 
         </div>

@@ -610,7 +610,7 @@ def test_untrained_model_does_not_fabricate_missing_live_points(mock_carbon, moc
 @patch("routes.forecast.get_predictor")
 @patch("routes.forecast.get_carbon_data")
 def test_insufficient_history_for_model_extension(mock_carbon, mock_pred, client):
-    """A trained model must not be used when there is no 24-hour consecutive input window."""
+    """A provider forecast remains usable when model extension lacks history."""
     token = register_user(client, email="live_short_hist@example.com")
     now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
     mock_carbon.return_value = {
@@ -633,10 +633,11 @@ def test_insufficient_history_for_model_extension(mock_carbon, mock_pred, client
     mock_pred.return_value = trained
 
     resp = client.get("/api/forecast?zone=IN-SO&hours=36", headers=auth(token))
-    assert resp.status_code == 503
-    body = resp.get_json()
-    assert body["success"] is False
-    assert "insufficient consecutive hourly history" in body["error"]
+    assert resp.status_code == 200
+    data = resp.get_json()["data"]
+    assert data["forecastSource"] == "electricity_maps_api"
+    assert len(data["forecast"]) == 8
+    assert all(point["isML"] is False for point in data["forecast"])
     trained.predict.assert_not_called()
 
 
@@ -654,10 +655,11 @@ def test_model_extension_failure_is_distinct_from_provider_gap(mock_carbon, mock
     mock_pred.return_value = trained
 
     resp = client.get("/api/forecast?zone=IN-SO&hours=36", headers=auth(token))
-    assert resp.status_code == 503
-    body = resp.get_json()
-    assert "Trained model failed to extend the forecast" in body["error"]
-    assert "missing values" in body["error"]
+    assert resp.status_code == 200
+    data = resp.get_json()["data"]
+    assert data["forecastSource"] == "electricity_maps_api"
+    assert len(data["forecast"]) == 25
+    assert all(point["isML"] is False for point in data["forecast"])
 
 
 def test_ml_forecast_timestamps_continue_from_last_history_hour():

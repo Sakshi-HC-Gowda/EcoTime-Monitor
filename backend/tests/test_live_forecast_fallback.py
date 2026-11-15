@@ -59,7 +59,7 @@ def test_windows_use_ml_model_when_live_provider_has_no_forecast(client):
          patch("forecast.predict.ForecastPredictor.is_trained", return_value=True), \
          patch("forecast.predict.ForecastPredictor._validate_history", return_value=None), \
          patch("forecast.predict.ForecastPredictor.predict", return_value=_ml_forecast()):
-        response = client.get("/api/windows?zone=IN-SO", headers=headers)
+        response = client.get("/api/windows?zone=IN-SO&threshold=550", headers=headers)
     body = response.get_json()
     assert response.status_code == 200, body
     assert body["forecastSource"] == "ml_model"

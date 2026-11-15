@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -7,6 +8,7 @@ import pytest
 from app import create_app
 from extensions import db
 from models.activity import Activity
+from models.analytics_recommendation import AnalyticsRecommendation
 from services import optimizer_service
 
 
@@ -171,7 +173,7 @@ def test_no_lower_carbon_window_is_explained(carbon_fixture):
 
     assert result["result"]["selectedTasks"] == []
     assert "No lower-carbon window" in result["recommendations"][0]["reason"]
-    assert "no lower-carbon band" in result["carbonData"]["classification"]
+    assert "no forecast point meets" in result["carbonData"]["classification"]
 
 
 def test_current_zero_carbon_intensity_is_preserved(carbon_fixture):
@@ -489,6 +491,72 @@ def test_recommendations_return_and_persist_the_current_optimization(
         "/api/optimization/latest",
         headers={"Authorization": f"Bearer {other_token}"},
     )
+    assert other_latest.status_code == 200
+    assert other_latest.get_json()["data"] is None
+
+
+def test_latest_optimization_is_not_exposed_to_another_user_in_same_org(client, app):
+    first = client.post(
+        "/api/auth/register",
+        json={
+            "email": "latest-owner@example.com",
+            "password": "Password123!",
+            "first_name": "Latest",
+            "last_name": "Owner",
+            "organization_name": "Shared Optimization Org",
+        },
+    ).get_json()
+    second = client.post(
+        "/api/auth/register",
+        json={
+            "email": "latest-other@example.com",
+            "password": "Password123!",
+            "first_name": "Latest",
+            "last_name": "Other",
+            "organization_name": "Shared Optimization Org",
+        },
+    ).get_json()
+    owner_headers = {"Authorization": f"Bearer {first['token']}"}
+    other_headers = {"Authorization": f"Bearer {second['token']}"}
+    activity = client.post(
+        "/api/activities",
+        headers=owner_headers,
+        json={
+            "name": "Owner activity",
+            "type": "flexible",
+            "duration": 30,
+            "powerDraw": 100,
+        },
+    ).get_json()["data"]
+
+    with app.app_context():
+        record = AnalyticsRecommendation(
+            organization_id=activity["organizationId"],
+            activity_id=None,
+            text="Optimization run",
+            reason=json.dumps({
+                "response": {
+                    "result": {
+                        "selectedTasks": [{"id": activity["id"]}],
+                    },
+                    "savings": {
+                        "totalSavedCo2": 1.0,
+                        "baselineCo2": 2.0,
+                        "recommendedCo2": 1.0,
+                        "reductionPercent": 50.0,
+                    },
+                },
+                "inputSnapshot": {"activities": []},
+            }),
+            status="optimization_result",
+        )
+        db.session.add(record)
+        db.session.commit()
+
+    owner_latest = client.get("/api/optimization/latest", headers=owner_headers)
+    other_latest = client.get("/api/optimization/latest", headers=other_headers)
+    assert owner_latest.status_code == 200
+    assert owner_latest.get_json()["data"] is not None
     assert other_latest.status_code == 200
     assert other_latest.get_json()["data"] is None
 
@@ -940,7 +1008,8 @@ def test_run_now_rejects_stale_non_scheduled_status(client, app):
 def test_api_unavailability_is_labeled_and_not_replaced_by_api_shaped_data(monkeypatch):
     from services import carbon_service
 
-    monkeypatch.setattr(carbon_service, "get_electricity_maps_api_key", lambda: "configured")
+    carbon_service.clear_api_failure_cache()
+    monkeypatch.setattr(carbon_service, "get_electricity_maps_api_key", lambda *_args: "configured")
     monkeypatch.setattr(carbon_service, "_fetch_live_data", lambda *_: None)
 
     result = carbon_service.get_carbon_data("US-CA")

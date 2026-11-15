@@ -11,6 +11,7 @@ import { WindowTimeline } from '@/features/windows/components/WindowTimeline';
 import { WindowCalendar } from '@/features/windows/components/WindowCalendar';
 import type { GreenWindow } from '@/types/domain';
 import { getGreenWindowLabel } from '@/features/windows/utils/windowLabels';
+import { useSimulationConfig } from '@/features/optimization/hooks/useOptimization';
 
 type ViewMode = 'cards' | 'timeline' | 'calendar';
 
@@ -23,8 +24,12 @@ const VIEW_OPTIONS: { value: ViewMode; label: string; icon: React.ElementType }[
 export function GreenWindowsPage() {
   const navigate = useNavigate();
   const { selectedZone } = useZone();
+  const { data: simulationConfig } = useSimulationConfig();
   const [viewMode, setViewMode] = useState<ViewMode>('cards');
-  const { data: windows, isLoading, isError, refetch } = useGreenWindows(selectedZone, 180);
+  const { data: windows, isLoading, isError, refetch } = useGreenWindows(
+    selectedZone,
+    simulationConfig?.lowCarbonThreshold ?? 180,
+  );
 
   if (isLoading) {
     return (
@@ -46,7 +51,16 @@ export function GreenWindowsPage() {
   }
 
   const handleSchedule = (win: GreenWindow) => {
-    navigate('/activities', { state: { targetWindow: win, targetZone: selectedZone } });
+    if (!selectedZone) return;
+    const endTime = win.endTime ?? new Date(
+      new Date(win.startTime).getTime() + win.duration * 60_000,
+    ).toISOString();
+    navigate('/optimization', {
+      state: {
+        selectedWindow: { ...win, endTime },
+        selectedZone,
+      },
+    });
   };
 
   return (

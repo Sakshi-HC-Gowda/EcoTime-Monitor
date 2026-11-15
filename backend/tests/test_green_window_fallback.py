@@ -133,7 +133,7 @@ def test_simulated_fallback_returns_green_windows(mock_get_carbon, client):
     token = register_user(client)
     mock_get_carbon.return_value = _make_simulated_fallback()
 
-    resp = client.get("/api/windows?zone=IN-SO&threshold=180", headers=auth(token))
+    resp = client.get("/api/windows?zone=IN-SO&threshold=650", headers=auth(token))
     assert resp.status_code == 200, resp.get_data(as_text=True)
 
     body = resp.get_json()

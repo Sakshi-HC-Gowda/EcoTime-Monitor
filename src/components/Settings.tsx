@@ -8,6 +8,13 @@ interface SettingsProps {
   lowCarbonThreshold: number;
   baselineIntensity: number;
   onApiKeyChange: (key: string) => void;
+  onApiKeySave: () => void;
+  canEditCredential: boolean;
+  canEditThreshold: boolean;
+  credentialConfigured: boolean | null;
+  credentialLoading: boolean;
+  credentialError: string | null;
+  carbonError: string | null;
   onZoneChange: (zone: string) => void;
   onThresholdChange: (threshold: number) => void;
   onBaselineChange: (baseline: number) => void;
@@ -21,6 +28,13 @@ export const Settings: React.FC<SettingsProps> = ({
   lowCarbonThreshold,
   baselineIntensity,
   onApiKeyChange,
+  onApiKeySave,
+  canEditCredential,
+  canEditThreshold,
+  credentialConfigured,
+  credentialLoading,
+  credentialError,
+  carbonError,
   onZoneChange,
   onThresholdChange,
   onBaselineChange,
@@ -51,8 +65,8 @@ export const Settings: React.FC<SettingsProps> = ({
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-            This legacy API-key preference is stored locally. Backend live-data credentials are configured server-side,
-            and the status below reflects the carbon data source actually returned by the backend.
+            Organization admins can save the provider credential securely on the server. The token is never returned
+            to the browser, and the status below reflects the carbon data source actually returned by the backend.
           </p>
 
           <div className="input-group">
@@ -63,10 +77,38 @@ export const Settings: React.FC<SettingsProps> = ({
                 placeholder="Enter Electricity Maps API auth-token..."
                 value={apiKey}
                 onChange={(e) => onApiKeyChange(e.target.value)}
+                disabled={!canEditCredential || credentialLoading}
                 style={{ flex: 1, fontFamily: 'monospace' }}
               />
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                onClick={onApiKeySave}
+                disabled={!canEditCredential || credentialLoading || !apiKey.trim()}
+              >
+                {credentialLoading ? 'Saving...' : 'Save'}
+              </Button>
             </div>
           </div>
+
+          <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+            {credentialLoading
+              ? 'Checking secure provider configuration...'
+              : credentialConfigured === true
+                ? 'A provider credential is configured. The stored token is not displayed.'
+                : credentialConfigured === false
+                  ? 'No organization provider credential is configured. The server environment fallback may still apply.'
+                  : 'Provider credential status is unavailable.'}
+          </p>
+          {credentialError && (
+            <p style={{ fontSize: '12px', color: 'var(--rose)' }}>{credentialError}</p>
+          )}
+          {carbonError && (
+            <p style={{ fontSize: '12px', color: 'var(--amber)' }}>
+              Latest carbon provider status: {carbonError}
+            </p>
+          )}
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', borderRadius: '8px', background: isSimulated === false ? 'var(--green-glow)' : 'var(--amber-glow)', border: isSimulated === false ? '1px solid var(--green-border)' : '1px solid var(--amber-border)' }}>
             {isSimulated === true ? (
@@ -153,6 +195,7 @@ export const Settings: React.FC<SettingsProps> = ({
               step="5"
               value={lowCarbonThreshold}
               onChange={(e) => onThresholdChange(Number(e.target.value))}
+              disabled={!canEditThreshold}
             />
             <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
               Defines the boundary below which the scheduler classifies a time slot as a "Green Window".

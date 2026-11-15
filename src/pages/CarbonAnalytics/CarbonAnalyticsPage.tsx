@@ -39,6 +39,11 @@ export function CarbonAnalyticsPage() {
 
   const current = carbon.current.carbonIntensity;
   const isOptimal = current < 180;
+  const forecastIntensities = carbon.forecast
+    .map((point) => point.carbonIntensity)
+    .filter((intensity) => Number.isFinite(intensity));
+  const peak = forecastIntensities.length ? Math.max(...forecastIntensities) : null;
+  const lowest = forecastIntensities.length ? Math.min(...forecastIntensities) : null;
 
   return (
     <div className="page-shell page-stack">
@@ -89,21 +94,20 @@ export function CarbonAnalyticsPage() {
 
         <MetricCard
           title="Renewable Mix"
-          value="62"
+          value="—"
           unit="%"
-          subtitle="High solar & wind share"
+          subtitle="Not provided by the current carbon data source"
           icon={Leaf}
           iconColor="text-green-400"
           iconBg="bg-green-500/10 border-green-500/20"
           accentClass="metric-accent-green"
-          trend={{ value: '4% vs last week', positive: true }}
         />
 
         <MetricCard
           title="24h Peak Carbon"
-          value="340"
+          value={peak ?? '—'}
           unit="gCO₂e/kWh"
-          subtitle="Thermal peak at 19:00"
+          subtitle={peak === null ? 'No forecast data available' : 'Highest returned forecast value'}
           icon={Zap}
           iconColor="text-rose-400"
           iconBg="bg-rose-500/10 border-rose-500/20"
@@ -112,9 +116,9 @@ export function CarbonAnalyticsPage() {
 
         <MetricCard
           title="24h Lowest Carbon"
-          value="112"
+          value={lowest ?? '—'}
           unit="gCO₂e/kWh"
-          subtitle="Solar trough at 13:00"
+          subtitle={lowest === null ? 'No forecast data available' : 'Lowest returned forecast value'}
           icon={TrendingDown}
           iconColor="text-teal-400"
           iconBg="bg-teal-500/10 border-teal-500/20"

@@ -57,7 +57,8 @@ export const authService = {
     password: string;
     first_name: string;
     last_name: string;
-    organization_name: string;
+    organization_name?: string;
+    invitation_code?: string;
   }): Promise<AuthSession> {
     const response = await apiClient.request<{ token: string; user: AuthUser }>('/auth/register', {
       method: 'POST',

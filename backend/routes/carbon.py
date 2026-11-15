@@ -71,7 +71,11 @@ def get_carbon():
     try:
         if not zone:
             raise ValueError("A non-empty grid zone is required")
-        data = get_carbon_data(zone_id=zone, offset_hours=offset)
+        data = get_carbon_data(
+            zone_id=zone,
+            offset_hours=offset,
+            organization_id=request.user.organization_id,
+        )
     except Exception as exc:
         logger.exception("GET /api/carbon failed for zone %s", zone)
         return jsonify({
@@ -114,7 +118,11 @@ def get_windows():
     try:
         if not zone:
             raise ValueError("A non-empty grid zone is required")
-        carbon = get_carbon_data(zone_id=zone, offset_hours=offset)
+        carbon = get_carbon_data(
+            zone_id=zone,
+            offset_hours=offset,
+            organization_id=request.user.organization_id,
+        )
 
         # _simulation_fallback() sets an informational "error" key on valid
         # simulated data explaining *why* the live API was unavailable.

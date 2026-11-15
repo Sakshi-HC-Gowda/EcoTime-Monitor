@@ -10,10 +10,11 @@ export function LoginPage() {
   const navigate = useNavigate();
   const { login, register } = useAuth();
 
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [mode, setMode] = useState<'login' | 'register' | 'join'>('login');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [organizationName, setOrganizationName] = useState('');
+  const [invitationCode, setInvitationCode] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -52,7 +53,7 @@ export function LoginPage() {
       !lastName.trim() ||
       !email.trim() ||
       !password ||
-      !organizationName.trim()
+      (mode === 'register' ? !organizationName.trim() : !invitationCode.trim())
     ) {
       setError('Please complete all onboarding fields.');
       return;
@@ -66,7 +67,9 @@ export function LoginPage() {
         password,
         first_name: firstName.trim(),
         last_name: lastName.trim(),
-        organization_name: organizationName.trim(),
+        ...(mode === 'register'
+          ? { organization_name: organizationName.trim() }
+          : { invitation_code: invitationCode.trim() }),
       });
 
       navigate('/dashboard');
@@ -94,12 +97,16 @@ export function LoginPage() {
           <h1 className="mt-8 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
             {mode === 'login'
               ? 'Welcome Back'
-              : 'Create Your Organization'}
+              : mode === 'join'
+                ? 'Join Your Organization'
+                : 'Create Your Organization'}
           </h1>
           <p className="mt-2 text-sm text-slate-400">
             {mode === 'login'
               ? 'Sign in to access your EcoTime dashboard'
-              : 'Set up your tenant and admin account'}
+              : mode === 'join'
+                ? 'Use an invitation code from an organization admin'
+                : 'Set up your tenant and admin account'}
           </p>
         </div>
 
@@ -125,7 +132,19 @@ export function LoginPage() {
             className={`segment-tab flex-1 ${mode === 'register' ? 'active' : ''}`}
             aria-pressed={mode === 'register'}
           >
-            Register
+            Create Organization
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setMode('join');
+              setError('');
+            }}
+            className={`segment-tab flex-1 ${mode === 'join' ? 'active' : ''}`}
+            aria-pressed={mode === 'join'}
+          >
+            Join Existing
           </button>
         </div>
 
@@ -228,22 +247,43 @@ export function LoginPage() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-2">
-              <label
-                htmlFor="register-organization"
-                className="text-sm font-semibold text-slate-300"
-              >
-                Organization name
-              </label>
-              <input
-                id="register-organization"
-                type="text"
-                value={organizationName}
-                onChange={(event) => setOrganizationName(event.target.value)}
-                className={inputClassName}
-                required
-              />
-            </div>
+            {mode === 'register' ? (
+              <div className="flex flex-col gap-2">
+                <label
+                  htmlFor="register-organization"
+                  className="text-sm font-semibold text-slate-300"
+                >
+                  Organization name
+                </label>
+                <input
+                  id="register-organization"
+                  type="text"
+                  value={organizationName}
+                  onChange={(event) => setOrganizationName(event.target.value)}
+                  className={inputClassName}
+                  required
+                />
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <label
+                  htmlFor="register-invitation-code"
+                  className="text-sm font-semibold text-slate-300"
+                >
+                  Invitation code
+                </label>
+                <input
+                  id="register-invitation-code"
+                  type="text"
+                  autoComplete="one-time-code"
+                  placeholder="Paste the code from your admin"
+                  value={invitationCode}
+                  onChange={(event) => setInvitationCode(event.target.value)}
+                  className={inputClassName}
+                  required
+                />
+              </div>
+            )}
 
             <div className="flex flex-col gap-2">
               <label
@@ -289,8 +329,8 @@ export function LoginPage() {
               disabled={isSubmitting}
             >
               {isSubmitting
-                ? 'Creating organization...'
-                : 'Create organization'}
+                ? mode === 'join' ? 'Joining organization...' : 'Creating organization...'
+                : mode === 'join' ? 'Join organization' : 'Create organization'}
             </Button>
           </form>
         )}

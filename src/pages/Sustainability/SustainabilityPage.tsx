@@ -23,6 +23,7 @@ import {
   type SustainabilityScore,
   type UserBadge,
   type LeaderboardEntry,
+  type GlobalLeaderboardEntry,
   type EcoPointTransaction,
 } from '@/services/sustainabilityService';
 
@@ -33,11 +34,14 @@ export function SustainabilityPage() {
   const [badges, setBadges] = useState<UserBadge[]>([]);
   const [transactions, setTransactions] = useState<EcoPointTransaction[]>([]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [globalLeaderboard, setGlobalLeaderboard] = useState<GlobalLeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<{ title: string; message: string; isAuthError?: boolean } | null>(null);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
   const [leaderboardError, setLeaderboardError] = useState<string | null>(null);
   const [leaderboardOptIn, setLeaderboardOptIn] = useState(false);
+  const [globalLeaderboardOptIn, setGlobalLeaderboardOptIn] = useState(false);
+  const [leaderboardScope, setLeaderboardScope] = useState<'organization' | 'global'>('organization');
   const [optInLoading, setOptInLoading] = useState(false);
   const [optInError, setOptInError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -158,6 +162,7 @@ export function SustainabilityPage() {
           setScore(scoreResponse.data);
           optInValue = Boolean(scoreResponse.data.leaderboardOptIn);
           setLeaderboardOptIn(optInValue);
+          setGlobalLeaderboardOptIn(Boolean(scoreResponse.data.globalLeaderboardOptIn));
           scoreOrgId = scoreResponse.data.organizationId
             ? String(scoreResponse.data.organizationId)
             : null;
@@ -212,6 +217,20 @@ export function SustainabilityPage() {
         } else {
           setLeaderboard([]);
         }
+        if (scoreResponse.success && scoreResponse.data?.globalLeaderboardOptIn) {
+          setLeaderboardLoading(true);
+          const globalRes = await sustainabilityService.getGlobalLeaderboard();
+          if (ignore || activeUserIdRef.current !== currentUser.id) return;
+          if (globalRes.success && globalRes.data) {
+            setGlobalLeaderboard(globalRes.data.leaderboard || []);
+          } else {
+            setLeaderboardError(globalRes.error || 'Failed to load global leaderboard.');
+            setGlobalLeaderboard([]);
+          }
+          setLeaderboardLoading(false);
+        } else {
+          setGlobalLeaderboard([]);
+        }
       } catch (err) {
         if (ignore || activeUserIdRef.current !== currentUser.id) return;
 
@@ -242,13 +261,14 @@ export function SustainabilityPage() {
   }, []);
 
   const handleRetryLeaderboard = useCallback(async () => {
-      if (!organizationId || !user || leaderboardLoading) {
-        return;
-      }
-      const currentUserId = user.id;
-      setLeaderboardLoading(true);
-      setLeaderboardError(null);
-      const response = await sustainabilityService.getOrganizationLeaderboard(organizationId);
+    if ((!organizationId && leaderboardScope === 'organization') || !user || leaderboardLoading) {
+      return;
+    }
+    const currentUserId = user.id;
+    setLeaderboardLoading(true);
+    setLeaderboardError(null);
+    if (leaderboardScope === 'organization') {
+      const response = await sustainabilityService.getOrganizationLeaderboard(organizationId!);
       if (activeUserIdRef.current !== currentUserId) return;
       if (response.status === 401) {
         setLeaderboardError('Session expired. Please log in again to view the leaderboard.');
@@ -262,8 +282,21 @@ export function SustainabilityPage() {
         setLeaderboardError(response.error || 'Failed to load organization leaderboard.');
         setLeaderboard([]);
       }
-      setLeaderboardLoading(false);
-}, [organizationId, user, leaderboardLoading]);
+    } else {
+      const response = await sustainabilityService.getGlobalLeaderboard();
+      if (activeUserIdRef.current !== currentUserId) return;
+      if (response.status === 401) {
+        setLeaderboardError('Session expired. Please log in again to view the leaderboard.');
+        setGlobalLeaderboard([]);
+      } else if (response.success && response.data) {
+        setGlobalLeaderboard(response.data.leaderboard || []);
+      } else {
+        setLeaderboardError(response.error || 'Failed to load global leaderboard.');
+        setGlobalLeaderboard([]);
+      }
+    }
+    setLeaderboardLoading(false);
+  }, [organizationId, user, leaderboardLoading, leaderboardScope]);
 
 // Handle opt-in toggle
 const handleLeaderboardOptIn = async () => {
@@ -319,6 +352,30 @@ const handleLeaderboardOptIn = async () => {
 
     setOptInLoading(false);
   };
+
+  const handleGlobalLeaderboardOptIn = async () => {
+      if (!user || optInLoading) return;
+      const currentUserId = user.id;
+      setOptInLoading(true);
+      setOptInError(null);
+      const response = await sustainabilityService.setGlobalLeaderboardOptIn(!globalLeaderboardOptIn);
+      if (activeUserIdRef.current !== currentUserId) return;
+      if (response.success && response.data) {
+        const updated = response.data.globalLeaderboardOptIn;
+        setGlobalLeaderboardOptIn(updated);
+        if (updated) {
+          const boardRes = await sustainabilityService.getGlobalLeaderboard();
+          if (boardRes.success && boardRes.data) setGlobalLeaderboard(boardRes.data.leaderboard || []);
+        } else {
+          setGlobalLeaderboard([]);
+        }
+        const scoreRes = await sustainabilityService.getSustainabilityScore(currentUserId);
+        if (scoreRes.success && scoreRes.data) setScore(scoreRes.data);
+      } else {
+        setOptInError(response.error || 'Failed to update global leaderboard preference.');
+      }
+      setOptInLoading(false);
+    };
 
   // 1. Session Loading State
   if (authLoading) {
@@ -385,7 +442,9 @@ const handleLeaderboardOptIn = async () => {
           [
             {
               icon: Leaf,
-              label: 'Estimated emissions saved (latest run)',
+              label: savings && savings.totalSavedCo2 < 0
+                ? 'Estimated emissions increase (latest run)'
+                : 'Estimated emissions saved (latest run)',
               value: savings ? formatG(savings.totalSavedCo2) : 'Run an optimization to see this',
               color: 'text-green-400',
               bg: 'bg-green-500/10 border-green-500/20',
@@ -657,33 +716,56 @@ const handleLeaderboardOptIn = async () => {
 
                   <div>
                     <h2 className="text-lg font-semibold text-white">
-                      Organization Leaderboard
+                      {leaderboardScope === 'organization' ? 'Organization Leaderboard' : 'Global Leaderboard'}
                     </h2>
 
                     <p className="text-sm text-slate-400">
-                      Participate only if you choose to opt in.
+                      {leaderboardScope === 'global'
+                        ? 'Compare sustainability contributions across organizations.'
+                        : 'Participate only if you choose to opt in.'}
                     </p>
                   </div>
 
                 </div>
 
-                {organizationId && (
+                {((leaderboardScope === 'organization' && organizationId) || leaderboardScope === 'global') && (
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
                     className="border-green-500/20 bg-green-500/10 text-green-400 hover:bg-green-500/20 hover:text-green-300"
-                    onClick={handleLeaderboardOptIn}
+                    onClick={leaderboardScope === 'organization'
+                      ? handleLeaderboardOptIn
+                      : handleGlobalLeaderboardOptIn}
                     disabled={optInLoading}
                   >
                     {optInLoading
                       ? 'Updating...'
-                      : leaderboardOptIn
+                      : (leaderboardScope === 'organization'
+                        ? leaderboardOptIn
+                        : globalLeaderboardOptIn)
                         ? 'Opt Out'
                         : 'Opt In'}
                   </Button>
                 )}
 
+              </div>
+
+              <div className="mb-6 flex gap-2 border-b border-white/10">
+                <button
+                  type="button"
+                  className={`px-3 py-2 text-sm font-semibold ${leaderboardScope === 'organization' ? 'border-b-2 border-green-400 text-green-300' : 'text-slate-400'}`}
+                  onClick={() => setLeaderboardScope('organization')}
+                >
+                  Organization
+                </button>
+                <button
+                  type="button"
+                  className={`px-3 py-2 text-sm font-semibold ${leaderboardScope === 'global' ? 'border-b-2 border-green-400 text-green-300' : 'text-slate-400'}`}
+                  onClick={() => setLeaderboardScope('global')}
+                >
+                  Global
+                </button>
               </div>
 
               {optInError && (
@@ -724,7 +806,7 @@ const handleLeaderboardOptIn = async () => {
                     Retry Leaderboard
                   </Button>
                 </div>
-              ) : !leaderboardOptIn ? (
+              ) : (leaderboardScope === 'organization' ? !leaderboardOptIn : !globalLeaderboardOptIn) ? (
                 <div className="text-center py-8">
                   <Trophy className="w-8 h-8 text-slate-500 mx-auto mb-3" />
 
@@ -736,7 +818,7 @@ const handleLeaderboardOptIn = async () => {
                     Select Opt In to participate.
                   </p>
                 </div>
-              ) : leaderboard.length === 0 ? (
+              ) : (leaderboardScope === 'organization' ? leaderboard : globalLeaderboard).length === 0 ? (
                 <div className="text-center py-8">
                   <p className="text-slate-400">
                     No leaderboard entries yet.
@@ -753,30 +835,44 @@ const handleLeaderboardOptIn = async () => {
                           Rank
                         </th>
 
-                        <th className="text-left py-3 text-slate-400">
-                          User
+                        {leaderboardScope === 'global' ? (
+                          <th className="text-left py-3 text-slate-400">
+                            Organization
+                          </th>
+                        ) : (
+                          <th className="text-left py-3 text-slate-400">
+                            User
+                          </th>
+                        )}
+                        <th className="text-right py-3 text-slate-400">
+                          {leaderboardScope === 'global' ? 'Average Score' : 'Score'}
                         </th>
 
                         <th className="text-right py-3 text-slate-400">
-                          Score
+                          {leaderboardScope === 'global' ? 'Average EcoPoints' : 'EcoPoints'}
                         </th>
 
-                        <th className="text-right py-3 text-slate-400">
-                          EcoPoints
-                        </th>
-
-                        <th className="text-right py-3 text-slate-400">
-                          Streak
-                        </th>
+                        {leaderboardScope === 'global' && (
+                          <th className="text-right py-3 text-slate-400">
+                            Participating Members
+                          </th>
+                        )}
+                        {leaderboardScope === 'organization' && (
+                          <th className="text-right py-3 text-slate-400">
+                            Streak
+                          </th>
+                        )}
                       </tr>
                     </thead>
 
                     <tbody>
-                      {leaderboard.map((entry) => {
-                        const isCurrentUser = entry.userId === currentUserIdStr;
+                      {(leaderboardScope === 'organization' ? leaderboard : globalLeaderboard).map((entry) => {
+                        const isOrganizationEntry = 'userId' in entry;
+                        const isGlobalEntry = 'averageScore' in entry;
+                        const isCurrentUser = isOrganizationEntry && entry.userId === currentUserIdStr;
                         return (
                           <tr
-                            key={entry.userId}
+                            key={`${entry.rank}-${isGlobalEntry ? entry.organizationName : entry.displayName}`}
                             className={`border-b border-white/5 ${isCurrentUser ? 'bg-green-500/[0.06]' : ''
                               }`}
                           >
@@ -796,16 +892,22 @@ const handleLeaderboardOptIn = async () => {
                             </td>
 
                             <td className="py-3 text-right text-white">
-                              {entry.score}
+                              {isGlobalEntry ? entry.averageScore : entry.score}
                             </td>
 
                             <td className="py-3 text-right text-green-400">
-                              {entry.totalPoints}
+                              {isGlobalEntry ? entry.averageEcoPoints : entry.totalPoints}
                             </td>
 
-                            <td className="py-3 text-right text-orange-400">
-                              {entry.currentStreak} days
-                            </td>
+                            {isGlobalEntry ? (
+                              <td className="py-3 text-right text-slate-300">
+                                {entry.participatingMembers}
+                              </td>
+                            ) : (
+                              <td className="py-3 text-right text-orange-400">
+                                {entry.currentStreak} days
+                              </td>
+                            )}
                           </tr>
                         );
                       })}

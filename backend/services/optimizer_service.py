@@ -34,7 +34,6 @@ from optimization.carbon_calculator import (
 )
 from services.carbon_service import (
     GRID_ZONES,
-    GREEN_WINDOW_THRESHOLD_RATIO,
     detect_green_windows,
     get_carbon_data,
 )
@@ -222,6 +221,8 @@ def recommend_schedule(
     reserved_intervals_by_window: dict[str, list[tuple[datetime, datetime]]] | None = None,
     unavailable_window_ids: set[str] | None = None,
     require_fresh_data: bool = False,
+    organization_id: int | None = None,
+    low_carbon_threshold: float = 180.0,
 ) -> dict:
     """Connect verified carbon/forecast data to existing window and scheduling algorithms."""
     calculate_emissions_grams(0.0, baseline_intensity)
@@ -233,7 +234,11 @@ def recommend_schedule(
             raise ValueError("Activity duration must be greater than zero.")
     if zone_id not in GRID_ZONES:
         raise ValueError(f"Unsupported grid zone '{zone_id}'.")
-    carbon = get_carbon_data(zone_id=zone_id, offset_hours=0)
+    carbon = get_carbon_data(
+        zone_id=zone_id,
+        offset_hours=0,
+        organization_id=organization_id,
+    )
     # _simulation_fallback() sets an informational "error" key on valid
     # simulated data explaining *why* the live API was unavailable.
     # Only reject if the data is NOT a usable simulated fallback.
@@ -323,6 +328,7 @@ def recommend_schedule(
     detected_windows = detect_green_windows(
         forecast=forecast,
         current_datetime=carbon["current"]["datetime"],
+        threshold=low_carbon_threshold,
     )
     for window in detected_windows:
         window["id"] = f"{zone_id}:{window['id']}"
@@ -581,9 +587,8 @@ def recommend_schedule(
     )
     savings = calculate_savings_from_emissions(baseline_co2, recommended_co2)
     forecast_values = [point["carbonIntensity"] for point in forecast]
-    forecast_has_range = max(forecast_values) > min(forecast_values)
-    relative_threshold = min(forecast_values) + (
-        (max(forecast_values) - min(forecast_values)) * GREEN_WINDOW_THRESHOLD_RATIO
+    has_qualifying_point = any(
+        value <= low_carbon_threshold for value in forecast_values
     )
     used_window_ids = {str(task["assignedWindowId"]) for task in selected_tasks}
     result = {
@@ -623,11 +628,11 @@ def recommend_schedule(
             "currentIntensity": current_intensity,
             "forecastSource": forecast_source,
             "classification": (
-                "lower-carbon relative to forecast range"
-                if forecast_has_range
-                else "no lower-carbon band in a constant forecast range"
+                "at or below configured Green Window threshold"
+                if has_qualifying_point
+                else "no forecast point meets the configured Green Window threshold"
             ),
-            "relativeThreshold": round(relative_threshold, 2),
+            "threshold": low_carbon_threshold,
         },
     }
 

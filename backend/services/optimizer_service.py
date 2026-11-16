@@ -33,6 +33,7 @@ from optimization.carbon_calculator import (
     calculate_savings_grams,
 )
 from services.carbon_service import (
+    DEFAULT_GREEN_WINDOW_THRESHOLD,
     GRID_ZONES,
     detect_green_windows,
     get_carbon_data,
@@ -222,7 +223,7 @@ def recommend_schedule(
     unavailable_window_ids: set[str] | None = None,
     require_fresh_data: bool = False,
     organization_id: int | None = None,
-    low_carbon_threshold: float = 180.0,
+    low_carbon_threshold: float = DEFAULT_GREEN_WINDOW_THRESHOLD,
 ) -> dict:
     """Connect verified carbon/forecast data to existing window and scheduling algorithms."""
     calculate_emissions_grams(0.0, baseline_intensity)
@@ -589,7 +590,7 @@ def recommend_schedule(
     forecast_values = [point["carbonIntensity"] for point in forecast]
     has_qualifying_point = any(
         value <= low_carbon_threshold for value in forecast_values
-    )
+    ) and min(forecast_values) < max(forecast_values)
     used_window_ids = {str(task["assignedWindowId"]) for task in selected_tasks}
     result = {
         "method": method,

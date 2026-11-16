@@ -882,7 +882,7 @@ const handleLeaderboardOptIn = async () => {
 
                             <td className="py-3 text-slate-300">
                               <span className="font-medium">
-                                User {entry.userId}
+                                {isGlobalEntry ? entry.organizationName : entry.displayName}
                               </span>
                               {isCurrentUser && (
                                 <span className="ml-2 ds-badge bg-green-500/10 text-green-400 border-green-500/20 text-[10px] py-0 px-1.5">

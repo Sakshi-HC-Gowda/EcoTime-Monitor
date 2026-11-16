@@ -176,6 +176,39 @@ def test_no_lower_carbon_window_is_explained(carbon_fixture):
     assert "no forecast point meets" in result["carbonData"]["classification"]
 
 
+def test_provider_like_forecast_above_effective_threshold_has_no_feasible_window(
+    carbon_fixture,
+):
+    carbon, start = carbon_fixture
+    carbon["isSimulated"] = False
+    carbon["source"] = "electricity_maps_api"
+    carbon["forecastSource"] = "electricity_maps_api"
+    carbon["forecast"] = [
+        {
+            "datetime": (start + timedelta(hours=hour)).isoformat(),
+            "carbonIntensity": value,
+        }
+        for hour, value in enumerate([393, 410, 450, 500, 550, 600])
+    ]
+
+    result = optimizer_service.recommend_schedule(
+        tasks=[task()],
+        permitted_window=interval(start, start + timedelta(hours=6)),
+        method="greedy",
+        baseline_intensity=600,
+        zone_id="US-CA",
+        require_fresh_data=True,
+        low_carbon_threshold=185,
+    )
+
+    assert result["carbonData"]["source"] == "electricity_maps_api"
+    assert result["carbonData"]["isSimulated"] is False
+    assert result["carbonData"]["threshold"] == 185
+    assert result["windows"] == []
+    assert result["result"]["selectedTasks"] == []
+    assert "No lower-carbon window" in result["recommendations"][0]["reason"]
+
+
 def test_current_zero_carbon_intensity_is_preserved(carbon_fixture):
     carbon, _ = carbon_fixture
     carbon["current"]["carbonIntensity"] = 0

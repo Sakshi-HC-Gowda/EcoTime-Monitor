@@ -12,6 +12,7 @@ import { WindowCalendar } from '@/features/windows/components/WindowCalendar';
 import type { GreenWindow } from '@/types/domain';
 import { getGreenWindowLabel } from '@/features/windows/utils/windowLabels';
 import { useSimulationConfig } from '@/features/optimization/hooks/useOptimization';
+import { DEFAULT_GREEN_WINDOW_THRESHOLD } from '@/constants/carbon';
 
 type ViewMode = 'cards' | 'timeline' | 'calendar';
 
@@ -28,7 +29,7 @@ export function GreenWindowsPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('cards');
   const { data: windows, isLoading, isError, refetch } = useGreenWindows(
     selectedZone,
-    simulationConfig?.lowCarbonThreshold ?? 180,
+    simulationConfig?.lowCarbonThreshold ?? DEFAULT_GREEN_WINDOW_THRESHOLD,
   );
 
   if (isLoading) {

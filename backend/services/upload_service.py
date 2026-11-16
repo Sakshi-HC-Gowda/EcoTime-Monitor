@@ -22,7 +22,7 @@ from models.activity_history import ActivityHistory
 from models.upload_registration import UploadRegistration
 from models.simulation_config import SimulationConfig
 from services import optimizer_service
-from services.carbon_service import _DEFAULT_ZONE_ID
+from services.carbon_service import DEFAULT_GREEN_WINDOW_THRESHOLD, _DEFAULT_ZONE_ID
 
 logger = logging.getLogger(__name__)
 
@@ -258,7 +258,9 @@ def schedule_upload(upload_id: str, organization_id: int) -> tuple[UploadRegistr
             baseline_intensity=baseline,
             organization_id=organization_id,
             low_carbon_threshold=(
-                config.low_carbon_threshold if config else 180.0
+                config.low_carbon_threshold
+                if config
+                else DEFAULT_GREEN_WINDOW_THRESHOLD
             ),
         )
     except optimizer_service.RecommendationDataUnavailable as exc:

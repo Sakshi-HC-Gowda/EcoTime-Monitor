@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 ELECTRICITY_MAPS_PROVIDER = "electricity_maps"
 ENCRYPTION_KEY_ENV = "ECOTIME_CREDENTIAL_ENCRYPTION_KEY"
+PROVIDER_CREDENTIALS_MIGRATION = "20261115_provider_credentials"
 
 
 class CredentialConfigurationError(RuntimeError):
@@ -48,6 +49,17 @@ def get_environment_token() -> str | None:
     return _valid_token(os.getenv("ELECTRICITY_MAPS_API_KEY"))
 
 
+def is_missing_credentials_table_error(exc: SQLAlchemyError) -> bool:
+    original = getattr(exc, "orig", None)
+    if getattr(original, "pgcode", None) == "42P01":
+        return True
+    message = str(exc).lower()
+    return (
+        "organization_provider_credentials" in message
+        and ("does not exist" in message or "no such table" in message)
+    )
+
+
 def get_organization_token(organization_id: int | None) -> str | None:
     if organization_id is None:
         return None
@@ -73,11 +85,20 @@ def get_organization_token(organization_id: int | None) -> str | None:
         raise
     except SQLAlchemyError as exc:
         db.session.rollback()
-        logger.warning(
-            "Stored provider credentials are unavailable for organization %s",
-            organization_id,
-            exc_info=exc,
-        )
+        if is_missing_credentials_table_error(exc):
+            logger.warning(
+                "Provider credentials table is missing; apply Alembic revision %s "
+                "before saving organization credentials. Using environment fallback "
+                "for organization %s.",
+                PROVIDER_CREDENTIALS_MIGRATION,
+                organization_id,
+            )
+        else:
+            logger.warning(
+                "Stored provider credentials are unavailable for organization %s",
+                organization_id,
+                exc_info=exc,
+            )
         return None
 
 

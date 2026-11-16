@@ -1,0 +1,1 @@
+export const DEFAULT_GREEN_WINDOW_THRESHOLD = 380;

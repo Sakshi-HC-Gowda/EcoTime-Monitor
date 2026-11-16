@@ -5,6 +5,7 @@ import { useActivitiesQuery, useActivityMutations } from '@/features/activities/
 import { useCarbon, useGreenWindows } from '@/features/carbon/hooks/useCarbon';
 import { useZone } from '@/app/ZoneProvider';
 import { useSimulationConfig } from '@/features/optimization/hooks/useOptimization';
+import { DEFAULT_GREEN_WINDOW_THRESHOLD } from '@/constants/carbon';
 import { LoadingSkeleton } from '@/components/ui/LoadingSkeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { Button } from '@/components/ui/Button';
@@ -78,7 +79,7 @@ export function ActivitiesPage() {
   const { data: simulationConfig } = useSimulationConfig();
   const { data: currentWindows } = useGreenWindows(
     selectedWindowZone ?? selectedZone,
-    simulationConfig?.lowCarbonThreshold ?? 180,
+    simulationConfig?.lowCarbonThreshold ?? DEFAULT_GREEN_WINDOW_THRESHOLD,
   );
   const [activeTab, setActiveTab] = useState<TabStatus>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);

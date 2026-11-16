@@ -300,6 +300,7 @@ def generate_simulated_data(
 # ---------------------------------------------------------------------------
 
 _EMAPS_BASE = "https://api.electricitymap.org/v3"
+DEFAULT_GREEN_WINDOW_THRESHOLD = 380.0
 
 # Negative-result cache: avoid repeated API calls when the service is down.
 # Maps zone_id -> monotonic timestamp of last API/network failure.
@@ -531,7 +532,7 @@ def _simulation_fallback(
 def detect_green_windows(
     forecast: list[dict],
     current_datetime: str,
-    threshold: float = 180.0,
+    threshold: float = DEFAULT_GREEN_WINDOW_THRESHOLD,
 ) -> list[dict]:
     """
     Detect contiguous low-carbon periods in a forecast array.
@@ -575,6 +576,11 @@ def detect_green_windows(
 
     forecast_min = min(forecast_values)
     forecast_actual_peak = max(forecast_values)
+    if forecast_actual_peak == forecast_min:
+        logger.debug(
+            "Green Window detection skipped: forecast has no lower-carbon range"
+        )
+        return windows
     forecast_peak = forecast_actual_peak
     forecast_peak = max(forecast_peak, 300)  # Minimum meaningful peak
 

@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 
 import { useCarbon, useGreenWindows } from '@/features/carbon/hooks/useCarbon';
+import { DEFAULT_GREEN_WINDOW_THRESHOLD } from '@/constants/carbon';
 import { useZone } from '@/app/ZoneProvider';
 import { GreenWindowsList } from '@/features/carbon/components/GreenWindowsList';
 import { useActivitiesQuery } from '@/features/activities/hooks/useActivitiesQuery';
@@ -70,7 +71,7 @@ export function DashboardPage() {
   const { data: simulationConfig } = useSimulationConfig();
   const { data: windows, isLoading: windowsLoading, isError: windowsError } = useGreenWindows(
     selectedZone,
-    simulationConfig?.lowCarbonThreshold ?? 180,
+    simulationConfig?.lowCarbonThreshold ?? DEFAULT_GREEN_WINDOW_THRESHOLD,
   );
   const { data: latestOptimization } = useLatestOptimization(user?.id ?? null);
 
@@ -95,7 +96,9 @@ export function DashboardPage() {
   }
 
   const currentIntensity = carbon.current.carbonIntensity;
-  const isLow = currentIntensity < 180;
+  const isLow = currentIntensity <= (
+    simulationConfig?.lowCarbonThreshold ?? DEFAULT_GREEN_WINDOW_THRESHOLD
+  );
 
   const activities = activitiesData?.items ?? [];
   const greenWindows = windows ?? [];

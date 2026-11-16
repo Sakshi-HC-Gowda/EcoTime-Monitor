@@ -1,10 +1,12 @@
 import type { CarbonDataPoint } from '@/types/domain';
+import { DEFAULT_GREEN_WINDOW_THRESHOLD } from '@/constants/carbon';
 
 interface Props {
   forecast: CarbonDataPoint[];
+  threshold?: number;
 }
 
-export function HeatMap({ forecast }: Props) {
+export function HeatMap({ forecast, threshold = DEFAULT_GREEN_WINDOW_THRESHOLD }: Props) {
   const points = forecast.slice(0, 24);
 
   return (
@@ -20,9 +22,9 @@ export function HeatMap({ forecast }: Props) {
           const timeStr = new Date(pt.datetime).getHours() + ':00';
 
           let bg = 'bg-green-500/20 text-green-300 border-green-500/30';
-          if (val > 280) {
+          if (val > 450) {
             bg = 'bg-rose-500/20 text-rose-300 border-rose-500/30';
-          } else if (val > 180) {
+          } else if (val > threshold) {
             bg = 'bg-amber-500/20 text-amber-300 border-amber-500/30';
           }
 

@@ -5,6 +5,7 @@ import { useZone } from '@/app/ZoneProvider';
 import { Button } from '@/components/ui/Button';
 import { useCarbon, useGreenWindows } from '@/features/carbon/hooks/useCarbon';
 import { useSimulationConfig } from '@/features/optimization/hooks/useOptimization';
+import { DEFAULT_GREEN_WINDOW_THRESHOLD } from '@/constants/carbon';
 import {
   formatRecommendedTime,
   getEstimatedEcoScore,
@@ -46,7 +47,7 @@ export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
   const { data: simulationConfig } = useSimulationConfig();
   const { data: greenWindows = [] } = useGreenWindows(
     selectedZone,
-    simulationConfig?.lowCarbonThreshold ?? 180,
+    simulationConfig?.lowCarbonThreshold ?? DEFAULT_GREEN_WINDOW_THRESHOLD,
     0,
     isOpen,
   );

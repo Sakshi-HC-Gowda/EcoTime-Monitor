@@ -11,8 +11,9 @@ import { providerService } from '@/services/providerService';
 import { optimizerService } from '@/services/optimizerService';
 import { useSimulationConfig } from '@/features/optimization/hooks/useOptimization';
 import type { AuthUser } from '@/features/auth/types';
+import { DEFAULT_GREEN_WINDOW_THRESHOLD } from '@/constants/carbon';
 
-const DEFAULT_LOW_CARBON_THRESHOLD = 180;
+const DEFAULT_LOW_CARBON_THRESHOLD = DEFAULT_GREEN_WINDOW_THRESHOLD;
 const DEFAULT_BASELINE_INTENSITY = 380;
 
 function readStoredNumber(key: string, fallback: number, legacyKey?: string): number {
@@ -164,7 +165,7 @@ export function SettingsPage() {
 
   const handleResetStatistics = () => {
     resetAll();
-    setLowCarbonThreshold(180);
+    setLowCarbonThreshold(DEFAULT_LOW_CARBON_THRESHOLD);
     setBaselineIntensity(380);
     localStorage.removeItem('ecotime_low_carbon_threshold');
     localStorage.removeItem('ecotime_baseline_intensity');

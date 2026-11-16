@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { carbonService } from '@/services/carbonService';
+import { DEFAULT_GREEN_WINDOW_THRESHOLD } from '@/constants/carbon';
 
 export function useCarbon(zone: string | null | undefined, offset: number = 0) {
   return useQuery({
@@ -15,7 +16,7 @@ export function useCarbon(zone: string | null | undefined, offset: number = 0) {
   });
 }
 
-export function useGreenWindows(zone: string | null | undefined, threshold: number = 180, offset: number = 0, enabled: boolean = true) {
+export function useGreenWindows(zone: string | null | undefined, threshold: number = DEFAULT_GREEN_WINDOW_THRESHOLD, offset: number = 0, enabled: boolean = true) {
   return useQuery({
     queryKey: ['windows', zone, threshold, offset],
     queryFn: async () => {

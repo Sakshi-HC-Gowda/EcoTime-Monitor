@@ -5,7 +5,10 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from services import optimizer_service
-from services.carbon_service import detect_green_windows
+from services.carbon_service import (
+    DEFAULT_GREEN_WINDOW_THRESHOLD,
+    detect_green_windows,
+)
 
 
 def _carbon(zone: str, forecast_start: datetime) -> dict:
@@ -154,3 +157,17 @@ def test_green_window_threshold_is_absolute_and_inclusive():
     assert windows[1]["duration"] == 60
     assert windows[0]["avgCarbonIntensity"] == 180
     assert windows[1]["avgCarbonIntensity"] == 180
+
+
+def test_default_green_window_threshold_matches_documented_policy():
+    assert DEFAULT_GREEN_WINDOW_THRESHOLD == 380
+    start = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    forecast = [
+        {"datetime": (start + timedelta(hours=index)).isoformat(), "carbonIntensity": value}
+        for index, value in enumerate((379, 380, 381))
+    ]
+
+    windows = detect_green_windows(forecast, start.isoformat())
+
+    assert len(windows) == 1
+    assert windows[0]["duration"] == 120

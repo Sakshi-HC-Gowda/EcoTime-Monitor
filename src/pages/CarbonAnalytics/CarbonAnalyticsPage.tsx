@@ -12,10 +12,13 @@ import { GridMixChart } from '@/features/carbon/components/GridMixChart';
 import { HeatMap } from '@/features/carbon/components/HeatMap';
 import { HourlyTimeline } from '@/features/carbon/components/HourlyTimeline';
 import { RegionComparison } from '@/features/carbon/components/RegionComparison';
+import { DEFAULT_GREEN_WINDOW_THRESHOLD } from '@/constants/carbon';
+import { useSimulationConfig } from '@/features/optimization/hooks/useOptimization';
 
 export function CarbonAnalyticsPage() {
   const { selectedZone, setSelectedZone } = useZone();
   const { data: carbon, isLoading, isError, refetch } = useCarbon(selectedZone);
+  const { data: simulationConfig } = useSimulationConfig();
 
   if (isLoading) {
     return (
@@ -38,7 +41,8 @@ export function CarbonAnalyticsPage() {
   }
 
   const current = carbon.current.carbonIntensity;
-  const isOptimal = current < 180;
+  const threshold = simulationConfig?.lowCarbonThreshold ?? DEFAULT_GREEN_WINDOW_THRESHOLD;
+  const isOptimal = current <= threshold;
   const forecastIntensities = carbon.forecast
     .map((point) => point.carbonIntensity)
     .filter((intensity) => Number.isFinite(intensity));
@@ -173,12 +177,12 @@ export function CarbonAnalyticsPage() {
       {/* ── HeatMap & Hourly Timeline ───────────────────────────────────────── */}
       <div className="card-grid card-grid-lg-2">
         <GlassCard>
-          <HeatMap forecast={carbon.forecast} />
+          <HeatMap forecast={carbon.forecast} threshold={threshold} />
         </GlassCard>
 
         <GlassCard>
           <h3 className="text-[15px] font-bold text-white mb-4">Hourly Intensity Breakdown</h3>
-          <HourlyTimeline forecast={carbon.forecast} />
+          <HourlyTimeline forecast={carbon.forecast} threshold={threshold} />
         </GlassCard>
       </div>
     </div>

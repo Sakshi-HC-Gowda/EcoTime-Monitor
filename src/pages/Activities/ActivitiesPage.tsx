@@ -79,7 +79,7 @@ export function ActivitiesPage() {
   const { data: simulationConfig } = useSimulationConfig();
   const { data: currentWindows } = useGreenWindows(
     selectedWindowZone ?? selectedZone,
-    simulationConfig?.lowCarbonThreshold ?? DEFAULT_GREEN_WINDOW_THRESHOLD,
+    simulationConfig?.lowCarbonThreshold ?? 180,
   );
   const [activeTab, setActiveTab] = useState<TabStatus>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);

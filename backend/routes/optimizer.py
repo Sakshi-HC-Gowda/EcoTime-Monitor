@@ -41,7 +41,6 @@ from services.carbon_service import clear_api_failure_cache
 from services.provider_credentials import (
     CredentialConfigurationError,
     get_electricity_maps_token,
-    is_missing_credentials_table_error,
     save_organization_token,
 )
 
@@ -754,20 +753,12 @@ def set_electricity_maps_config():
             "error": str(exc),
             "timestamp": _now_iso(),
         }), 503
-    except SQLAlchemyError as exc:
+    except SQLAlchemyError:
         db.session.rollback()
-        if is_missing_credentials_table_error(exc):
-            logger.warning(
-                "Provider credentials table is missing; apply Alembic revision "
-                "20261115_provider_credentials before saving organization credentials "
-                "for organization %s.",
-                request.user.organization_id,
-            )
-        else:
-            logger.exception(
-                "Could not persist Electricity Maps credential for organization %s",
-                request.user.organization_id,
-            )
+        logger.exception(
+            "Could not persist Electricity Maps credential for organization %s",
+            request.user.organization_id,
+        )
         return jsonify({
             "success": False,
             "error": "Could not persist the provider credential. Apply the pending database migration.",

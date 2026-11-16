@@ -71,7 +71,7 @@ export function DashboardPage() {
   const { data: simulationConfig } = useSimulationConfig();
   const { data: windows, isLoading: windowsLoading, isError: windowsError } = useGreenWindows(
     selectedZone,
-    simulationConfig?.lowCarbonThreshold ?? DEFAULT_GREEN_WINDOW_THRESHOLD,
+    simulationConfig?.lowCarbonThreshold ?? 180,
   );
   const { data: latestOptimization } = useLatestOptimization(user?.id ?? null);
 

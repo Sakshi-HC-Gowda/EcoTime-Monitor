@@ -16,6 +16,7 @@ from auth_utils import require_auth
 from models.activity import Activity
 
 from services.carbon_service import (
+    DEFAULT_GREEN_WINDOW_THRESHOLD,
     get_carbon_data,
     detect_green_windows,
     get_available_zones,
@@ -28,7 +29,9 @@ logger = logging.getLogger(__name__)
 carbon_bp = Blueprint("carbon", __name__)
 
 _DEFAULT_ZONE = _DEFAULT_ZONE_ID
-_DEFAULT_THRESHOLD = float(os.getenv("LOW_CARBON_THRESHOLD", "180"))
+_DEFAULT_THRESHOLD = float(
+    os.getenv("LOW_CARBON_THRESHOLD", str(DEFAULT_GREEN_WINDOW_THRESHOLD))
+)
 
 
 # ---------------------------------------------------------------------------
@@ -99,7 +102,7 @@ def get_windows():
 
     Query Parameters:
         zone (str): Grid zone ID (default: US-CA)
-        threshold (float): Carbon intensity threshold (default: 180)
+        threshold (float): Carbon intensity threshold (default: 380)
         offset (float): Simulation time offset in hours (default: 0)
 
     Returns 200:

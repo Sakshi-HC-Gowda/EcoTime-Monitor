@@ -33,6 +33,7 @@ from optimization.carbon_calculator import (
     calculate_savings_grams,
 )
 from services.carbon_service import (
+    DEFAULT_GREEN_WINDOW_THRESHOLD,
     GRID_ZONES,
     detect_green_windows,
     get_carbon_data,

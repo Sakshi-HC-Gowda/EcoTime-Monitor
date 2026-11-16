@@ -109,10 +109,11 @@ data generation is synthetic and generated from the repository's zone
 simulation functions. A trained model or simulated result is not a measured
 future grid value.
 
-Green Windows are contiguous forecast periods in the forecast's cleanest
-relative band. The detection threshold is derived from the forecast minimum
-and range (the configured `GREEN_WINDOW_THRESHOLD_RATIO`, currently 0.35);
-when there is no lower-carbon range, detection returns no Green Windows.
+Green Windows are contiguous forecast periods at or below the configured
+absolute `LOW_CARBON_THRESHOLD` in `gCO2e/kWh`. The default threshold is
+380, matching the project's indicative Green policy; administrators can
+change it through the Settings page. The same persisted value is used by
+Green Window detection and scheduling.
 Ranking scores compare windows with forecast conditions and are not measured
 emissions savings.
 

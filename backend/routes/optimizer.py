@@ -13,7 +13,12 @@ import logging
 import json
 import math
 import os
-from services.carbon_service import _DEFAULT_ZONE_ID, GRID_ZONES, normalize_zone_id
+from services.carbon_service import (
+    DEFAULT_GREEN_WINDOW_THRESHOLD,
+    _DEFAULT_ZONE_ID,
+    GRID_ZONES,
+    normalize_zone_id,
+)
 from datetime import datetime, timedelta, timezone
 from flask import Blueprint, request, jsonify
 from auth_utils import require_auth, require_organization_admin
@@ -87,7 +92,12 @@ def _get_simulation_config() -> SimulationConfig:
         config = SimulationConfig(
             id=1,
             zone=_DEFAULT_ZONE_ID,
-            low_carbon_threshold=float(os.getenv("LOW_CARBON_THRESHOLD", "180")),
+            low_carbon_threshold=float(
+                os.getenv(
+                    "LOW_CARBON_THRESHOLD",
+                    str(DEFAULT_GREEN_WINDOW_THRESHOLD),
+                )
+            ),
             baseline_intensity=float(os.getenv("BASELINE_INTENSITY", "380")),
             simulation_speed=int(os.getenv("SIMULATION_SPEED", "15")),
             is_simulating=os.getenv("SIMULATION_MODE", "true").lower() == "true",

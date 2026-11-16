@@ -42,6 +42,7 @@ export interface UserBadge {
 export interface LeaderboardEntry {
   rank: number;
   userId: string;
+  displayName: string;
   score: number;
   totalPoints: number;
   currentStreak: number;

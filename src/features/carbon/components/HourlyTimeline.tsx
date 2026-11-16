@@ -1,11 +1,13 @@
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from 'recharts';
 import type { CarbonDataPoint } from '@/types/domain';
+import { DEFAULT_GREEN_WINDOW_THRESHOLD } from '@/constants/carbon';
 
 interface Props {
   forecast: CarbonDataPoint[];
+  threshold?: number;
 }
 
-export function HourlyTimeline({ forecast }: Props) {
+export function HourlyTimeline({ forecast, threshold = DEFAULT_GREEN_WINDOW_THRESHOLD }: Props) {
   const data = forecast.slice(0, 24).map((pt) => ({
     hour: new Date(pt.datetime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     intensity: pt.carbonIntensity,
@@ -24,7 +26,7 @@ export function HourlyTimeline({ forecast }: Props) {
             {data.map((entry, index) => (
               <Cell
                 key={`cell-${index}`}
-                fill={entry.intensity < 180 ? '#10b981' : entry.intensity < 280 ? '#f59e0b' : '#f43f5e'}
+                fill={entry.intensity <= threshold ? '#10b981' : entry.intensity < 450 ? '#f59e0b' : '#f43f5e'}
               />
             ))}
           </Bar>

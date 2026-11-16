@@ -65,7 +65,7 @@ function detectGreenWindows(
   };
 
   for (const point of forecast) {
-    if (point.carbonIntensity < threshold) {
+    if (point.carbonIntensity <= threshold) {
       currentBlock.push(point);
     } else {
       if (currentBlock.length > 0) {

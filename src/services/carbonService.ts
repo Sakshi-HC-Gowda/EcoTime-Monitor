@@ -1,5 +1,6 @@
 import { apiClient } from './apiClient';
 import type { CarbonResponse, GreenWindow, GridZone, ApiResponse } from '../types/domain';
+import { DEFAULT_GREEN_WINDOW_THRESHOLD } from '@/constants/carbon';
 
 /** Carbon data is fetched exclusively via the Flask backend (never Electricity Maps directly). */
 export const carbonService = {
@@ -8,7 +9,7 @@ export const carbonService = {
     return apiClient.request<CarbonResponse>(`/carbon?${params.toString()}`);
   },
 
-  async getGreenWindows(zone: string, threshold: number = 180, offset: number = 0): Promise<ApiResponse<GreenWindow[]>> {
+  async getGreenWindows(zone: string, threshold: number = DEFAULT_GREEN_WINDOW_THRESHOLD, offset: number = 0): Promise<ApiResponse<GreenWindow[]>> {
     const params = new URLSearchParams({
       zone,
       threshold: String(threshold),

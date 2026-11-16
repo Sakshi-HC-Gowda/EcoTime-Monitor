@@ -22,7 +22,7 @@ from models.activity_history import ActivityHistory
 from models.upload_registration import UploadRegistration
 from models.simulation_config import SimulationConfig
 from services import optimizer_service
-from services.carbon_service import _DEFAULT_ZONE_ID
+from services.carbon_service import DEFAULT_GREEN_WINDOW_THRESHOLD, _DEFAULT_ZONE_ID
 
 logger = logging.getLogger(__name__)
 

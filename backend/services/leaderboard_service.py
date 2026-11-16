@@ -6,9 +6,6 @@ Provides organization-level sustainability rankings.
 
 from __future__ import annotations
 
-from sqlalchemy import inspect, text
-
-from extensions import db
 from models import SustainabilityScore, User
 
 

@@ -165,7 +165,7 @@ export function DashboardPage() {
       <div className="flex flex-col gap-6 rounded-2xl border border-white/[0.07] bg-gradient-to-r from-[#0b1424] via-[#09111e] to-[#070c14] p-8 shadow-xl backdrop-blur-md sm:p-10 lg:flex-row lg:items-center lg:justify-between mb-8">
         <div>
           <h1 className="flex items-center gap-3 text-3xl font-extrabold tracking-tight text-white sm:text-4xl mb-2">
-            Good Evening, {user?.firstName || 'User'}!{' '}
+            Welcome, {user?.firstName || 'User'}!{' '}
             <span className="inline-block animate-pulse">
               👋
             </span>

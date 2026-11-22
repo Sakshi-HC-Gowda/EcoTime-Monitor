@@ -47,7 +47,7 @@ export function CreateActivityModal({ isOpen, onClose, onSubmit }: Props) {
   const { data: simulationConfig } = useSimulationConfig();
   const { data: greenWindows = [] } = useGreenWindows(
     selectedZone,
-    simulationConfig?.lowCarbonThreshold ?? DEFAULT_GREEN_WINDOW_THRESHOLD,
+    simulationConfig?.lowCarbonThreshold ?? 180,
     0,
     isOpen,
   );

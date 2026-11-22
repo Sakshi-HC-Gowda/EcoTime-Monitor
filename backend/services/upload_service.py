@@ -258,9 +258,7 @@ def schedule_upload(upload_id: str, organization_id: int) -> tuple[UploadRegistr
             baseline_intensity=baseline,
             organization_id=organization_id,
             low_carbon_threshold=(
-                config.low_carbon_threshold
-                if config
-                else DEFAULT_GREEN_WINDOW_THRESHOLD
+                config.low_carbon_threshold if config else 180.0
             ),
         )
     except optimizer_service.RecommendationDataUnavailable as exc:

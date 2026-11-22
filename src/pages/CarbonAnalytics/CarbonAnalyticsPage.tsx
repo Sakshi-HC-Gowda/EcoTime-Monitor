@@ -41,8 +41,7 @@ export function CarbonAnalyticsPage() {
   }
 
   const current = carbon.current.carbonIntensity;
-  const threshold = simulationConfig?.lowCarbonThreshold ?? DEFAULT_GREEN_WINDOW_THRESHOLD;
-  const isOptimal = current <= threshold;
+  const isOptimal = current < 180;
   const forecastIntensities = carbon.forecast
     .map((point) => point.carbonIntensity)
     .filter((intensity) => Number.isFinite(intensity));

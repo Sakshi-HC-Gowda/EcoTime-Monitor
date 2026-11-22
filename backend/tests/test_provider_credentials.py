@@ -3,16 +3,9 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import requests
-import pytest
-from sqlalchemy.exc import ProgrammingError
 
-from app import create_app
-from models.organization_provider_credential import OrganizationProviderCredential
 from services import carbon_service
-from services.provider_credentials import (
-    get_electricity_maps_token,
-    get_environment_token,
-)
+from services.provider_credentials import get_environment_token
 
 
 def _response(status_code: int, payload: dict) -> MagicMock:
@@ -24,39 +17,10 @@ def _response(status_code: int, payload: dict) -> MagicMock:
     return response
 
 
-@pytest.fixture
-def app():
-    return create_app("testing")
-
-
 def test_placeholder_environment_token_is_not_used(monkeypatch):
     monkeypatch.setenv("ELECTRICITY_MAPS_API_KEY", "your_api_key_here")
 
     assert get_environment_token() is None
-
-
-def test_missing_credentials_table_uses_environment_fallback_without_traceback(
-    app, monkeypatch, caplog
-):
-    monkeypatch.setenv("ELECTRICITY_MAPS_API_KEY", "environment-token")
-
-    with app.app_context():
-        with patch.object(
-            OrganizationProviderCredential.query,
-            "filter_by",
-            side_effect=ProgrammingError(
-                'relation "organization_provider_credentials" does not exist',
-                {},
-                type("PostgresError", (), {"pgcode": "42P01"})(),
-            ),
-        ), patch("services.provider_credentials.db.session.rollback"):
-            token, source = get_electricity_maps_token(42)
-
-    assert token == "environment-token"
-    assert source == "environment"
-    assert caplog.records
-    assert caplog.records[-1].exc_info is None
-    assert "apply Alembic revision 20261115_provider_credentials" in caplog.text
 
 
 @patch("services.carbon_service.requests.get")

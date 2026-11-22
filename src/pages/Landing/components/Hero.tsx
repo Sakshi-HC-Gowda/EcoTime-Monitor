@@ -1,10 +1,15 @@
+
 import { motion } from 'framer-motion';
-import { ArrowRight, Play } from 'lucide-react';
+import { ArrowRight, Play, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { useState } from 'react';
 
 export function Hero() {
+  const [isVideoOpen, setIsVideoOpen] = useState(false);
+
   return (
     <section className="relative w-full min-h-screen pt-24 pb-16 md:pt-28 md:pb-20 lg:pt-32 lg:pb-24 overflow-hidden flex items-center">
+
       {/* Background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-12 left-1/2 -translate-x-1/2 w-[760px] max-w-[90vw] h-[420px] bg-gradient-to-tr from-green-500/15 via-emerald-500/8 to-cyan-500/10 blur-[110px] rounded-full animate-aurora" />
@@ -12,6 +17,7 @@ export function Hero() {
 
       <div className="landing-container relative z-10 max-w-[1280px] mx-auto px-6 md:px-12">
         <div className="text-center max-w-4xl mx-auto flex flex-col items-center">
+
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
@@ -59,11 +65,13 @@ export function Hero() {
             </Button>
 
             <Button
-              href="#workflow"
+              onClick={() => setIsVideoOpen(true)}
               variant="secondary"
               fullWidth
               className="sm:w-auto px-8 py-4 text-base"
-              iconLeft={<Play className="w-5 h-5 mr-2 text-green-400 fill-green-400" />}
+              iconLeft={
+                <Play className="w-5 h-5 mr-2 text-green-400 fill-green-400" />
+              }
             >
               Watch Demo
             </Button>
@@ -71,6 +79,38 @@ export function Hero() {
 
         </div>
       </div>
+
+      {/* Video Modal */}
+      {isVideoOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setIsVideoOpen(false)}
+        >
+          <div
+            className="relative w-full max-w-4xl rounded-xl bg-black shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setIsVideoOpen(false)}
+              className="absolute -top-10 right-0 text-white hover:text-green-400"
+              aria-label="Close video"
+            >
+              <X className="w-7 h-7" />
+            </button>
+
+            <video
+              src="/demo.mp4"
+              controls
+              autoPlay
+              playsInline
+              className="w-full rounded-xl"
+            >
+              Your browser does not support video playback.
+            </video>
+          </div>
+        </div>
+      )}
+
     </section>
   );
 }

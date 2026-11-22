@@ -5,6 +5,7 @@ import { useZone } from '@/app/ZoneProvider';
 import { Button } from '@/components/ui/Button';
 import { useCarbon, useGreenWindows } from '@/features/carbon/hooks/useCarbon';
 import { useSimulationConfig } from '@/features/optimization/hooks/useOptimization';
+import { DEFAULT_GREEN_WINDOW_THRESHOLD } from '@/constants/carbon';
 import {
   formatRecommendedTime,
   getEstimatedEcoScore,

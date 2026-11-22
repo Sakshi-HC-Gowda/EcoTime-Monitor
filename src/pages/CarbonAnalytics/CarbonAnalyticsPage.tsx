@@ -12,14 +12,13 @@ import { GridMixChart } from '@/features/carbon/components/GridMixChart';
 import { HeatMap } from '@/features/carbon/components/HeatMap';
 import { HourlyTimeline } from '@/features/carbon/components/HourlyTimeline';
 import { RegionComparison } from '@/features/carbon/components/RegionComparison';
+import { DEFAULT_GREEN_WINDOW_THRESHOLD } from '@/constants/carbon';
 import { useSimulationConfig } from '@/features/optimization/hooks/useOptimization';
 
 export function CarbonAnalyticsPage() {
   const { selectedZone, setSelectedZone } = useZone();
   const { data: carbon, isLoading, isError, refetch } = useCarbon(selectedZone);
   const { data: simulationConfig } = useSimulationConfig();
-
-  const threshold = simulationConfig?.lowCarbonThreshold ?? 380;
 
   if (isLoading) {
     return (
